@@ -1,0 +1,18 @@
+#!/bin/sh
+# live-boot mounts the medium at /run/live/medium; walk the source device up
+# to its whole disk and record it for fog-setup's inventory. If that mount
+# isn't there (toram boots, unit ordering), fall back to the stick's own
+# FOG-BOOT label — the file must exist whenever the stick is present, since
+# it is what keeps the installer from offering to erase itself. Repair boots
+# have no FOG-BOOT (they run from the installed disk's recovery partition),
+# so fall back once more to the fog-recovery label: the boot disk there is
+# the machine's own disk, which must be excluded all the same.
+set -eu
+mkdir -p /run/fog-installer
+src="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
+[ -n "$src" ] || src="$(blkid -L FOG-BOOT 2>/dev/null || true)"
+[ -n "$src" ] || src="$(blkid -L fog-recovery 2>/dev/null || true)"
+[ -n "$src" ] || exit 0
+disk="$(lsblk -no pkname "$src" 2>/dev/null | head -1)"
+[ -n "$disk" ] || disk="$(basename "$src")"
+echo "$disk" > /run/fog-installer/boot-disk

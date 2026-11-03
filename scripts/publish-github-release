@@ -1,0 +1,195 @@
+#!/bin/sh
+# Publish the signed release directory (bin/release/, which release.sh
+# builds) as the GitHub release of the same version on the public repo, so
+# strangers install and update from GitHub: install.sh, the Proxmox scripts
+# and fogd all look for https://github.com/fogapp/fog/releases/latest/
+# download/latest.json first.
+#
+#   scripts/publish-github-release vX.Y.Z --check          verify, change nothing
+#   scripts/publish-github-release vX.Y.Z --publish [SHA]  create or update it
+#
+# scripts/publish-public.sh runs --check before it pushes the sync commit and
+# --publish (tagging that commit) after; run it alone to retry a failed
+# upload. Idempotent: an existing release gets its assets replaced
+# (--clobber), never a second release.
+#
+#   FOG_PUBLIC_REPO     fogapp/fog
+#   FOG_PUBLIC_GH_USER  fogapp      the GitHub account gh must be logged in as
+#
+# It never logs in by itself. The files are exactly the ones release.sh
+# signed: the manifest's signature is checked against the pinned key, its
+# version against the one given, and every file against SHA256SUMS.
+set -eu
+
+VERSION="${1:?usage: publish-github-release vX.Y.Z --check|--publish [target sha]}"
+MODE="${2:---check}"
+TARGET="${3:-}"
+REPO="${FOG_PUBLIC_REPO:-fogapp/fog}"
+GH_USER="${FOG_PUBLIC_GH_USER:-fogapp}"
+REL=bin/release
+# GitHub refuses release assets of 2 GiB or more.
+MAX_ASSET=2147483647
+
+cd "$(dirname "$0")/.."
+die() { printf 'publish-github-release: %s\n' "$*" >&2; exit 1; }
+
+printf '%s\n' "$VERSION" | grep -Eqx 'v[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}(-[0-9A-Za-z.]+)?' \
+  || die "version must look like v0.1.0 (got '$VERSION')"
+case "$MODE" in --check|--publish) ;; *) die "mode must be --check or --publish" ;; esac
+case "$TARGET" in ''|*[!0-9a-f]*) [ -z "$TARGET" ] || die "target must be a commit sha" ;; esac
+
+# --- the release directory is the one release.sh signed --------------------
+
+[ -d "$REL" ] || die "no $REL/ — it is built by ./scripts/release.sh $VERSION (/ship), on this machine."
+for f in latest.json latest.json.sig SHA256SUMS install.sh fogd.service fogd-rollback \
+         fogd-linux-amd64 fogd-linux-arm64; do
+  [ -f "$REL/$f" ] || die "$REL/ has no $f — rebuild it with ./scripts/release.sh $VERSION."
+done
+GOT=$(tr -d ' \t\r\n' < "$REL/latest.json" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+[ "$GOT" = "$VERSION" ] || die "$REL/ holds $GOT, not $VERSION — run ./scripts/release.sh $VERSION first."
+# GitHub serves the assets beside the manifest; absolute URLs would send
+# strangers' downloads to the private host.
+if tr -d ' \t\r\n' < "$REL/latest.json" | grep -q '"url":"[a-z]*://'; then
+  die "$REL/latest.json names absolute URLs; it must be the relative manifest release.sh writes."
+fi
+go run ./internal/selfupdate/signtool verify "$REL/latest.json" \
+  || die "$REL/latest.json isn't signed by the pinned release key."
+# Nothing that names this private repo's commits or the build machine goes
+# public (release.sh checked too; this is the last gate).
+./scripts/check-release-binaries "$REL" >/dev/null \
+  || die "a binary in $REL/ carries version-control info or a local path — rebuild with ./scripts/release.sh $VERSION."
+
+sha256_of() {
+  { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1" 2>/dev/null; } | awk '{print $1}'
+}
+
+# What is uploaded is exactly what the signed manifest names — each file
+# checked against the sha256 inside it — plus the manifest, its signature
+# and SHA256SUMS. Anything else in the directory is refused, not uploaded.
+PAIRS=$(tr -d ' \t\r\n' < "$REL/latest.json" \
+  | grep -o '"url":"[^"]*","sha256":"[0-9a-f]\{64\}"' \
+  | sed 's/"url":"\([^"]*\)","sha256":"\([0-9a-f]*\)"/\1 \2/')
+[ -n "$PAIRS" ] || die "$REL/latest.json names no files."
+WANT="latest.json
+latest.json.sig
+SHA256SUMS"
+while read -r name want; do
+  case "$name" in
+    ''|.*|*[!A-Za-z0-9._-]*) die "$REL/latest.json names '$name', which isn't a plain file name." ;;
+  esac
+  [ -f "$REL/$name" ] || die "$REL/ has no $name, which the signed manifest names — rebuild it with ./scripts/release.sh $VERSION."
+  [ "$(sha256_of "$REL/$name")" = "$want" ] \
+    || die "$REL/$name isn't the file the signed manifest names (its sha256 differs) — rebuild it with ./scripts/release.sh $VERSION."
+  WANT="$WANT
+$name"
+done <<EOF
+$PAIRS
+EOF
+for f in "$REL"/*; do
+  printf '%s\n' "$WANT" | grep -qxF -- "${f##*/}" \
+    || die "$REL/${f##*/} isn't named by the signed manifest — remove it; only the manifest's files are published."
+done
+# SHA256SUMS is for people checking a copy by hand: it must say exactly
+# what the manifest says, and cover every file but itself.
+while read -r sum name; do
+  printf '%s\n' "$WANT" | grep -qxF -- "$name" || die "SHA256SUMS lists $name, which isn't part of the release."
+  [ "$name" != SHA256SUMS ] || die "SHA256SUMS lists itself."
+  [ "$(sha256_of "$REL/$name")" = "$sum" ] || die "SHA256SUMS disagrees with $name (and the signed manifest) — rebuild it with ./scripts/release.sh $VERSION."
+done < "$REL/SHA256SUMS"
+while IFS= read -r name; do
+  [ "$name" = SHA256SUMS ] && continue
+  grep -q "  $name\$" "$REL/SHA256SUMS" || die "SHA256SUMS doesn't list $name."
+done <<EOF
+$WANT
+EOF
+
+# --- gh, as the public account ----------------------------------------------
+
+command -v gh >/dev/null 2>&1 || die "the GitHub CLI (gh) isn't installed: brew install gh"
+WHO=$(GH_HOST=github.com gh api user --jq .login 2>/dev/null || true)
+if [ "$WHO" != "$GH_USER" ]; then
+  cat >&2 <<EOF
+publish-github-release: gh is ${WHO:+logged in to github.com as '$WHO', }not logged in as '$GH_USER'.
+Log in once as $GH_USER (it opens a browser; sign in there as $GH_USER), then run this again:
+
+  gh auth login --hostname github.com --git-protocol ssh --web
+
+When it asks to upload an SSH key, skip it: $GH_USER's key is already on GitHub.
+If gh already knows $GH_USER as a second account:  gh auth switch --hostname github.com --user $GH_USER
+EOF
+  exit 1
+fi
+
+# Everything in the directory, except an asset too big for GitHub.
+ASSETS=""
+for name in $(printf '%s\n' "$WANT" | sort -u); do
+  f="$REL/$name"
+  size=$(wc -c < "$f" | tr -d ' ')
+  if [ "$size" -gt "$MAX_ASSET" ]; then
+    echo "publish-github-release: skipping ${f##*/} ($size bytes): GitHub takes assets under 2 GiB" >&2
+    continue
+  fi
+  ASSETS="$ASSETS
+$f"
+done
+
+if [ "$MODE" = --check ]; then
+  echo "github release ok to publish: $REPO $VERSION ($(printf '%s\n' "$ASSETS" | sed '/^$/d' | wc -l | tr -d ' ') assets, as $GH_USER)"
+  exit 0
+fi
+
+# --- publish -----------------------------------------------------------------
+
+NOTES="fog $VERSION. Every file here is listed with its sha256 in latest.json, which is signed with fog's release key (latest.json.sig); install.sh, the Proxmox scripts and fogd check both.
+
+    curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh"
+
+# What GitHub calls "latest" is what installs and updates read
+# (releases/latest/download/latest.json), so it is decided, never assumed: a
+# pre-release is marked as one and never latest; a release is latest only
+# when it is at least the release GitHub calls latest now, by semver
+# precedence (signtool compare, the updater's own order) — so re-running an
+# older version never takes "latest" back from a newer one.
+case "$VERSION" in
+  *-*) PRE=--prerelease; LATEST=--latest=false ;;
+  *)
+    PRE=--prerelease=false
+    LATEST=--latest
+    CURRENT=$(gh release view --repo "$REPO" --json tagName --jq .tagName 2>/dev/null || true)
+    if [ -n "$CURRENT" ] && [ "$CURRENT" != "$VERSION" ]; then
+      ORDER=$(go run ./internal/selfupdate/signtool compare "$VERSION" "$CURRENT" 2>/dev/null || echo 1)
+      if [ "$ORDER" = -1 ]; then
+        LATEST=--latest=false
+        echo "==> $VERSION is older than $CURRENT, GitHub's latest: publishing it without taking latest"
+      fi
+    fi
+    ;;
+esac
+
+# The asset list goes in as positional arguments, one per file, unsplit.
+set --
+while IFS= read -r f; do
+  [ -z "$f" ] || set -- "$@" "$f"
+done <<EOF
+$ASSETS
+EOF
+
+if gh release view "$VERSION" --repo "$REPO" >/dev/null 2>&1; then
+  echo "==> $REPO $VERSION exists: replacing its assets"
+  gh release upload "$VERSION" --repo "$REPO" --clobber "$@"
+  gh release edit "$VERSION" --repo "$REPO" "$PRE" "$LATEST" >/dev/null
+else
+  echo "==> creating $REPO $VERSION"
+  if [ -n "$TARGET" ]; then
+    gh release create "$VERSION" --repo "$REPO" --title "$VERSION" --notes "$NOTES" "$PRE" "$LATEST" --target "$TARGET" "$@"
+  else
+    gh release create "$VERSION" --repo "$REPO" --title "$VERSION" --notes "$NOTES" "$PRE" "$LATEST" "$@"
+  fi
+fi
+
+# Read back what GitHub holds: every file must be there.
+HAVE=$(gh release view "$VERSION" --repo "$REPO" --json assets --jq '.assets[].name')
+for f in "$@"; do
+  printf '%s\n' "$HAVE" | grep -qxF "${f##*/}" || die "GitHub's $VERSION is missing ${f##*/} — run this again."
+done
+echo "published github release $REPO $VERSION ($# assets)"

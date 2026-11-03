@@ -1,0 +1,254 @@
+package proxy
+
+// fog-wire: the one path from one app to another (internal/apps/netwire.go).
+//
+// Apps share no network. A consumer reaches a provider by the provider's
+// name, which on the consumer's own network is fog-wire's: a Caddy of fog's
+// own, with no published port. For each provider and each container port a
+// consumer reaches it on, fog-wire serves that port, answers only requests
+// whose Host is the provider (its name, or a public name it is routed at)
+// and whose peer is on one of that provider's consumers' networks, deletes
+// every spelling of the identity headers, and forwards to the provider by
+// its fog-only name. Anything else is a 403. So a wire runs one way: the
+// provider has no path into any consumer's network, and nothing it sends
+// can claim to be a person.
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/netip"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"gitea.lan/matthew/fog/internal/apps"
+	"gitea.lan/matthew/fog/internal/execx"
+	"gitea.lan/matthew/fog/internal/fsx"
+	"gitea.lan/matthew/fog/internal/store"
+)
+
+// wireGlobals open every fog-wire config, the first one it boots on
+// included: the admin endpoint on a socket, not a port — every port is a
+// provider's to have — so a reload always finds the running Caddy.
+const wireGlobals = "{\n\tauto_https off\n\tadmin unix//config/admin.sock\n}\n"
+
+// WireContainer is fog-wire's container name.
+const WireContainer = "fog-wire"
+
+func (p *Proxy) wireDir() string { return filepath.Join(p.DataDir, "wire") }
+
+// applyWires renders fog-wire's config from the deployed specs and converges
+// it when it changed. Caller holds applyMu.
+func (p *Proxy) applyWires(ctx context.Context) error {
+	wires, err := apps.PlanWires(p.Store)
+	if err != nil {
+		return fmt.Errorf("planning wires: %w", err)
+	}
+	subnets, err := p.appSubnets(ctx)
+	if err != nil {
+		return fmt.Errorf("reading app networks: %w", err)
+	}
+	domain, _ := p.Store.GetSetting(store.SettingBaseDomain)
+	hosts := map[string][]string{}
+	if domain != "" && apps.ValidRouteHost(domain) {
+		if routes, err := p.collectRoutes(domain); err == nil {
+			for _, r := range routes {
+				if r.App != "" {
+					hosts[r.App] = append(hosts[r.App], r.Host)
+				}
+			}
+		}
+	}
+	conf := []byte(wirefile(wires, subnets, hosts))
+	compose, err := p.wireCompose()
+	if err != nil {
+		return err
+	}
+	sum := digest(conf, compose)
+	if sum == p.wireApplied && p.isRunning(ctx, WireContainer) {
+		return nil
+	}
+	p.wireApplied = ""
+	dir := p.wireDir()
+	for _, sub := range []string{"data", "config"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			return err
+		}
+	}
+	if err := stageConfig(dir, conf, wireGlobals); err != nil {
+		return err
+	}
+	if err := fsx.WriteFileAtomic(filepath.Join(dir, "compose.yaml"), compose, 0o644); err != nil {
+		return err
+	}
+	conv := p.wireConverge
+	if conv == nil {
+		conv = p.composeWireConverge
+	}
+	if err := conv(ctx, dir); err != nil {
+		discardStaged(dir)
+		return err
+	}
+	if err := promoteStaged(dir); err != nil {
+		return err
+	}
+	p.wireApplied = sum
+	// Its networks are the apps' to give it (apps.ReconcileNetworks), which
+	// runs after every Apply.
+	return nil
+}
+
+// appSubnets answers each app network's subnet, by network name.
+func (p *Proxy) appSubnets(ctx context.Context) (map[string]string, error) {
+	if p.subnets != nil {
+		return p.subnets(ctx)
+	}
+	nets, err := p.docker().NetworksByLabel(ctx, "fog.net=app")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, n := range nets {
+		for _, c := range n.IPAM.Config {
+			if pfx, err := netip.ParsePrefix(c.Subnet); err == nil && pfx.Addr().Is4() {
+				out[n.Name] = pfx.Masked().String()
+			}
+		}
+	}
+	return out, nil
+}
+
+// consumerSubnet is a consumer's own network's subnet, sealed or not.
+func consumerSubnet(subnets map[string]string, app string) string {
+	for _, n := range []string{apps.OwnNetwork(app, nil), apps.OwnNetwork(app, &apps.AppSpec{Network: apps.NetworkSealed})} {
+		if s := subnets[n]; s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// wirefile renders fog-wire's Caddyfile: one server per container port, one
+// route per provider on it, each open only to its consumers' subnets.
+func wirefile(wires []apps.Wire, subnets map[string]string, hosts map[string][]string) string {
+	type key struct {
+		port     int
+		provider string
+	}
+	from := map[key][]string{}
+	for _, w := range wires {
+		s := consumerSubnet(subnets, w.Consumer)
+		if s == "" {
+			continue // its network isn't there yet: no way in until it is
+		}
+		for _, port := range w.Ports {
+			k := key{port, w.Provider}
+			if !containsStr(from[k], s) {
+				from[k] = append(from[k], s)
+			}
+		}
+	}
+	byPort := map[int][]string{}
+	for k := range from {
+		byPort[k.port] = append(byPort[k.port], k.provider)
+	}
+	ports := make([]int, 0, len(byPort))
+	for port := range byPort {
+		ports = append(ports, port)
+	}
+	sort.Ints(ports)
+
+	var b strings.Builder
+	b.WriteString("# Generated by Fog: the wires between apps (internal/proxy/wire.go).\n")
+	b.WriteString(wireGlobals)
+	for _, port := range ports {
+		provs := byPort[port]
+		sort.Strings(provs)
+		fmt.Fprintf(&b, ":%d {\n", port)
+		for _, p := range appIdentityPrefixes {
+			fmt.Fprintf(&b, "\trequest_header -%s*\n", p)
+		}
+		for _, prov := range provs {
+			subs := from[key{port, prov}]
+			sort.Strings(subs)
+			names := append([]string{prov}, hosts[prov]...)
+			m := "@" + strings.NewReplacer("-", "_").Replace(prov)
+			fmt.Fprintf(&b, "\t%s {\n\t\thost %s\n\t\tremote_ip %s\n\t}\n", m, strings.Join(names, " "), strings.Join(subs, " "))
+			fmt.Fprintf(&b, "\thandle %s {\n\t\treverse_proxy %s:%d {\n\t\t\tflush_interval -1\n\t\t}\n\t}\n", m, apps.AppUpstream(prov), port)
+		}
+		b.WriteString("\thandle {\n\t\trespond \"No wire to this app from here\" 403\n\t}\n}\n")
+	}
+	return b.String()
+}
+
+func containsStr(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Proxy) wireCompose() ([]byte, error) {
+	image, _ := p.Store.GetSetting(SettingCaddyImage)
+	if image == "" {
+		image = DefaultCaddyImage
+	}
+	service := map[string]any{
+		"image":          image,
+		"container_name": WireContainer,
+		"restart":        "unless-stopped",
+		"volumes":        []string{"./conf:/etc/caddy:ro", "./data:/data", "./config:/config"},
+		// A network to start on; the apps' own come from the reconcile. No
+		// port is published: only containers reach it.
+		"networks": map[string]any{apps.NetworkName: map[string]any{}},
+		"labels":   map[string]string{"fog.managed": "true", "fog.system": "wire"},
+		"cap_drop": []string{"MKNOD", "NET_RAW"},
+	}
+	doc := map[string]any{
+		"name":     "fog-wire",
+		"services": map[string]any{"wire": service},
+		"networks": map[string]any{apps.NetworkName: map[string]any{"external": true}},
+	}
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	return []byte("# Generated by Fog. Recovery without Fog: docker compose up -d\n" + string(out)), nil
+}
+
+func (p *Proxy) composeWireConverge(ctx context.Context, dir string) error {
+	if err := p.docker().EnsureNetwork(ctx, apps.NetworkName); err != nil {
+		return fmt.Errorf("wire up: %w", err)
+	}
+	up := execx.Command(ctx, "docker", "compose", "up", "-d")
+	up.Dir = dir
+	if err := execx.Step(ctx, applyTimeout, "bringing the wire proxy up", up); err != nil {
+		return err
+	}
+	validate := execx.Command(ctx, "docker", "exec", WireContainer, "caddy", "validate", "--adapter", "caddyfile", "--config", "/etc/caddy/"+stagedName)
+	if err := execx.Step(ctx, applyTimeout, "validating the wire config", validate); err != nil {
+		if execx.TimedOut(err) {
+			return err
+		}
+		return fmt.Errorf("generated wire config rejected, previous wires still serving: %w", errors.Unwrap(err))
+	}
+	if err := promoteStaged(dir); err != nil {
+		return err
+	}
+	reload := execx.Command(ctx, "docker", "exec", WireContainer, "caddy", "reload", "--config", "/etc/caddy/Caddyfile")
+	return execx.Step(ctx, applyTimeout, "reloading the wire proxy", reload)
+}
+
+func (p *Proxy) isRunning(ctx context.Context, name string) bool {
+	if p.caddyRunning != nil {
+		return p.caddyRunning(ctx)
+	}
+	d, err := p.docker().Inspect(ctx, name)
+	return err == nil && d.State.Running
+}

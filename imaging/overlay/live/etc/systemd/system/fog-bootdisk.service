@@ -1,0 +1,14 @@
+# Records which physical disk the live medium is on, so the installer can
+# never offer to erase the stick it booted from.
+[Unit]
+Description=Resolve the installer's own boot disk
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fog-bootdisk
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

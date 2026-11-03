@@ -1,0 +1,9 @@
+# DHCP on every wired interface; link-local as a fallback so name.local
+# answers even on a routerless direct cable to a laptop.
+[Match]
+Name=en* eth*
+
+[Network]
+DHCP=yes
+LinkLocalAddressing=ipv4
+MulticastDNS=yes

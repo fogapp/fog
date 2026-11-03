@@ -1,0 +1,4 @@
+# A display plugged in, unplugged or swapped: let the kiosk re-decide its
+# scale (fog-kiosk-rescale.service). --no-block, since udev kills RUN
+# programs that linger.
+ACTION=="change", SUBSYSTEM=="drm", ENV{HOTPLUG}=="1", RUN+="/usr/bin/systemctl --no-block start fog-kiosk-rescale.service"

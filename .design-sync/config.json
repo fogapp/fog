@@ -1,0 +1,94 @@
+{
+  "pkg": "fog-frontend",
+  "globalName": "Fog",
+  "projectId": "836150e9-4c56-4448-a67b-df92508cea2f",
+  "shape": "package",
+  "buildCmd": "sh .design-sync/prebuild.sh",
+  "srcDir": "src/components",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": ".ds-styles.css",
+  "componentSrcMap": {
+    "Spinner": "src/components/Async.tsx",
+    "Loading": "src/components/Async.tsx",
+    "LoadError": "src/components/Async.tsx",
+    "StaleNote": "src/components/Async.tsx",
+    "AppFolderChoices": "src/components/AppFolderChoices.tsx",
+    "AvatarMenu": "src/components/AvatarMenu.tsx",
+    "Badge": "src/components/Badge.tsx",
+    "Button": "src/components/Button.tsx",
+    "CommandPalette": "src/components/CommandPalette.tsx",
+    "ContextMenu": "src/components/ContextMenu.tsx",
+    "CopyButton": "src/components/CopyButton.tsx",
+    "DockerInstall": "src/components/DockerInstall.tsx",
+    "Field": "src/components/Field.tsx",
+    "FileIcon": "src/components/FileIcon.tsx",
+    "GitAccess": "src/components/GitAccess.tsx",
+    "InboxBell": "src/components/InboxBell.tsx",
+    "Layout": "src/components/Layout.tsx",
+    "Logo": "src/components/Logo.tsx",
+    "Markdown": "src/components/MarkdownImpl.tsx",
+    "MetricsRibbon": "src/components/MetricsRibbon.tsx",
+    "Modal": "src/components/Modal.tsx",
+    "PageHeader": "src/components/PageHeader.tsx",
+    "PathBrowser": "src/components/PathBrowser.tsx",
+    "Section": "src/components/Section.tsx",
+    "SectionHead": "src/components/Section.tsx",
+    "StatusLine": "src/components/Section.tsx",
+    "SettingRow": "src/components/SettingRow.tsx",
+    "SettingRows": "src/components/SettingRow.tsx",
+    "SetupPanel": "src/components/SetupPanel.tsx",
+    "Sidebar": "src/components/Sidebar.tsx",
+    "SpecEditor": "src/components/SpecEditor.tsx",
+    "StateBadge": "src/components/StateBadge.tsx",
+    "StateDot": "src/components/StateBadge.tsx",
+    "StoragePicker": "src/components/StoragePicker.tsx",
+    "Tabs": "src/components/Tabs.tsx",
+    "Terminal": "src/components/Terminal.tsx",
+    "PeerShareComposer": "src/components/files/PeerShareComposer.tsx",
+    "Toggle": "src/components/Toggle.tsx",
+    "Select": "src/components/Field.tsx",
+    "TextArea": "src/components/Field.tsx",
+    "FilterInput": "src/components/Field.tsx",
+    "RowList": "src/components/SettingRow.tsx",
+    "RowItem": "src/components/SettingRow.tsx",
+    "Segmented": "src/components/Segmented.tsx"
+  },
+  "entry": "frontend/src/design-system.ts",
+  "dtsPropsFor": {
+    "Button": "variant?: \"primary\" | \"secondary\" | \"info\" | \"danger\" | \"ghost\"; size?: \"sm\" | \"md\"; children: React.ReactNode; className?: string; disabled?: boolean; type?: \"button\" | \"submit\" | \"reset\"; title?: string; onClick?: React.MouseEventHandler<HTMLButtonElement>; id?: string; style?: React.CSSProperties;",
+    "Field": "label: string; hint?: React.ReactNode; value?: string; defaultValue?: string; placeholder?: string; type?: string; name?: string; required?: boolean; disabled?: boolean; autoFocus?: boolean; onChange?: React.ChangeEventHandler<HTMLInputElement>; id?: string;",
+    "ContextMenu": "x: number; y: number; items: { label?: React.ReactNode; onSelect?: () => void; disabled?: boolean; danger?: boolean; shortcut?: string; /** renders a rule and nothing else */ separator?: boolean }[]; onClose: () => void;",
+    "Tabs": "items: readonly { id: string; label: string; count?: number; hot?: boolean; /** segment-routed tabs: the link target (needs a react-router context); leave unset and use onChange for query-routed tabs */ to?: string; end?: boolean }[]; active?: string; onChange?: (id: string) => void; variant?: \"pills\" | \"underline\"; label: string; /** drop the strip's own hairline when the row around it draws one */ inline?: boolean;",
+    "StateBadge": "/** the app's container state; undefined = not known yet */ status?: { state: string; healthy?: boolean; deploying?: boolean; name?: string; detail?: string; updateAvailable?: boolean }; /** true once the server has answered at least once */ known: boolean; /** true when the status fetch failed */ error: boolean;",
+    "StateDot": "app: { state: string; healthy?: boolean; deploying?: boolean; name?: string; detail?: string; updateAvailable?: boolean };",
+    "InboxBell": "/** no props — reads the inbox from the running fog API */",
+    "MetricsRibbon": "/** no props — polls system metrics from the running fog API */",
+    "PeerShareComposer": "/** fog API FileFedShare (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ share?: Record<string, unknown>; peerId?: number; path?: string; onClose: () => void;",
+    "GitAccess": "name: string; /** fog API GitInfo (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ git: Record<string, unknown>;",
+    "SetupPanel": "name: string; /** fog API AppDetail (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ detail: Record<string, unknown>; /** fog API DeployStatusResponse (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ deployStatus?: Record<string, unknown>; onDeployStarted: () => void;",
+    "SpecEditor": "/** fog API SpecDraft — see emptyDraft() in SpecEditor.tsx (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ draft: Record<string, unknown>; onChange: (d: Record<string, unknown>) => void; source?: boolean; app?: string;",
+    "StoragePicker": "/** fog API CatalogOption (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ option: Record<string, unknown>; /** fog API Volume (frontend/src/api.ts) — fetched from a running fogd, not composable in a design */ volume: Record<string, unknown>; value: string; onChange: (v: string) => void; appTitle: string; app: string;",
+    "Toggle": "checked: boolean; onChange: (on: boolean) => void; label?: string; disabled?: boolean; className?: string;"
+  },
+  "overrides": {
+    "Modal": {
+      "cardMode": "single",
+      "viewport": "720x480"
+    },
+    "ContextMenu": {
+      "cardMode": "single",
+      "viewport": "640x360"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "Section": {
+      "cardMode": "column"
+    }
+  },
+  "docsDir": "../.design-sync/docs",
+  "readmeHeader": ".design-sync/conventions.md",
+  "extraFonts": [
+    "src/fonts.css"
+  ]
+}

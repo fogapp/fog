@@ -1,0 +1,47 @@
+#!/bin/sh
+# check-release-binaries <dir>: every Go binary in <dir> must be fit to
+# publish — no version-control stamp (`go version -m` showing vcs=, or
+# vcs.revision and vcs.time: this private repo's commit hash and time) and
+# no path from the machine that built it (this checkout, or the builder's
+# home directory). release.sh runs it on bin/release/ before signing, and
+# publish-github-release before uploading. Files that aren't Go binaries
+# (scripts, units, the manifest) are skipped.
+set -eu
+
+dir="${1:?usage: check-release-binaries <dir>}"
+[ -d "$dir" ] || { echo "check-release-binaries: no directory $dir" >&2; exit 1; }
+command -v go >/dev/null 2>&1 || { echo "check-release-binaries: needs go (go version -m)" >&2; exit 1; }
+top=$(cd "$(dirname "$0")/.." && pwd)
+
+# The paths a binary must not carry. $HOME only when it names a person's
+# directory: /root (CI) or / would match strings fogd legitimately holds.
+paths="$top"
+case "${HOME:-}" in ''|/|/root) ;; *) paths="$paths
+$HOME" ;; esac
+
+bad=""
+checked=0
+for f in "$dir"/*; do
+  [ -f "$f" ] || continue
+  info=$(go version -m "$f" 2>/dev/null) || continue
+  checked=$((checked + 1))
+  if printf '%s\n' "$info" | grep -Eq '[[:space:]]vcs[.=]'; then
+    bad="$bad
+  ${f##*/}: carries version-control info ($(printf '%s\n' "$info" | grep -Eo 'vcs[.=][^[:space:]]*' | head -n 3 | tr '\n' ' '))— build with -buildvcs=false"
+  fi
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if LC_ALL=C grep -aqF -- "$p" "$f"; then
+      bad="$bad
+  ${f##*/}: contains the local path $p — build with -trimpath"
+    fi
+  done <<EOF
+$paths
+EOF
+done
+
+if [ -n "$bad" ]; then
+  echo "check-release-binaries: these binaries aren't fit to publish:$bad" >&2
+  exit 1
+fi
+echo "release binaries ok: $checked checked, no version-control info or local paths"

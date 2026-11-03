@@ -1,0 +1,11 @@
+# Re-decides the kiosk's scale. Started by udev when a display is plugged in,
+# unplugged or swapped (90-fog-kiosk.rules), and by fog-setup after the
+# wizard's screen-size buttons; fog-kiosk restarts the kiosk only when the
+# answer actually changed.
+[Unit]
+Description=Fog installer kiosk rescale
+ConditionPathExistsGlob=/dev/dri/card*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fog-kiosk rescale

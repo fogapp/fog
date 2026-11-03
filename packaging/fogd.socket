@@ -1,0 +1,20 @@
+[Unit]
+Description=Fog - the dashboard's listening socket
+Documentation=https://github.com/fogapp/fog
+
+[Socket]
+# systemd holds fogd's port, not fogd: it stays bound across every fogd
+# restart — a self-update, a crash, the watchdog — so nothing else on the
+# machine can take it in the gap, block the new fogd, or answer in its
+# place. fogd takes it over (LISTEN_FDS, internal/sdnotify) and binds
+# FOG_LISTEN itself only when started without it. A different port is a
+# drop-in beside this one (proxmox-lxc.sh and proxmox-vm.sh write it):
+#   [Socket]
+#   ListenStream=
+#   ListenStream=9000
+ListenStream=8080
+BindIPv6Only=both
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

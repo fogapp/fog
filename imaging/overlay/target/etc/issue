@@ -1,0 +1,10 @@
+
+   ░░░  fog
+   ─────────────────────────────────────────────
+
+   Starting up — this screen fills in with Fog's health
+   and every URL that reaches this server as soon as it
+   reports in. Meanwhile, from any browser on your network:
+
+      http://\n.local:8080
+

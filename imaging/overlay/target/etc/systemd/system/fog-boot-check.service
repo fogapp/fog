@@ -1,0 +1,15 @@
+# The gate for systemd-boot's boot counting: boot-complete.target (and with
+# it the bless that finalizes a kernel entry) is only reached once fogd
+# actually answers. A kernel that boots but can't run Fog is a failed boot.
+[Unit]
+Description=Fog boot health gate
+After=fogd.service
+Before=boot-complete.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fog-boot-check
+RemainAfterExit=yes
+
+[Install]
+RequiredBy=boot-complete.target

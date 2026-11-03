@@ -1,0 +1,32 @@
+#!/bin/sh
+# packaging/fogd.service and the self-update rollback guard under real
+# systemd: the hardened unit runs a stand-in fogd and probes what fogd needs
+# inside its sandbox; a broken update is rolled back by ExecStartPre at
+# start, by ExecStartPre at the deadline of a crash loop, and by the
+# systemd-run timer on a unit without ExecStartPre; an install from before
+# fogd.socket self-updates onto the release's units (socket on its own port,
+# drop-ins intact), and unit files that fail are put back
+# (internal/selfupdate/systemd_linux_test.go).
+#
+# Needs a Linux machine with systemd and root. It installs a scratch unit,
+# fogd-test.service, under /opt/fogtest and removes both afterwards.
+#
+#   scripts/test-fogd-unit                       here, on Linux (sudo)
+#   colima ssh -- sh -c 'cd <repo> && scripts/test-fogd-unit <prebuilt test binary>'
+#
+# Given a test binary (GOOS=linux go test -c ./internal/selfupdate), it runs
+# that; otherwise it builds one, which needs Go here.
+set -eu
+cd "$(dirname "$0")/.."
+
+BIN="${1:-}"
+if [ -z "$BIN" ]; then
+  BIN=$(mktemp)
+  trap 'rm -f "$BIN"' EXIT
+  go test -c -o "$BIN" ./internal/selfupdate
+fi
+# The test reads ../../ paths relative to the package, like `go test` does.
+cd internal/selfupdate
+SUDO=""
+[ "$(id -u)" -eq 0 ] || SUDO=sudo
+$SUDO env FOG_TEST_SYSTEMD=1 "$BIN" -test.run 'TestUnderSystemd' -test.v -test.count=1

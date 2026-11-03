@@ -1,0 +1,18 @@
+/* The wizard's stylesheet entry: the shared design system plus wizard-only
+   overrides. Vite's root for this bundle is setup/, so Tailwind's automatic
+   source scan stops there — the components under ../src (Button, Field,
+   Async, Logo) must be declared or their classes never make it into the
+   build, and a "primary" button renders with no background at all. */
+@import "../src/index.css";
+@source "../src/components";
+
+/* The first-run route sits on its own flat ground, a shade deeper than the
+   app's — derived from the palette's ground so it follows every palette.
+   Nothing else changes. */
+body {
+  background-color: color-mix(in oklab, var(--color-fog-950) 97%, black);
+}
+
+html[data-theme="dark"] body {
+  background-color: color-mix(in oklab, var(--color-fog-950) 88%, black);
+}

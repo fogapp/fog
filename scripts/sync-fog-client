@@ -1,0 +1,5 @@
+#!/bin/sh
+# Sync clients/fog-client into each app's vendored copy; see scripts/sync-gem.
+#
+# Usage: scripts/sync-fog-client [--allow-dirty] [app-dir ...]   (defaults to sibling checkouts)
+exec "$(dirname "$0")/sync-gem" fog-client "$@"

@@ -1,0 +1,113 @@
+#!/bin/sh
+# The installer's kiosk on the machine's own display, and the one place its
+# scale is decided.
+#
+# cage hands chromium the panel at scale 1, so a 4K display lays the wizard
+# out across 3840 CSS pixels and it reads like fine print. Size it from the
+# panel instead: the device scale factor that leaves the page about a
+# 1536×864 canvas — the everyday laptop viewport the wizard is drawn for —
+# in quarter steps, never below 1. The first line of a connector's modes is
+# its preferred mode, which is the one cage drives.
+#
+# Two things outrank that guess, newest intent first: the wizard's
+# screen-size buttons (fog-setup writes $DIR/override), then fog.scale=<n> on
+# the kernel command line — the boot menu has no editor, so add it to the
+# options line of loader/entries/fog-installer.conf on the stick's FOG-BOOT
+# partition.
+#
+#   fog-kiosk          start cage + chromium at the wanted scale
+#   fog-kiosk rescale  restart the kiosk if the wanted scale has changed; run
+#                      on display hotplug and after the screen-size buttons
+#   fog-kiosk off      stop the kiosk: the display drops to the root shell on
+#                      tty1 that it was covering (the recovery menu's safe
+#                      mode); nothing on the disk is mounted or touched
+#   fog-kiosk on       start the kiosk again
+set -u
+
+case "${1:-}" in
+  off)
+    systemctl stop fog-kiosk.service
+    # The shell this uncovers has been sitting at its prompt since boot and
+    # nothing on its screen explains why the menu just vanished — so say
+    # so, and say the way back. The stopped unit stays stopped: Restart=
+    # covers crashes, not a stop, and the rescale unit only restarts a
+    # running kiosk.
+    printf '\n   The Fog Recovery screen was closed from its menu (safe mode).\n   This is a root shell on the recovery system. Nothing from this\n   machine'"'"'s disk is mounted; the labels are fog-root and fog-data.\n\n   Back to the recovery screen:  systemctl start fog-kiosk\n   Back into Fog:                reboot\n\n' > /dev/tty1 2>/dev/null
+    exit 0
+    ;;
+  on)
+    exec systemctl start fog-kiosk.service
+    ;;
+esac
+
+DIR=/run/fog-kiosk
+
+# norm prints a usable scale, 0.5–4, formatted by awk so "2.50" and "2.5"
+# compare equal — or nothing.
+norm() {
+  case "$1" in
+    "" | *[!0-9.]* | .* | *. | *.*.*) return 0 ;;
+  esac
+  awk -v s="$1" 'BEGIN { s += 0; if (s >= 0.5 && s <= 4) print s }'
+}
+
+detected() {
+  mode=""
+  for c in /sys/class/drm/card*-*; do
+    [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+    mode="$(head -1 "$c/modes" 2>/dev/null)"
+    [ -n "$mode" ] && break
+  done
+  echo "$mode" | awk -Fx '{
+    w = $1 + 0; h = $2 + 0
+    s = (w > 0 && h > 0) ? (w / 1536 < h / 864 ? w / 1536 : h / 864) : 1
+    s = int(s * 4 + 0.5) / 4
+    if (s < 1) s = 1
+    if (s > 4) s = 4
+    print s
+  }'
+}
+
+# automatic is what the kiosk picks with no override: fog.scale, else the
+# panel's guess.
+automatic() {
+  s=""
+  for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+      fog.scale=*) s="$(norm "${arg#fog.scale=}")" ;;
+    esac
+  done
+  if [ -n "$s" ]; then echo "$s"; else detected; fi
+}
+
+# put replaces a state file whole, so fog-setup never reads half of one.
+put() {
+  printf '%s\n' "$2" > "$DIR/.$1" && mv -f "$DIR/.$1" "$DIR/$1"
+}
+
+# A hotplug arrives as a burst of change events, and the connector's modes
+# land a beat after the first; let them settle before reading.
+[ "${1:-}" = rescale ] && sleep 1
+
+auto="$(automatic)"
+scale="$(norm "$(cat "$DIR/override" 2>/dev/null)")"
+[ -n "$scale" ] || scale="$auto"
+
+if [ "${1:-}" = rescale ]; then
+  [ -d "$DIR" ] && put auto "$auto"
+  # Only a running kiosk is restarted: one that is between restarts reads
+  # the new answer on its way up anyway.
+  if [ "$scale" != "$(cat "$DIR/scale" 2>/dev/null)" ] && systemctl -q is-active fog-kiosk.service; then
+    echo "fog-kiosk: scale ${scale} wanted, restarting the kiosk" >&2
+    systemctl --no-block restart fog-kiosk.service
+  fi
+  exit 0
+fi
+
+put auto "$auto" || true
+put scale "$scale" || true
+echo "fog-kiosk: scale ${scale} (automatic ${auto})" >&2
+
+exec /usr/bin/cage -d -- /usr/bin/chromium --kiosk --no-first-run \
+  --disable-infobars --noerrdialogs --ozone-platform=wayland \
+  --force-device-scale-factor="$scale" http://localhost

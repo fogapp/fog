@@ -1,0 +1,44 @@
+/* Utilities the design agent needs for its own layout glue, beyond what
+   fog's source happens to use. Every name here is plain Tailwind v4 over
+   fog's @theme (frontend/src/index.css); nothing is invented. Two hues only:
+   the beacon (accent) and amber (warn). Text is ink, ink-muted or ink-faint;
+   the fog scale is offered for fills and surfaces only. */
+@source inline("{,sm:,md:,lg:,xl:}{flex,inline-flex,grid,block,inline-block,hidden,contents}");
+@source inline("{flex-row,flex-col,flex-wrap,flex-1,flex-none,shrink-0,grow,items-start,items-center,items-end,items-stretch,items-baseline,justify-start,justify-center,justify-end,justify-between,self-start,self-center,self-end,self-stretch}");
+@source inline("{,sm:,md:,lg:}grid-cols-{1,2,3,4,5,6,12}");
+@source inline("col-span-{1,2,3,4,5,6,full}");
+@source inline("{gap,gap-x,gap-y,p,px,py,pt,pb,pl,pr,m,mx,my,mt,mb,ml,mr,space-x,space-y}-{0,0.5,1,1.5,2,2.5,3,3.5,4,5,6,8,10,12,16}");
+@source inline("{mx-auto,ml-auto,mr-auto,-mt-1,-ml-px,-mx-3.5}");
+@source inline("{w,h,size}-{full,screen,fit,auto,px,0,0.5,1,1.5,2,3,3.5,4,5,6,7,8,10,12,16,20,24,32,40,48,64,80,96}");
+@source inline("w-{1/2,1/3,2/3,1/4,3/4}");
+@source inline("min-w-{0,full,fit,48}");
+@source inline("min-h-{0,screen,full}");
+@source inline("max-h-{full,screen,\\[80vh\\]}");
+@source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,prose,full,none}");
+@source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,cell,hint,label,title,heading,figure,figure-sm}");
+@source inline("text-\\[{11px,13px}\\]");
+@source inline("font-{normal,medium,semibold,bold,mono,sans}");
+@source inline("leading-{none,tight,snug,normal,relaxed}");
+@source inline("tracking-{tight,normal,wide,wider}");
+@source inline("tracking-\\[{-.01em,-.015em,-.025em}\\]");
+@source inline("{text-left,text-center,text-right,truncate,uppercase,capitalize,tabular-nums,break-words,break-all,whitespace-nowrap,whitespace-pre-wrap,italic,underline,line-through,no-underline}");
+@source inline("line-clamp-{1,2,3}");
+@source inline("{caps-label,field-label,group-label,subhead,unit,edge-accent}");
+@source inline("{,hover:}{bg,border}-fog-{50,100,200,300,400,500,600,700,800,900,950}");
+@source inline("{,hover:,group-hover:,placeholder:}text-{ink,ink-muted,ink-faint}");
+@source inline("{bg-ink,bg-ink-muted,bg-ink-faint,placeholder-ink-faint}");
+@source inline("{,hover:}{bg,text,border,ring,divide,placeholder}-{accent,accent-hover,accent-on,warn}");
+@source inline("{,hover:}{bg,border,ring,text}-{accent,warn}/{10,15,20,30,40,45,50,60}");
+@source inline("{,hover:}{bg,border,divide}-{veil,line,line-strong,veil-edge,hair,hair-strong,divider,hover,edge,edge-hover,edge-strong}");
+@source inline("{border-b,border-t,border-l,border-r}-{accent,warn,line,hair,hair-strong,edge-strong,veil-edge}");
+@source inline("{text-transparent,bg-transparent,bg-black/40,bg-black/60,bg-code,text-current,bg-white/20}");
+@source inline("{border,border-2,border-t,border-b,border-l,border-r,border-l-2,border-b-2,border-t-transparent,border-transparent,divide-y}");
+@source inline("rounded-{sm,md,lg,xl,full}");
+@source inline("shadow-{sm,md,lg,xl,2xl,none}");
+@source inline("shadow-black/{40,50}");
+@source inline("{relative,absolute,fixed,sticky,inset-0,top-0,right-0,bottom-0,left-0,top-20,z-10,z-20,z-40,z-50}");
+@source inline("overflow-{hidden,auto,x-auto,y-auto}");
+@source inline("{cursor-pointer,cursor-default,cursor-not-allowed,select-none,pointer-events-none,sr-only,outline-none,transition-colors,transition-opacity,transition,antialiased,scroll-mt-20,backdrop-blur}");
+@source inline("opacity-{0,40,50,60,80,100}");
+@source inline("animate-{spin,pulse}");
+@source inline("{disabled:opacity-40,disabled:opacity-50,disabled:cursor-not-allowed,focus:border-accent,focus:outline-none,focus:ring-\\[3px\\],focus:ring-accent/15,hover:border-edge-hover,ring-1,ring-edge}");

@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Sync one of fog's canonical Ruby gems (clients/<gem>) into each app's
+# vendored copy. Vendoring instead of a gem server: Docker builds need zero
+# credentials and zero network to install it, and there is exactly one
+# command to keep every app's copy on fogd's wire (hand-copying is how the
+# copies drift). scripts/sync-flare, sync-fog-client and sync-fogfed name the
+# gem for you.
+#
+# Usage: scripts/sync-gem [--allow-dirty] <gem> [app-dir ...]
+#   (app dirs default to sibling checkouts)
+#
+# What reaches every app is what is committed here: the gem is staged from
+# `git archive HEAD -- clients/<gem>`, never the working tree, so a
+# half-written file, a gitignored file the gemspec's globs happen to match,
+# or an edit hidden from `git status` with assume-unchanged or skip-worktree
+# can't ship. It also refuses while clients/<gem> shows uncommitted or
+# untracked changes, so you know your edits aren't going. --allow-dirty
+# (anywhere in the arguments) syncs the working tree as it is instead.
+set -euo pipefail
+
+allow_dirty=0
+args=()
+for a in "$@"; do
+  if [ "$a" = "--allow-dirty" ]; then allow_dirty=1; else args+=("$a"); fi
+done
+if [ ${#args[@]} -eq 0 ]; then
+  echo "usage: $0 [--allow-dirty] <gem> [app-dir ...]" >&2
+  exit 2
+fi
+gem="${args[0]}"
+src="$(cd "$(dirname "$0")/../clients/$gem" && pwd)"
+targets=("${args[@]:1}")
+
+if [ "$allow_dirty" = 0 ]; then
+  if ! dirty="$(git -C "$src" status --porcelain --untracked-files=all -- . 2>&1)"; then
+    echo "error: can't tell whether clients/$gem is committed: $dirty" >&2
+    echo "hint: --allow-dirty syncs the working tree as it is" >&2
+    exit 1
+  fi
+  if [ -n "$dirty" ]; then
+    echo "error: clients/$gem has uncommitted or untracked changes; commit them first:" >&2
+    printf '%s\n' "$dirty" | sed 's/^/  /' >&2
+    echo "hint: --allow-dirty syncs the working tree as it is" >&2
+    exit 1
+  fi
+fi
+if [ ${#targets[@]} -eq 0 ]; then
+  # No roster to forget: every sibling of the fog checkout that already
+  # vendors the gem gets the update. First-time vendoring of a new app is
+  # explicit: scripts/sync-gem <gem> ../newapp
+  base="$(cd "$src/../../.." && pwd)"
+  for dir in "$base"/*/; do
+    [ -d "${dir}vendor/gems/$gem" ] && targets+=("${dir%/}")
+  done
+  if [ ${#targets[@]} -eq 0 ]; then
+    echo "error: no checkout under $base vendors $gem (vendor/gems/$gem)" >&2
+    echo "hint: pass the app dir explicitly to vendor it the first time" >&2
+    exit 1
+  fi
+fi
+
+# Exactly what the gemspec says the gem contains (its `files`), plus the
+# gemspec itself, which Bundler needs to load a path gem. The gemspec is the
+# one list: a file it ships reaches every app, and nothing else does (tests,
+# Rakefile and generators stay in the canonical copy). Its globs resolve from
+# the gem's own directory, as they do for `gem build`.
+list="$(mktemp)"
+stage="$(mktemp -d)"
+export_dir="$(mktemp -d)"
+trap 'rm -rf "$list" "$stage" "$export_dir"' EXIT
+
+# The committed gem, unless --allow-dirty asked for the working tree.
+from="$src"
+if [ "$allow_dirty" = 0 ]; then
+  # HEAD:<path> names exactly the committed tree of clients/<gem>, rooted
+  # at the gem, wherever this runs from.
+  # (Run from the top: from a subdirectory, git archive narrows to it again.)
+  prefix="$(git -C "$src" rev-parse --show-prefix)"
+  top="$(git -C "$src" rev-parse --show-toplevel)"
+  if ! git -C "$top" archive --format=tar "HEAD:${prefix%/}" | tar -x -C "$export_dir"; then
+    echo "error: can't read clients/$gem as committed (git archive HEAD:${prefix%/})" >&2
+    exit 1
+  fi
+  from="$export_dir"
+  [ -f "$from/$gem.gemspec" ] || { echo "error: clients/$gem/$gem.gemspec isn't committed" >&2; exit 1; }
+fi
+
+(cd "$from" && ruby -e '
+  spec = Gem::Specification.load(ARGV[0]) or abort "error: cannot load #{ARGV[0]}"
+  files = spec.files.uniq
+  abort "error: #{ARGV[0]} lists no files" if files.empty?
+  missing = files.reject { |f| File.file?(f) }
+  abort "error: #{ARGV[0]} lists files that are not here: #{missing.join(", ")}" unless missing.empty?
+  print((files | [ARGV[0]]).sort.join("\0"), "\0")
+' "$gem.gemspec") >"$list"
+rsync -a --from0 --files-from="$list" "$from/" "$stage/"
+
+for app in "${targets[@]}"; do
+  if [ ! -f "$app/Gemfile" ]; then
+    echo "error: $app is not an app checkout (no Gemfile)" >&2
+    exit 1
+  fi
+  dest="$app/vendor/gems/$gem"
+  mkdir -p "$dest"
+  # --delete makes the vendored copy the staged one exactly: a file the gem
+  # no longer ships (or an earlier sync left behind) goes.
+  rsync -a --delete "$stage/" "$dest/"
+  echo "synced -> $dest"
+done

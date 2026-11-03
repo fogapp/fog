@@ -1,0 +1,17 @@
+# The installer agent: hardware inventory, the install engine, and the wizard
+# UI on :80 for both the kiosk and any LAN browser at http://fog.local.
+[Unit]
+Description=Fog installer agent
+After=network.target fog-bootdisk.service
+Wants=fog-bootdisk.service
+
+[Service]
+# Type=notify: READY only once the wizard is actually listening, so the
+# kiosk's After= means "the page will load", not "the process exists".
+Type=notify
+ExecStart=/usr/local/bin/fog-setup
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

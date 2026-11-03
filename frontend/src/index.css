@@ -1,0 +1,211 @@
+@import "tailwindcss";
+@import "./fonts.css";
+@import "./themes.css";
+
+/* Fog's identity (docs/design/fog-identity.md). A few rules applied
+   everywhere: three text tones, two line strengths, one control height,
+   hierarchy from weight rather than size, and one accent kept for what is
+   primary or active. Two hues — the beacon and amber — on a flat ground.
+   Everything a screen needs is a token here plus a handful of named
+   utilities below, so a page never carries a literal colour.
+
+   Text is ink, ink-muted or ink-faint, nothing else. The fog scale is for
+   fills and surfaces, used positionally: 950–700 are grounds, surfaces and
+   borders, 600–50 are fills. Light mode re-points the same tokens at a
+   mirrored ramp, so no class name changes between modes. */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Plus Jakarta reads best a touch heavier than regular, so "normal" is
+     450. Medium (500) is for controls, semibold (600) for section titles,
+     bold (700) for page titles. */
+  --font-weight-normal: 450;
+
+  /* Body is 14/1.6. The steps below sit between Tailwind's: table cells,
+     hints, and the small uppercase label kept for stat tiles and table
+     headers. */
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.6;
+  --text-cell: 0.84375rem;
+  --text-cell--line-height: 1.45;
+  --text-hint: 0.8125rem;
+  --text-hint--line-height: 1.5;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.35;
+  --text-label--letter-spacing: 0.02em;
+  /* Page and section titles. */
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.015em;
+  --text-heading: 1rem;
+  --text-heading--line-height: 1.35;
+  /* Headline figures: 42px and 32px, tight, tabular. */
+  --text-figure: 2.625rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.025em;
+  --text-figure-sm: 2rem;
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.025em;
+
+  --color-fog-50: #f2f7fb;
+  --color-fog-100: #dce3ea;
+  --color-fog-200: #cfd8e2;
+  --color-fog-300: #b6c2ce;
+  --color-fog-400: #93a1b1;
+  --color-fog-500: #8a98a9;
+  --color-fog-600: #5a6878;
+  --color-fog-700: #2c3742;
+  --color-fog-800: #212a34;
+  --color-fog-900: #171e26;
+  --color-fog-950: #0d1116;
+
+  /* The three text tones, per palette from themes.css; these are Fog dark. */
+  --color-ink: #f2f7fb;
+  --color-ink-muted: #8e9cac;
+  --color-ink-faint: #616f7f;
+
+  /* The beacon: alive, primary, now. accent-on is the only text colour that
+     may sit on a beacon fill — white fails contrast on it. */
+  --color-accent: #7ee7d5;
+  --color-accent-hover: #98efe0;
+  --color-accent-on: #08211d;
+  /* Amber: "needs you". Nothing in a house is an emergency, so there is no
+     red — a destructive action is amber-outlined. */
+  --color-warn: #e6a23c;
+
+  /* The screen-within-a-page surface: code, logs, keys, anything quoted
+     verbatim. Not part of the positional scale — it recedes in both modes. */
+  --color-code: #0a0e12;
+
+  /* Structure. Two line strengths draw everything: line for panel edges,
+     hairlines and row dividers, line-strong for the edge of a control. The
+     role names (hair, divider, edge…) resolve to one of the two in
+     themes.css. The veil is the surface a panel sits on. All flat — there
+     are no gradients or shadows anywhere in the system. */
+  --color-line: #ffffff14;
+  --color-line-strong: #ffffff26;
+  --color-veil: #ffffff09;
+  --color-veil-edge: #ffffff14;
+  --color-edge: #ffffff26;
+  --color-edge-hover: #ffffff38;
+  --color-edge-strong: #ffffff26;
+  --color-hair: #ffffff14;
+  --color-hair-strong: #ffffff14;
+  --color-divider: #ffffff14;
+  --color-hover: #ffffff08;
+
+  /* The usage bar on a disk row: one fixed colour per category, in bar
+     order (Apps, Drive, Backups, Postgres, Fog, Docker), validated for adjacent
+     distinguishability in both modes; "other" is the recessive rest. The
+     only place the identity's two hues are joined by more — a stacked bar
+     is unreadable in one. Colour follows the category, never its rank. */
+  --color-seg-apps: #3987e5;
+  --color-seg-drive: #d95926;
+  --color-seg-backups: #199e70;
+  --color-seg-postgres: #c98500;
+  --color-seg-fog: #d55181;
+  --color-seg-docker: #8a6fe0;
+  --color-seg-other: #ffffff2e;
+
+  /* A progress bar with no figure to show: a segment sweeping the track. */
+  --animate-sweep: sweep 1.4s ease-in-out infinite;
+  @keyframes sweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
+  }
+}
+
+/* Named pieces of the identity that are more than one declaration. Each is
+   a word a page can use instead of restating the recipe. */
+
+/* The small uppercase label: 12px, 500, lightly tracked. It names the
+   figure in a stat tile and heads a table column, and nothing else —
+   sections are titled in sentence case (SectionHead). */
+@utility caps-label {
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+  letter-spacing: var(--text-label--letter-spacing);
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+/* A heading inside a pane or a panel — a room's info pane, a dialog's
+   parts: sentence case, set by weight. */
+@utility subhead {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* The small quiet heading over a group of rows: the sidebar's groups, a
+   menu's sections, the command palette's groups. */
+@utility group-label {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--color-ink-faint);
+}
+
+/* A form control's label: sentence case, the reading face at 500. */
+@utility field-label {
+  font-size: var(--text-cell);
+  line-height: var(--text-cell--line-height);
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+/* The unit after a headline figure: 0.4em, regular, quiet. */
+@utility unit {
+  font-size: 0.4em;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-left: 3px;
+  color: var(--color-ink-muted);
+}
+
+/* The 2px beacon edge on a selected row in a list or table. */
+@utility edge-accent {
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* The boot script in index.html sets data-theme (always a resolved "light"
+   or "dark", never "system") and data-palette before first paint; theme.ts
+   keeps them current. The token values for every theme × palette live in
+   themes.css, generated by scripts/themes.mjs. */
+
+/* The ground is one flat colour. No gradient exists anywhere in the
+   system; every surface above the ground is flat too. */
+body {
+  @apply bg-fog-950 text-ink antialiased;
+  font-weight: var(--font-weight-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Every focusable control shows the same ring and a beacon edge. Never
+   removed without a replacement. The ring's colour goes through its own
+   property: some Chrome versions resolve a color-mix() over a var() written
+   straight into box-shadow as the text colour, which drew a near-black ring
+   in light mode. */
+:focus-visible {
+  --focus-ring: color-mix(in srgb, var(--color-accent) 13%, transparent);
+  outline: 1px solid var(--color-accent);
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sweep {
+    animation: none;
+  }
+}

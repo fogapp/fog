@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/design-system.ts", "scripts/*.mjs"],
+  "project": ["src/**/*.{ts,tsx}", "setup/**/*.{ts,tsx}"],
+  "ignore": ["src/api.gen.ts", "setup/types.gen.ts"],
+  "ignoreDependencies": [
+    "@hpke/core",
+    "@noble/curves",
+    "@noble/hashes",
+    "@scure/bip39",
+    "ts-mls",
+    "tailwindcss"
+  ]
+}

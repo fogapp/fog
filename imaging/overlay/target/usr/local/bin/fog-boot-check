@@ -1,0 +1,15 @@
+#!/bin/sh
+# "This boot succeeded" means Fog answers — not merely that the kernel came
+# up. Only then does systemd-bless-boot confirm the entry; three unblessed
+# boots and systemd-boot falls back to the previous kernel, and after that
+# to the recovery partition. Generous deadline: a cold boot pulls Docker up.
+i=0
+while [ $i -lt 60 ]; do
+  if curl -fsS -m 2 http://localhost:8080/api/setup/status >/dev/null 2>&1; then
+    exit 0
+  fi
+  i=$((i+1))
+  sleep 3
+done
+echo "fog-boot-check: fogd never answered — boot stays unblessed" >&2
+exit 1

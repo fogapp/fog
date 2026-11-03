@@ -1,0 +1,53 @@
+# binaries — bin/ is every build's output (make, release.sh's bin/release/,
+# signtool); a `go build` run at the root drops a binary named after its
+# package there instead
+/bin/
+/fogd
+/fog-locker
+/fog-node
+/fog-setup
+/fog-console
+/signtool
+# a `go build` inside a cmd/ directory drops the binary there
+/cmd/*/fogd
+/cmd/*/fog-locker
+/cmd/*/fog-node
+/cmd/*/fog-setup
+/cmd/*/fog-console
+
+# sandbox profiles test runs leave at the root (a tracked profile elsewhere
+# in the tree stays tracked)
+/*.sb
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+# the chat SDK borrows the frontend's node_modules through a symlink
+clients/chat-sdk/node_modules
+
+# built UI embedded into the binary lands in dist/app (wiped by every
+# build); only the placeholder dist/index.html is tracked, and no build
+# ever writes to it
+internal/ui/dist/app/
+internal/setupui/dist/app/
+
+# local dev state
+/.devdata/
+
+# editor/os
+.DS_Store
+
+# TypeScript incremental build cache
+frontend/tsconfig.tsbuildinfo
+
+# imaging build artifacts
+imaging/out/
+
+# design-sync (claude.ai/design) staged scripts, build output, machine state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules/
+frontend/.ds-styles.css
+frontend/.ds-types/

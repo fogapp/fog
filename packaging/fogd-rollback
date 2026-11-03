@@ -1,0 +1,223 @@
+#!/bin/sh
+# fogd-rollback: puts the previous fogd back when a self-update never came up
+# healthy — the binary, or the unit files. It runs from three places:
+#
+#   fogd-rollback --boot           ExecStartPre=- in fogd.service, before every start
+#   fogd-rollback --timer          the one-shot systemd timer the updater arms
+#                                  when it changes anything (works with any
+#                                  fogd.service, and runs outside fogd's sandbox)
+#   fogd-rollback --install-units  how the updater installs new unit files:
+#                                  fogd's sandbox keeps /etc read-only, so
+#                                  this runs as a transient unit of its own
+#
+# All three read <dir>/fogd.update-pending, which fogd's updater writes
+# before it changes anything (internal/selfupdate/rollback.go). A trial is
+# one of two kinds:
+#
+#   binary  a new fogd was swapped in; fogd.prev is the one it replaced
+#   units   new fogd.service and fogd.socket were installed (only ever once
+#           the running fogd had proven itself on the old ones); the old
+#           ones are kept in <stage>/prev
+#
+# The new fogd deletes the marker once it has answered its own health check
+# for a while. A marker still there after its deadline means the change
+# never got healthy, and what it changed is put back, with a record left for
+# the restored fogd to post to the Inbox.
+#
+# It can't loop: the marker is claimed (renamed away) before anything is
+# restored, so each change is rolled back at most once, and nothing here ever
+# re-applies one. When the binary isn't the one the update installed, or
+# fogd.prev isn't the one it replaced, nothing is changed.
+#
+# This file must stay POSIX sh with no dependencies past coreutils and
+# systemctl: it runs exactly when fogd itself can't.
+set -eu
+umask 022
+
+MODE="${1:---boot}"
+case "$MODE" in
+  --boot|--timer|--install-units) ;;
+  *) echo "usage: fogd-rollback --boot|--timer|--install-units" >&2; exit 2 ;;
+esac
+
+# FOGD_ROLLBACK_DIR is a test seam; installed, the script sits beside fogd.
+DIR="${FOGD_ROLLBACK_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+EXE="$DIR/fogd"
+PENDING="$EXE.update-pending"
+RECORD="$EXE.rolled-back"
+
+log() { printf 'fogd-rollback: %s\n' "$*" >&2; }
+field() { sed -n "s/^$1=//p" "$2" | head -n 1; }
+sha() {
+  { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1" 2>/dev/null; } | awk '{print $1}'
+}
+
+[ -f "$PENDING" ] || exit 0
+
+# What the trial is about, from the marker, each value held to what it can be.
+kind=$(field kind "$PENDING")
+[ -n "$kind" ] || kind=binary
+unit=$(field unit "$PENDING")
+case "$unit" in ''|*[!A-Za-z0-9@._-]*) unit=fogd.service ;; esac
+socket=$(field socket "$PENDING")
+case "$socket" in ''|*[!A-Za-z0-9@._-]*) socket=fogd.socket ;; esac
+unit_dir=$(field unit_dir "$PENDING")
+case "$unit_dir" in ''|[!/]*|*[!A-Za-z0-9._/-]*|*..*) unit_dir=/etc/systemd/system ;; esac
+stage=$(field stage "$PENDING")
+case "$stage" in [!/]*|*[!A-Za-z0-9._/-]*|*..*) stage="" ;; esac
+listen=$(field listen "$PENDING")
+case "$listen" in *[!0-9A-Za-z.:\[\]-]*) listen="" ;; esac
+
+# The previous unit files back in place, socket and port drop-in as they
+# were, and fogd started on them.
+restore_units() {
+  prev="$stage/prev"
+  systemctl stop "$unit" 2>/dev/null || true
+  if [ -f "$prev/$socket.absent" ]; then
+    systemctl disable --now "$socket" >/dev/null 2>&1 || true
+    rm -f "$unit_dir/$socket"
+  fi
+  for f in "$unit" "$socket"; do
+    if [ -f "$prev/$f" ]; then
+      cp -p "$prev/$f" "$unit_dir/.$f.fog-prev"
+      mv -f "$unit_dir/.$f.fog-prev" "$unit_dir/$f"
+    fi
+  done
+  if [ -f "$prev/socket-dropin-created" ]; then
+    rm -f "$unit_dir/$socket.d/10-listen.conf"
+    rmdir "$unit_dir/$socket.d" 2>/dev/null || true
+  fi
+  systemctl daemon-reload
+  if [ ! -f "$prev/$socket.absent" ]; then
+    systemctl restart "$socket" || log "the previous $socket wouldn't start"
+  fi
+  systemctl start "$unit" || log "restored the previous unit files, but '$unit' didn't start"
+}
+
+record() { # <failed version> <restored version> <why>
+  {
+    printf 'kind=%s\n' "$kind"
+    printf 'failed_version=%s\n' "$1"
+    printf 'restored_version=%s\n' "$2"
+    printf 'units_hash=%s\n' "$(field units_hash "$CLAIM")"
+    printf 'at=%s\n' "$(date +%s)"
+    printf 'by=%s\n' "${MODE#--}"
+    printf 'why=%s\n' "$3"
+    echo '--- journal'
+    journalctl -u "$unit" -n 40 --no-pager -o short-iso 2>/dev/null || true
+  } > "$RECORD.tmp"
+  mv -f "$RECORD.tmp" "$RECORD"
+}
+
+# --- installing new unit files ------------------------------------------------
+
+if [ "$MODE" = --install-units ]; then
+  [ "$kind" = units ] && [ -n "$stage" ] || { log "no unit change is on trial"; exit 2; }
+  new="$stage/new"
+  prev="$stage/prev"
+  [ -f "$new/$unit" ] && [ -f "$new/$socket" ] || { log "the staged unit files are missing"; exit 1; }
+  rm -rf "$prev"
+  mkdir -p "$prev"
+  for f in "$unit" "$socket"; do
+    if [ -f "$unit_dir/$f" ]; then cp -p "$unit_dir/$f" "$prev/$f"; else : > "$prev/$f.absent"; fi
+  done
+  # A server whose port isn't the socket's default says so on fogd
+  # (FOG_LISTEN, in its own drop-in); the socket gets the same port, unless
+  # it already has drop-ins of its own. The server's drop-ins themselves
+  # are never touched.
+  default=$(sed -n 's/^ListenStream=//p' "$new/$socket" | tail -n 1)
+  if [ -n "$listen" ] && [ "${listen#:}" != "$default" ] && ! ls "$unit_dir/$socket.d/"*.conf >/dev/null 2>&1; then
+    mkdir -p "$unit_dir/$socket.d"
+    printf '[Socket]\nListenStream=\nListenStream=%s\n' "${listen#:}" > "$unit_dir/$socket.d/10-listen.conf"
+    : > "$prev/socket-dropin-created"
+  fi
+  for f in "$unit" "$socket"; do
+    cp "$new/$f" "$unit_dir/.$f.fog-new"
+    chmod 0644 "$unit_dir/.$f.fog-new"
+    mv -f "$unit_dir/.$f.fog-new" "$unit_dir/$f"
+  done
+  systemctl daemon-reload
+  systemctl enable "$socket" >/dev/null 2>&1 || true
+  # The port moves from fogd to systemd here, the one moment it is free:
+  # fogd stops (closing its own listener), the socket binds the port at once,
+  # and fogd starts on the socket — milliseconds, not a restart delay. From
+  # then on the socket holds it across every restart.
+  systemctl stop "$unit" || true
+  if ! systemctl start "$socket"; then
+    log "$socket wouldn't start; putting the previous unit files back"
+    CLAIM="$PENDING.claimed"
+    mv "$PENDING" "$CLAIM" 2>/dev/null || exit 1
+    trap 'rm -f "$CLAIM"' EXIT
+    restore_units
+    v=$(field to_version "$CLAIM")
+    record "$v" "$v" "socket wouldn't start"
+    exit 1
+  fi
+  systemctl start "$unit" || log "'$unit' didn't start on the new unit files; the rollback timer will put the old ones back"
+  exit 0
+fi
+
+# --- rolling back -------------------------------------------------------------
+
+deadline=$(field deadline "$PENDING")
+case "$deadline" in
+  ''|*[!0-9]*) log "ignoring $PENDING: no readable deadline"; exit 0 ;;
+esac
+now=$(date +%s)
+# Before the deadline the change still has its chance.
+[ "$now" -ge "$deadline" ] || exit 0
+
+# Unit files live in /etc, which fogd's sandbox (and so this, run as its
+# ExecStartPre) can only read: the rollback of a unit change is handed to a
+# transient unit of its own, outside the sandbox. The armed timer would do
+# the same; whichever claims the marker first acts.
+if [ "$kind" = units ] && [ "$MODE" = --boot ]; then
+  systemd-run --unit="fogd-unit-rollback-$(date +%s)" --collect "$DIR/fogd-rollback" --timer >/dev/null 2>&1 \
+    || log "couldn't hand the unit rollback to systemd-run; the timer will do it"
+  exit 0
+fi
+
+# Claim the marker. Whoever renames it first acts; the other mode, or the new
+# fogd confirming itself at the last moment, finds it gone and stops.
+CLAIM="$PENDING.claimed"
+mv "$PENDING" "$CLAIM" 2>/dev/null || exit 0
+trap 'rm -f "$CLAIM"' EXIT
+
+to_version=$(field to_version "$CLAIM")
+from_version=$(field from_version "$CLAIM")
+to_sha=$(field to_sha256 "$CLAIM")
+from_sha=$(field from_sha256 "$CLAIM")
+
+if [ "$kind" = units ]; then
+  if [ -z "$stage" ] || [ ! -d "$stage/prev" ]; then
+    log "the unit change never got healthy, but its previous unit files aren't kept: leaving them"
+    exit 0
+  fi
+  restore_units
+  log "fogd's new unit files didn't become healthy by their deadline; restored the previous ones"
+  record "$to_version" "$from_version" "unit files didn't become healthy"
+  exit 0
+fi
+
+if [ "$(sha "$EXE")" != "$to_sha" ]; then
+  log "fogd is no longer the ${to_version:-update} it was swapped for; nothing to undo"
+  exit 0
+fi
+if [ -z "$from_sha" ] || [ ! -f "$EXE.prev" ] || [ "$(sha "$EXE.prev")" != "$from_sha" ]; then
+  log "fogd ${to_version:-?} never became healthy, but $EXE.prev isn't the ${from_version:-previous} binary it replaced: leaving it alone"
+  exit 0
+fi
+
+# Same directory, then one rename: fogd names a complete binary throughout.
+cp "$EXE.prev" "$EXE.rollback-tmp"
+chmod 0755 "$EXE.rollback-tmp"
+mv -f "$EXE.rollback-tmp" "$EXE"
+sync
+log "fogd $to_version didn't become healthy by its deadline; restored $from_version"
+record "$to_version" "$from_version" "didn't become healthy"
+
+# From ExecStartPre the start that runs next is already the restored binary.
+# From the timer, fogd is crash-looping or hung under the new one: restart it.
+if [ "$MODE" = --timer ]; then
+  systemctl restart "$unit" || log "restored $from_version, but 'systemctl restart $unit' failed"
+fi

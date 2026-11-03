@@ -1,0 +1,5 @@
+#!/bin/sh
+# Sync clients/flare into each app's vendored copy; see scripts/sync-gem.
+#
+# Usage: scripts/sync-flare [--allow-dirty] [app-dir ...]   (defaults to sibling checkouts)
+exec "$(dirname "$0")/sync-gem" flare "$@"

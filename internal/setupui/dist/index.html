@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <!-- Tracked placeholder: go:embed needs dist/ to exist so the Go tree
+       compiles without the frontend built. It deliberately references no
+       assets — a binary built from it says so instead of rendering blank.
+       `make frontend` overwrites it locally with the
+       real wizard (the build produces both apps); only this placeholder is committed. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fog Setup</title>
+  </head>
+  <body style="background:#15171e;color:#d5d9e2;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center">
+    <p>This fog-setup binary was built without the wizard frontend.<br />
+       Run <code>make frontend</code>, then rebuild fog-setup.</p>
+  </body>
+</html>

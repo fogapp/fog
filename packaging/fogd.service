@@ -1,0 +1,67 @@
+[Unit]
+Description=Fog - home server control plane
+Documentation=https://gitea.lan/matthew/fog
+After=network-online.target fogd.socket
+Wants=network-online.target fogd.socket
+
+[Service]
+# Type=notify + WatchdogSec: fogd reports READY once listening and heartbeats
+# while its database answers. A hung fogd (not just a dead one) gets restarted.
+Type=notify
+WatchdogSec=90
+# Before every start: if a self-update's new fogd hasn't confirmed itself
+# healthy by its deadline, put the previous binary back first (see
+# packaging/fogd-rollback). "-": a missing or failing guard never blocks fogd.
+ExecStartPre=-/usr/local/bin/fogd-rollback --boot
+ExecStart=/usr/local/bin/fogd
+Restart=always
+RestartSec=3
+# Under memory pressure the kernel kills an app container before the control
+# plane: fogd is what restarts apps and reports the outage.
+OOMScoreAdjust=-900
+# Stop signals fogd alone; it stops its own children (tailscaled, cloudflared)
+# in order — away access withdraws its route while tailscaled is still up.
+# The default control-group mode would SIGTERM them alongside fogd, racing
+# that withdrawal. Anything left once fogd exits is SIGKILLed.
+KillMode=mixed
+
+# fogd is root: it owns /var/lib/fog, drives the Docker socket, and (on first
+# run) installs Docker itself. Containers it manages run unprivileged.
+Environment=FOG_DATA_DIR=/var/lib/fog
+# The port is fogd.socket's: systemd holds it and passes it in, so it is
+# never free while fogd restarts. FOG_LISTEN is what fogd binds when started
+# without the socket, and where it checks its own health; keep the two the
+# same port.
+Environment=FOG_LISTEN=:8080
+
+# Hardening that doesn't get in the way of the Docker socket or data dir.
+# /usr/local/bin stays writable so self-update can swap the binary.
+NoNewPrivileges=false
+ProtectHome=read-only
+ProtectSystem=full
+ReadWritePaths=/var/lib/fog /usr/local/bin
+# Each of these was checked against what fogd and the children it runs in
+# this sandbox (tailscaled, cloudflared, git) do. Mounts and apt run outside
+# it, through systemd-run (internal/hostpkg), so they don't constrain those.
+#  - PrivateTmp: fogd keeps nothing in /tmp that another process reads; the
+#    NAS credentials and VPN auth key are written under /var/lib/fog.
+#  - ProtectControlGroups: nothing here writes cgroups; Docker's are its own.
+#  - RestrictSUIDSGID: fogd never creates setuid files (apt does, outside).
+#  - LockPersonality, RestrictRealtime, SystemCallArchitectures=native:
+#    every binary run here is native and needs neither.
+# Left out, because each can break something fogd runs: ProtectKernelTunables
+# and ProtectKernelModules (tailscaled may set sysctls and load tun or
+# netfilter modules), ProtectClock and ProtectKernelLogs (they close device
+# access, and tailscaled needs /dev/net/tun), PrivateDevices (same),
+# ProtectHostname, RestrictNamespaces and MemoryDenyWriteExecute (not
+# confirmed against tailscaled and cloudflared), and NoNewPrivileges.
+# scripts/test-fogd-unit runs this unit under real systemd.
+PrivateTmp=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

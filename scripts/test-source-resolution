@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Source resolution exists twice: internal/selfupdate/resolve.go (the
+# canonical shapes) and the shell resolver block — one block of text,
+# carried verbatim by install.sh, proxmox-lxc.sh and proxmox-vm.sh
+# (docs/hosting-the-source.md is the contract they share). install.sh and
+# resolve.go are run against each other over every shape by
+# internal/selfupdate/shellsource_test.go; this test pins the shell table
+# and requires the three copies of the block to be identical, so a change to
+# one that drifts from the others fails CI instead of failing an install.
+#
+# No network, no root: install.sh prints its candidate table under
+# FOG_PRINT_CANDIDATES=1.
+set -eu
+cd "$(dirname "$0")/.."
+
+fail=0
+check() { # <name> <expected> <actual>
+  if [ "$2" = "$3" ]; then
+    echo "ok   $1"
+  else
+    fail=1
+    {
+      echo "FAIL $1"
+      echo "  expected:"; printf '%s\n' "$2" | sed 's/^/    /'
+      echo "  actual:";   printf '%s\n' "$3" | sed 's/^/    /'
+    } >&2
+  fi
+}
+
+# install.sh emits "<manifest url>|<raw base>" per candidate.
+install_candidates() { # <source url>
+  FOG_PRINT_CANDIDATES=1 FOG_SOURCE="$1" FOG_BRANCH=main sh install.sh
+}
+eval "$(sed -n '/^valid_url()/,/^}$/p' proxmox-lxc.sh)"
+
+# --- a Gitea/Forgejo repo -----------------------------------------------------
+src=http://gitea.lan/matthew/fog
+check "install.sh: gitea repo" \
+"$src/raw/branch/main/release/latest.json|$src/raw/branch/main
+$src/latest.json|$src" \
+"$(install_candidates $src)"
+
+# --- a GitHub repo ------------------------------------------------------------
+# The release only — never the repo's committed manifest, whose URLs name
+# the host the release was cut on.
+src=https://github.com/you/fog
+raw=https://raw.githubusercontent.com/you/fog/main
+check "install.sh: github repo" \
+"$src/releases/latest/download/latest.json|$raw
+$src/latest.json|$src" \
+"$(install_candidates $src)"
+
+# --- a GitLab repo ------------------------------------------------------------
+src=https://gitlab.com/you/fog
+check "install.sh: gitlab repo" \
+"$src/-/raw/main/release/latest.json|$src/-/raw/main
+$src/latest.json|$src" \
+"$(install_candidates $src)"
+
+# --- a plain directory --------------------------------------------------------
+src=https://files.example.com/fog
+check "install.sh: plain directory" \
+"$src/latest.json|$src" \
+"$(install_candidates $src)"
+check "install.sh: directory at the host's root" \
+"https://files.example.com/latest.json|https://files.example.com" \
+"$(install_candidates https://files.example.com/)"
+
+# Trailing slashes are trimmed everywhere, like resolve.go's parseSource.
+check "install.sh: trailing slash" \
+"$src/latest.json|$src" \
+"$(install_candidates $src/)"
+
+# --- a manifest named directly ----------------------------------------------
+# Its directory is the release directory.
+check "install.sh: manifest URL" \
+"$src/latest.json|$src" \
+"$(install_candidates $src/latest.json)"
+
+# --- what nobody accepts ------------------------------------------------------
+# A source lands in a systemd unit and in curl's arguments; these must be
+# refused by install.sh and the Proxmox scripts alike.
+for bad in 'gitea.lan/matthew/fog' 'ftp://x/fog' 'http://x/my fog' 'http://x/fog;reboot' \
+           'http://x/$(id)' 'http://x/`id`' 'http://x/fog?a=1' 'http://u:p@x/fog' "http://x/'q'"; do
+  if install_candidates "$bad" >/dev/null 2>&1; then
+    check "install.sh refuses '$bad'" refused accepted
+  else
+    check "install.sh refuses '$bad'" refused refused
+  fi
+  if valid_url "$bad"; then
+    check "proxmox-lxc.sh refuses '$bad'" refused accepted
+  else
+    check "proxmox-lxc.sh refuses '$bad'" refused refused
+  fi
+done
+
+# The resolver block, byte for byte, in all three scripts: each must run
+# alone from a curl pipe, so it is copied rather than shared, and only this
+# check keeps the copies one.
+block() { sed -n '/^# >>> fog resolver/,/^# <<< fog resolver/p' "$1"; }
+[ -n "$(block install.sh)" ] || check "install.sh carries the resolver block" present missing
+for f in proxmox-lxc.sh proxmox-vm.sh; do
+  check "$f: the resolver block is install.sh's" "$(block install.sh)" "$(block $f)"
+done
+
+if [ "$fail" != 0 ]; then
+  echo "source resolution has drifted between install.sh, proxmox-lxc.sh, proxmox-vm.sh, and resolve.go" >&2
+  exit 1
+fi
+echo "source resolution: all shell copies match the resolver's shapes"

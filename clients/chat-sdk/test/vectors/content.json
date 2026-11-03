@@ -1,0 +1,197 @@
+{
+  "about": "Chat content (internal/chat/content.go, clients/chat-sdk/src/content.ts) as both sides must encode it. Each case is the CBOR map as JSON — byte strings as {\"$hex\": …} — and its canonical encoding. internal/chat's TestContentVectors and the SDK's content-vectors test both decode the hex to this content and encode it back to the same bytes. Regenerate the hex with UPDATE_VECTORS=1 go test ./internal/chat -run TestContentVectors.",
+  "cases": [
+    {
+      "name": "plain message",
+      "content": {
+        "v": 1,
+        "type": "message",
+        "id": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+        "sentAt": "2026-10-03T12:00:00Z",
+        "body": {
+          "format": "text/markdown",
+          "text": "héllo ✓"
+        }
+      },
+      "cbor": "a5617601626964781a30314a395a385a5134563344305937583557325431533052395164626f6479a264746578746a68c3a96c6c6f20e29c9366666f726d61746d746578742f6d61726b646f776e6474797065676d6573736167656673656e74417474323032362d31302d30335431323a30303a30305a"
+    },
+    {
+      "name": "reply in a thread with mentions and an attachment",
+      "content": {
+        "v": 1,
+        "type": "message",
+        "id": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9R",
+        "body": {
+          "format": "text/markdown",
+          "text": "@ana look"
+        },
+        "topicId": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+        "inReplyTo": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+        "mentions": [
+          "ana@home.example"
+        ],
+        "attachments": [
+          {
+            "blob": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "key": {
+              "$hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+            },
+            "nonce": {
+              "$hex": "a0a1a2a3a4a5a6a7a8a9aaab"
+            },
+            "name": "cat.jpg",
+            "mime": "image/jpeg",
+            "size": 48213,
+            "w": 640,
+            "h": 480,
+            "thumb": {
+              "$hex": "ffd8ffe0"
+            }
+          }
+        ],
+        "expires": "2026-10-10T12:00:00Z"
+      },
+      "cbor": "a9617601626964781a30314a395a385a5134563344305937583557325431533052395264626f6479a264746578746940616e61206c6f6f6b66666f726d61746d746578742f6d61726b646f776e6474797065676d657373616765676578706972657374323032362d31302d31305431323a30303a30305a67746f7069634964781a30314a395a385a51345633443059375835573254315330523951686d656e74696f6e738170616e6140686f6d652e6578616d706c6569696e5265706c79546f781a30314a395a385a513456334430593758355732543153305239516b6174746163686d656e747381a961681901e06177190280636b65795820000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f64626c6f62784039663836643038313838346337643635396132666561613063353561643031356133626634663162326230623832326364313564366331356230663030613038646d696d656a696d6167652f6a706567646e616d65676361742e6a70676473697a6519bc55656e6f6e63654ca0a1a2a3a4a5a6a7a8a9aaab657468756d6244ffd8ffe0"
+    },
+    {
+      "name": "edit",
+      "content": {
+        "v": 1,
+        "type": "edit",
+        "replaces": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+        "body": {
+          "format": "text/markdown",
+          "text": "hello"
+        }
+      },
+      "cbor": "a461760164626f6479a264746578746568656c6c6f66666f726d61746d746578742f6d61726b646f776e64747970656465646974687265706c61636573781a30314a395a385a51345633443059375835573254315330523951"
+    },
+    {
+      "name": "delete",
+      "content": {
+        "v": 1,
+        "type": "delete",
+        "replaces": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q"
+      },
+      "cbor": "a361760164747970656664656c657465687265706c61636573781a30314a395a385a51345633443059375835573254315330523951"
+    },
+    {
+      "name": "reaction removed",
+      "content": {
+        "v": 1,
+        "type": "reaction",
+        "reaction": {
+          "target": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+          "emoji": "👍",
+          "add": false
+        }
+      },
+      "cbor": "a36176016474797065687265616374696f6e687265616374696f6ea363616464f465656d6f6a6964f09f918d66746172676574781a30314a395a385a51345633443059375835573254315330523951"
+    },
+    {
+      "name": "pin",
+      "content": {
+        "v": 1,
+        "type": "pin",
+        "pin": {
+          "target": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+          "pinned": true
+        }
+      },
+      "cbor": "a36176016370696ea26670696e6e6564f566746172676574781a30314a395a385a5134563344305937583557325431533052395164747970656370696e"
+    },
+    {
+      "name": "read receipt",
+      "content": {
+        "v": 1,
+        "type": "receipt",
+        "readSeq": 70000
+      },
+      "cbor": "a36176016474797065677265636569707467726561645365711a00011170"
+    },
+    {
+      "name": "room metadata",
+      "content": {
+        "v": 1,
+        "type": "room",
+        "room": {
+          "name": "Kitchen",
+          "topic": "dinner plans",
+          "avatar": {
+            "$hex": "89504e47"
+          }
+        }
+      },
+      "cbor": "a361760164726f6f6da3646e616d65674b69746368656e65746f7069636c64696e6e657220706c616e73666176617461724489504e47647479706564726f6f6d"
+    },
+    {
+      "name": "typing",
+      "content": {
+        "v": 1,
+        "type": "typing"
+      },
+      "cbor": "a2617601647479706566747970696e67"
+    },
+    {
+      "name": "system message from the bot",
+      "content": {
+        "v": 1,
+        "type": "message",
+        "body": {
+          "format": "text/markdown",
+          "text": "Backups finished."
+        },
+        "system": "fog"
+      },
+      "cbor": "a461760164626f6479a26474657874714261636b7570732066696e69736865642e66666f726d61746d746578742f6d61726b646f776e6474797065676d6573736167656673797374656d63666f67"
+    },
+    {
+      "name": "link preview",
+      "content": {
+        "v": 1,
+        "type": "message",
+        "body": {
+          "format": "text/markdown",
+          "text": "https://example.com"
+        },
+        "preview": {
+          "url": "https://example.com",
+          "title": "Example",
+          "description": "An example",
+          "image": "https://example.com/i.png",
+          "site": "example.com"
+        }
+      },
+      "cbor": "a461760164626f6479a264746578747368747470733a2f2f6578616d706c652e636f6d66666f726d61746d746578742f6d61726b646f776e6474797065676d6573736167656770726576696577a56375726c7368747470733a2f2f6578616d706c652e636f6d64736974656b6578616d706c652e636f6d65696d616765781968747470733a2f2f6578616d706c652e636f6d2f692e706e67657469746c65674578616d706c656b6465736372697074696f6e6a416e206578616d706c65"
+    },
+    {
+      "name": "history for a newly joined device",
+      "content": {
+        "v": 1,
+        "type": "history",
+        "history": [
+          {
+            "id": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+            "seq": 12,
+            "sender": "ana@home.example",
+            "sentAt": "2026-10-03T12:00:00Z",
+            "hubAt": "2026-10-03T12:00:01Z",
+            "content": {
+              "v": 1,
+              "type": "message",
+              "id": "01J9Z8ZQ4V3D0Y7X5W2T1S0R9Q",
+              "body": {
+                "format": "text/markdown",
+                "text": "earlier"
+              }
+            }
+          }
+        ],
+        "historyFor": [
+          "dGhlLWRldmljZS1rZXk"
+        ]
+      },
+      "cbor": "a4617601647479706567686973746f727967686973746f727981a6626964781a30314a395a385a51345633443059375835573254315330523951637365710c65687562417474323032362d31302d30335431323a30303a30315a6673656e64657270616e6140686f6d652e6578616d706c656673656e74417474323032362d31302d30335431323a30303a30305a67636f6e74656e74a4617601626964781a30314a395a385a5134563344305937583557325431533052395164626f6479a26474657874676561726c69657266666f726d61746d746578742f6d61726b646f776e6474797065676d6573736167656a686973746f7279466f7281736447686c4c57526c646d6c6a5a5331725a586b"
+    }
+  ]
+}

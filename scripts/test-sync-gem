@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# scripts/sync-gem must vendor exactly what each gem's gemspec says the gem
+# contains, plus the gemspec, and nothing else: fog-client's rbi/ was once
+# left behind while its gemspec shipped it, and files an earlier sync copied
+# (a Rakefile) lingered in apps for good. This syncs every gem under clients/
+# into a scratch app that already holds stale files, and compares the result
+# with the gemspec's own list. No network; needs ruby and rsync.
+set -eu
+cd "$(dirname "$0")/.."
+
+fail=0
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+app="$scratch/app"
+mkdir -p "$app"
+touch "$app/Gemfile"
+
+for spec in clients/*/*.gemspec; do
+  dir="$(dirname "$spec")"
+  gem="$(basename "$spec" .gemspec)"
+  dest="$app/vendor/gems/$gem"
+  # What an older sync, or a hand copy, may have left.
+  mkdir -p "$dest/test" "$dest/lib"
+  touch "$dest/Rakefile" "$dest/test/stale_test.rb" "$dest/lib/removed.rb"
+
+  # This tree is mid-edit as often as not; the refusal is tested below.
+  scripts/sync-gem --allow-dirty "$gem" "$app" >/dev/null
+
+  want="$(cd "$dir" && ruby -e '
+    spec = Gem::Specification.load(ARGV[0])
+    puts((spec.files | [ARGV[0]]).sort)' "$gem.gemspec")"
+  got="$(cd "$dest" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)"
+  want="$(printf '%s\n' "$want" | LC_ALL=C sort)"
+  if [ "$want" = "$got" ]; then
+    echo "ok   $gem: $(printf '%s\n' "$got" | wc -l | tr -d ' ') files, as its gemspec lists"
+  else
+    fail=1
+    {
+      echo "FAIL $gem"
+      diff <(printf '%s\n' "$want") <(printf '%s\n' "$got") | sed 's/^/  /' || true
+    } >&2
+  fi
+  # Byte for byte, not just by name.
+  if ! (cd "$dest" && find . -type f -print0 | xargs -0 -I{} cmp -s "{}" "$OLDPWD/$dir/{}"); then
+    fail=1
+    echo "FAIL $gem: a vendored file differs from clients/$gem" >&2
+  fi
+done
+
+# The finding that started this: fog-client's typed surface ships.
+if [ -f "$app/vendor/gems/fog-client/rbi/fog_client_signin.rbi" ]; then
+  echo "ok   fog-client: rbi/ vendored"
+else
+  fail=1
+  echo "FAIL fog-client: rbi/ missing" >&2
+fi
+
+# A gem with uncommitted or untracked files is refused, unless
+# --allow-dirty; a committed one syncs, to sibling checkouts by default.
+# A scratch fog checkout, so the real one's state doesn't matter.
+root="$scratch/root"
+mkdir -p "$root/fog/scripts" "$root/fog/clients/demo/lib" "$root/app/vendor/gems/demo"
+cp scripts/sync-gem "$root/fog/scripts/"
+touch "$root/app/Gemfile"
+cat >"$root/fog/clients/demo/demo.gemspec" <<'SPEC'
+Gem::Specification.new do |s|
+  s.name = "demo"
+  s.version = "0.1.0"
+  s.summary = "demo"
+  s.authors = ["x"]
+  s.files = Dir["lib/**/*.rb"]
+end
+SPEC
+echo "module Demo; end" >"$root/fog/clients/demo/lib/demo.rb"
+g() { git -C "$root/fog" -c user.name=t -c user.email=t@example.com "$@" >/dev/null; }
+g init -q
+g add -A
+g commit -q -m init
+
+expect() { # <name> <want exit: 0|1> <command...>
+  local name="$1" want="$2"
+  shift 2
+  if "$@" >"$scratch/out" 2>&1; then got=0; else got=1; fi
+  if [ "$got" = "$want" ]; then
+    echo "ok   $name"
+  else
+    fail=1
+    echo "FAIL $name (exit $got, want $want)" >&2
+    sed 's/^/  /' "$scratch/out" >&2
+  fi
+}
+
+expect "a committed gem syncs to its siblings" 0 "$root/fog/scripts/sync-gem" demo
+echo "module Stray; end" >"$root/fog/clients/demo/lib/stray.rb"
+expect "an untracked lib file is refused" 1 "$root/fog/scripts/sync-gem" demo "$root/app"
+grep -q "lib/stray.rb" "$scratch/out" || { fail=1; echo "FAIL the refusal doesn't name the file" >&2; }
+[ ! -e "$root/app/vendor/gems/demo/lib/stray.rb" ] || { fail=1; echo "FAIL a refused sync still copied" >&2; }
+rm "$root/fog/clients/demo/lib/stray.rb"
+echo "# edit" >>"$root/fog/clients/demo/lib/demo.rb"
+expect "an uncommitted edit is refused" 1 "$root/fog/scripts/sync-gem" demo "$root/app"
+expect "--allow-dirty syncs it anyway" 0 "$root/fog/scripts/sync-gem" demo --allow-dirty
+grep -q "# edit" "$root/app/vendor/gems/demo/lib/demo.rb" || { fail=1; echo "FAIL --allow-dirty didn't copy the edit" >&2; }
+# Only committed bytes ship. Back to a clean, committed gem first.
+git -C "$root/fog" checkout -q -- clients/demo
+# A gitignored file the gemspec's glob matches: status stays clean, so
+# nothing refuses — and it must still not reach the app.
+printf 'ignored.rb\n' >"$root/fog/.gitignore"
+g add .gitignore
+g commit -q -m ignore
+echo "SECRET = 1" >"$root/fog/clients/demo/lib/ignored.rb"
+expect "a gitignored file doesn't stop a committed sync" 0 "$root/fog/scripts/sync-gem" demo "$root/app"
+[ ! -e "$root/app/vendor/gems/demo/lib/ignored.rb" ] || { fail=1; echo "FAIL a gitignored file was vendored" >&2; }
+rm "$root/fog/clients/demo/lib/ignored.rb"
+# Edits hidden from git status: the vendored copy is still the committed one.
+for flag in --assume-unchanged --skip-worktree; do
+  git -C "$root/fog" update-index "$flag" clients/demo/lib/demo.rb
+  echo "HIDDEN = 1 # $flag" >>"$root/fog/clients/demo/lib/demo.rb"
+  expect "an edit hidden with $flag doesn't stop the sync" 0 "$root/fog/scripts/sync-gem" demo "$root/app"
+  if grep -q "HIDDEN" "$root/app/vendor/gems/demo/lib/demo.rb"; then
+    fail=1; echo "FAIL an edit hidden with $flag was vendored" >&2
+  else
+    echo "ok   an edit hidden with $flag stays out"
+  fi
+  git -C "$root/fog" update-index "--no-${flag#--}" clients/demo/lib/demo.rb
+  git -C "$root/fog" checkout -q -- clients/demo/lib/demo.rb
+done
+cmp -s "$root/app/vendor/gems/demo/lib/demo.rb" <(git -C "$root/fog" show HEAD:clients/demo/lib/demo.rb) \
+  || { fail=1; echo "FAIL the vendored file isn't the committed one" >&2; }
+
+rm -rf "$root/fog/.git"
+expect "outside git, it can't tell, so it refuses" 1 "$root/fog/scripts/sync-gem" demo "$root/app"
+
+exit "$fail"

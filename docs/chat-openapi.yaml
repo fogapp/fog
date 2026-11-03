@@ -1,0 +1,3489 @@
+openapi: 3.1.0
+info:
+  title: fog Chat HTTP API
+  version: 0.12.24
+  summary: The HTTP surface of fog Chat, as implemented in internal/server.
+  description: |
+    fog Chat is an end-to-end encrypted (MLS, RFC 9420) group chat inside fogd.
+    This document describes exactly the routes registered in
+    internal/server/server.go for /api/people, /api/join, /api/chat, /hooks/chat,
+    /app/v1/chat and /fed/v1/chat, with request and response shapes taken from
+    the Go structs and writeJSON maps in the handlers. Concepts are in
+    docs/chat-contract.md.
+
+    **Addresses.** A person is addressed on the wire as `fog:<instanceId>/<handle>`
+    (`chat.ParseAddr`). `<instanceId>` is the home fog's federation instance id.
+
+    **Binary encoding.** Two encodings appear, and the difference matters:
+    * Fields written through `people.EncodeKey` (keys, attestations, KeyPackages,
+      GroupInfo, Welcome on `/api/chat/invites`, `senderDevice`, tree leaf
+      `signatureKey`) are **base64url without padding**. Inputs decoded with
+      `people.DecodeKey` accept base64url or standard base64, padded or not; send
+      unpadded base64url.
+    * Fields that are Go `[]byte` marshalled directly by `encoding/json`
+      (`ChatEvent.payload`, `Person.identityKey` inside a `person` object,
+      `RoomSnapshot.groupId`/`groupInfo`, notify `invite.welcome`) are **standard
+      base64 with padding**. Schemas below carry `contentEncoding` to say which.
+
+    **Errors.** Every error body is `{"error": string, "code"?: string}`. Codes the
+    handlers emit: `need_device` (428), `not_found` (404), `epoch_stale` (409),
+    `forbidden` (403), `bad_request` (400), `archived` (410), `identity_set` (409),
+    `previews_off` (403), `bot_not_in_room` (409), `rate_limited` (429), `moving`
+    (503, a hub hand-over is in flight), `need_group_info` (409: a room from before the
+    hub verified commits needs a member to publish GroupInfo for its epoch),
+    `awaiting_removal` (409: the bot won't post while the group still holds a departed
+    person's leaves), `quota` (507: attachment storage quota reached), and on the
+    federation plane
+    `missing_instance`, `unknown_peer`, `key_unusable`, `bad_signature` (all 403)
+    and `adopt_failed` (409). `chatError` writes `"code": ""` on an unmapped 500.
+    Many 400/401/404/409 bodies carry only `error`.
+
+    **System events.** An event of kind `system` is minted by the hub itself and its
+    `payload` is plaintext JSON, not MLS. The hub hand-over notice appended by the
+    new hub as its first act:
+    `{"kind": "hub-moved", "from": "<oldInstanceId>", "to": "<newInstanceId>", "by": "<personAddr>"}`.
+    And departures, `{"kind": K, "left": [personAddr...], "reason"?: string}` with
+    K one of `household-cut`, `banned`, `left`, `identity-reset`: the hub has
+    counted those people out of the room at this event (they see nothing after
+    it), and the first member device to see it commits the MLS removal of their
+    leaves. Any member may remove the leaves of someone the hub counts out.
+    `identity-reset` also tells clients to drop their pinned key and verification
+    mark for the person and to warn the room.
+
+    **Content profile (encrypted; the server never sees it).** The payload of an
+    `mls_private` event is an MLS `PrivateMessage` whose application data is a
+    CBOR map with string keys — fog's profile of draft-ietf-mimi-content
+    (internal/chat/content.go, version `v: 1`). Keys: `type`
+    (message | edit | delete | reaction | pin | receipt | room | typing | history),
+    `id` (the event's ULID), `sentAt`, `body {format: "text/markdown", text}`,
+    `topicId` (thread root), `inReplyTo`, `replaces` (edit/delete target),
+    `reaction {target, emoji, add}`, `pin {target, pinned}`, `mentions[]`,
+    `attachments[] {blob (sha256 of ciphertext), key, nonce, name, mime, size, w, h,
+    thumb}`, `expires`, `room {name, topic, avatar}`, `readSeq`, `system`,
+    `history[]`, `historyFor[]`, `preview {url, title, description, image, site}`.
+    This document treats every payload as opaque bytes.
+  x-fog-source-of-truth:
+    - internal/server/server.go
+    - internal/server/chat_handlers.go
+    - internal/server/chatme_handlers.go
+    - internal/server/chat_parity_handlers.go
+    - internal/server/chat_fed_handlers.go
+    - internal/server/chat_migrate_handlers.go
+    - internal/server/people_handlers.go
+    - internal/server/chat_ws.go
+    - internal/chat/service.go
+    - internal/chat/fed.go
+    - internal/chat/fed_migrate.go
+    - internal/chat/policy.go
+    - internal/chat/notify.go
+    - internal/store/chat.go
+    - internal/store/people.go
+    - internal/fed/sign.go
+
+servers:
+  - url: https://fog.{domain}
+    description: A fog with a configured base domain (people cookies are scoped to it).
+    variables:
+      domain:
+        default: example.house
+  - url: http://fog.lan:8080
+    description: A fog without a domain, on the LAN.
+
+tags:
+  - name: People
+    description: Directory, invites, sign-in and credentials (docs/chat-contract.md).
+  - name: Devices
+    description: A person's identity key, devices, KeyPackages, device-bound sessions and encrypted backup.
+  - name: Rooms
+    description: Rooms a person is in; hub-side or relayed to the hub for replicas.
+  - name: Events
+    description: The ciphertext log and the realtime stream.
+  - name: Blobs
+    description: Content-addressed encrypted attachments.
+  - name: Invites
+    description: Pending MLS Welcomes addressed to a person.
+  - name: Preferences
+    description: Per-person notification preferences and link previews.
+  - name: Push
+    description: Web Push (VAPID) subscriptions per device.
+  - name: Webhooks
+    description: Incoming webhooks that post as the fog bot.
+  - name: Apps
+    description: The app-facing surface, authenticated by FOG_API_TOKEN.
+  - name: Federation
+    description: The signed /fed/v1/chat plane between households.
+
+security: []
+
+paths:
+  # ---------------------------------------------------------------- People
+  /api/join/{secret}:
+    parameters:
+      - $ref: '#/components/parameters/JoinSecret'
+    get:
+      tags: [People]
+      operationId: joinPreview
+      summary: Preview an invite link
+      description: Unauthenticated. Describes what the invite offers before the joiner commits.
+      responses:
+        '200':
+          description: The invite is live.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [household, handle, displayName, role, expiresAt, passkeysAvailable]
+                properties:
+                  household: { type: string }
+                  handle: { type: string, description: Handle hint chosen by the operator; may be empty. }
+                  displayName: { type: string }
+                  role: { type: string, enum: [member, guest] }
+                  expiresAt: { $ref: '#/components/schemas/RFC3339' }
+                  passkeysAvailable: { type: boolean, description: True when a WebAuthn relying party can be formed for this host. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [People]
+      operationId: join
+      summary: Accept an invite and become a person
+      description: |
+        Unauthenticated and rate limited per IP. Creates the person, claims the
+        invite, optionally sets a password, mints a web person session and sets the
+        `fog_session` cookie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handle: { type: string, description: Required unless the invite carries a handle hint; must match the hint if one exists. }
+                displayName: { type: string }
+                password: { type: string, description: Optional; validated by auth.ValidatePassword. }
+      responses:
+        '200':
+          description: Joined; the `fog_session` cookie is set.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetPersonCookie' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/login:
+    post:
+      tags: [People]
+      operationId: personLogin
+      summary: Sign in with handle and password
+      description: |
+        Unauthenticated, rate limited per IP. Fog has one sign-in: this is the
+        same handler as `POST /api/auth/login`, and it authenticates operators
+        and members alike — the `role` on the person decides what the session
+        can reach, not which path was called. `handle` and `username` name the
+        same field. Sets the `fog_session` cookie; the session carries no
+        device (see `POST /api/chat/me/devices` and `.../session`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, password]
+              properties:
+                handle: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetPersonCookie' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: '`invalid handle or password`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/login/passkey/begin:
+    post:
+      tags: [People]
+      operationId: passkeyLoginBegin
+      summary: Begin a discoverable passkey sign-in
+      description: Rate limited per IP, separately from `finish`.
+      responses:
+        '200':
+          description: A WebAuthn assertion request.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ceremony, options]
+                properties:
+                  ceremony: { type: string, description: Opaque ceremony id to return in `finish`. }
+                  options: { type: object, description: 'go-webauthn `CredentialAssertion` (publicKey request options), passed to navigator.credentials.get.' }
+        '412':
+          description: No relying party can be formed (no domain / not a secure context).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/login/passkey/finish:
+    post:
+      tags: [People]
+      operationId: passkeyLoginFinish
+      summary: Finish a passkey sign-in
+      description: Rate limited per IP. Sets the `fog_session` cookie on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ceremony, response]
+              properties:
+                ceremony: { type: string }
+                response: { type: object, description: The authenticator's PublicKeyCredential (assertion) as JSON. }
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetPersonCookie' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: '`passkey not recognised` or `this account is suspended`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '412':
+          description: No relying party can be formed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/logout:
+    post:
+      tags: [People]
+      operationId: personLogout
+      summary: End the current person session
+      description: Deletes the session named by the `fog_session` cookie (or the bearer token), and clears the cookie. Always 200.
+      security:
+        - personCookie: []
+        - personBearer: []
+        - {}
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /api/people/me:
+    get:
+      tags: [People]
+      operationId: personMe
+      summary: The signed-in person and their credentials
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person, operator, credentials, passkeysAvailable, household]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+                  operator: { type: boolean, description: The request also carries a valid operator session. }
+                  credentials:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonCredential' }
+                  passkeysAvailable: { type: boolean }
+                  household: { type: string, description: Household (server) name. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/people/me/password:
+    post:
+      tags: [People]
+      operationId: setOwnPassword
+      summary: Set or change the person's password
+      description: A person who already has a password must present it as `current`; a passkey-only person adds a fallback and omits it.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                current: { type: string }
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: '`current password is wrong`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/me/passkeys/begin:
+    post:
+      tags: [People]
+      operationId: passkeyRegisterBegin
+      summary: Begin registering a passkey
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: A WebAuthn creation request (resident key required, user verification preferred).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ceremony, options]
+                properties:
+                  ceremony: { type: string }
+                  options: { type: object, description: 'go-webauthn `CredentialCreation`, passed to navigator.credentials.create.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '412':
+          description: No relying party can be formed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/me/passkeys/finish:
+    post:
+      tags: [People]
+      operationId: passkeyRegisterFinish
+      summary: Finish registering a passkey
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ceremony, response]
+              properties:
+                ceremony: { type: string }
+                label: { type: string, description: 'Defaults to "Passkey".' }
+                response: { type: object, description: The authenticator's PublicKeyCredential (attestation) as JSON. }
+      responses:
+        '200':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, label]
+                properties:
+                  id: { type: integer, format: int64 }
+                  label: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '412':
+          description: No relying party can be formed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/me/credentials/{id}:
+    delete:
+      tags: [People]
+      operationId: deleteOwnCredential
+      summary: Remove one of the person's credentials
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people:
+    get:
+      tags: [People]
+      operationId: listPeople
+      summary: Operator directory of people and pending invites
+      security: [ { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [people, invites]
+                properties:
+                  people:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonAdminView' }
+                  invites:
+                    type: array
+                    description: Unused, unexpired invites only.
+                    items: { $ref: '#/components/schemas/PersonInvite' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/invites:
+    post:
+      tags: [People]
+      operationId: createPersonInvite
+      summary: Mint a join link
+      security: [ { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handle: { type: string, description: Optional handle the invite is for; must be free. }
+                displayName: { type: string }
+                role: { type: string, enum: [member, guest], description: Defaults to member. }
+                ttlHours: { type: integer, description: 1–720; otherwise the default of 7 days. }
+      responses:
+        '200':
+          description: The link. The secret is shown once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, url, path, expiresAt]
+                properties:
+                  id: { type: integer, format: int64 }
+                  url: { type: string, format: uri, description: '`<publicURL>/join/<secret>`.' }
+                  path: { type: string, description: '`/join/<secret>`.' }
+                  expiresAt: { $ref: '#/components/schemas/RFC3339' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/invites/{id}:
+    delete:
+      tags: [People]
+      operationId: deletePersonInvite
+      summary: Revoke a join link
+      security: [ { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Int64Id'
+    patch:
+      tags: [People]
+      operationId: updatePerson
+      summary: Change a person's display name, role or status
+      description: The operator's own role and status cannot change. Suspending a person deletes their sessions.
+      security: [ { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                role: { type: string, enum: [member, guest] }
+                status: { type: string, enum: [active, suspended] }
+      responses:
+        '200':
+          description: The updated person.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonAdminView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [People]
+      operationId: deletePerson
+      summary: Remove a person
+      description: The operator cannot be removed (400).
+      security: [ { operatorSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/{id}/reset-identity:
+    post:
+      tags: [People]
+      operationId: resetPersonIdentity
+      summary: Operator-assisted recovery
+      description: |
+        Clears the person's identity key and revokes every device. The next device to
+        sign in starts a new identity. Chat treats the reset as a departure: the
+        person is taken out of every room they are in, with an `identity-reset`
+        system event (relayed to the hub of rooms hubbed elsewhere), and Welcomes
+        waiting for their old devices are dropped. The new identity can't join a
+        room by itself; a member must add it again.
+      security: [ { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/{id}/password:
+    post:
+      tags: [People]
+      operationId: setPersonPassword
+      summary: Operator sets a person's password
+      security: [ { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/{id}/sessions:
+    get:
+      tags: [People]
+      operationId: adminPersonSessions
+      summary: Operator lists a person's live sessions
+      security: [ { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200':
+          description: Newest activity first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonSessionView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/people/{id}/signout:
+    post:
+      tags: [People]
+      operationId: adminPersonSignout
+      summary: Operator signs a person out everywhere
+      description: Deletes every session of the person.
+      security: [ { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/people:
+    get:
+      tags: [People]
+      operationId: chatPeople
+      summary: Directory for chat — local people and peers' advertised people
+      description: |
+        Every active local person with their live devices, plus for each federation
+        peer granted `chat` the people that peer advertises in its heartbeat.
+        Remote device entries carry no `keyPackages` count.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [people, household, instanceId, households]
+                properties:
+                  people:
+                    type: array
+                    items: { $ref: '#/components/schemas/DirectoryPerson' }
+                  household: { type: string, description: This household's name. }
+                  instanceId: { type: string, description: This fog's federation instance id ("" if unknown). }
+                  households:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, instanceId, online, people]
+                      properties:
+                        name: { type: string }
+                        instanceId: { type: string }
+                        online: { type: boolean, description: Peer heartbeat seen within fed.OnlineWindow. }
+                        people:
+                          type: array
+                          items: { $ref: '#/components/schemas/DirectoryPerson' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/people/{handle}/keys:
+    get:
+      tags: [People]
+      operationId: chatPersonKeys
+      summary: Key material for a local person (MIMI keyMaterial)
+      description: |
+        The person's identity key and, per live device, its key, attestation and
+        one fresh KeyPackage.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Handle'
+        - $ref: '#/components/parameters/Ciphersuite'
+        - $ref: '#/components/parameters/OnlyDevice'
+      x-fog-notes:
+        - 'Each call consumes one unconsumed KeyPackage per device returned, within the caller''s budget: at most 12 of one person''s an hour per asker, 120 an hour of one person''s across all askers (fetching one''s own is unbounded). Past the budget, or for a device with none left, the device''s last-resort package is returned with `lastResort: true` and not consumed. A device with neither reports `keyPackage: null`.'
+        - '`device` narrows the answer to one device id, so a person adding their own new device consumes only that device''s package.'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyMaterial' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+
+  /api/chat/keys:
+    get:
+      tags: [People]
+      operationId: chatKeysByAddr
+      summary: Key material by address, local or remote
+      description: |
+        For a local address this is `GET /api/chat/people/{handle}/keys` with the
+        default ciphersuite. For a remote address the request is proxied over the
+        signed federation channel to the person's home fog
+        (`GET /fed/v1/chat/people/{handle}/keys`) and the home fog's JSON is returned
+        verbatim.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: addr
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/PersonAddr' }
+        - $ref: '#/components/parameters/OnlyDevice'
+      x-fog-notes:
+        - '`device` only applies to local addresses.'
+        - 404 `that household is not paired with this one` when the instance in `addr` is not a peer.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyMaterial' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  # --------------------------------------------------------------- Devices
+  /api/chat/me:
+    get:
+      tags: [Devices]
+      operationId: chatMe
+      summary: The person's chat self — identity key, devices, backup summary
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person, identityKey, devices, deviceId, operator, household, backup]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+                  identityKey:
+                    type: string
+                    description: base64url (unpadded) ed25519 public key, or "" when unset.
+                  devices:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeviceView' }
+                  deviceId:
+                    type: integer
+                    format: int64
+                    description: Device bound to this session; 0 when the session has none (cookie from login, or operator session).
+                  operator: { type: boolean }
+                  household:
+                    type: object
+                    required: [name, instanceId, domain]
+                    properties:
+                      name: { type: string }
+                      instanceId: { type: string }
+                      domain: { type: string, description: Configured base domain, or "". }
+                  backup:
+                    oneOf:
+                      - type: 'null'
+                      - type: object
+                        required: [version, updatedAt, bytes]
+                        properties:
+                          version: { type: integer, format: int64 }
+                          updatedAt: { $ref: '#/components/schemas/RFC3339' }
+                          bytes: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+
+  /api/chat/me/identity:
+    put:
+      tags: [Devices]
+      operationId: setIdentity
+      summary: Write the person identity key (once)
+      description: A second write is 409 `identity_set` until the operator resets the identity (`POST /api/people/{id}/reset-identity`).
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityKey]
+              properties:
+                identityKey: { $ref: '#/components/schemas/Base64UrlKey' }
+      responses:
+        '200':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, identityKey]
+                properties:
+                  ok: { type: boolean, const: true }
+                  identityKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: '`code: identity_set`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices:
+    post:
+      tags: [Devices]
+      operationId: registerDevice
+      summary: Register a device and bind the session to it
+      description: |
+        Creates a device for the signed-in person and mints a person session bound
+        to it. For `clientKind: web` the session replaces the `fog_session` cookie;
+        for `clientKind: native` the plaintext token is returned in `token` and used
+        as a bearer.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceKey]
+              properties:
+                name: { type: string, description: Defaults to a name derived from the User-Agent. }
+                kind: { type: string, enum: [web, ios, android, desktop], description: Anything else becomes web. }
+                deviceKey: { $ref: '#/components/schemas/Base64UrlKey' }
+                attestation:
+                  type: string
+                  description: base64url ed25519 signature by the identity key over `"fog-device-attest/1\n" || deviceKey`. Requires an identity key to be set.
+                ciphersuite: { type: integer, description: 'MLS ciphersuite id; 0/absent means 1 (MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519).' }
+                keyPackages:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/Base64UrlBytes' }
+                  description: Initial KeyPackages (each 16 B–64 KiB).
+                lastResort: { $ref: '#/components/schemas/Base64UrlBytes', description: 'The device''s last-resort KeyPackage: served, never consumed, when the one-use ones run out or an asker is past its budget. The device keeps its private keys.' }
+                clientKind: { type: string, enum: [web, native], description: Anything else is web. }
+      responses:
+        '200':
+          description: Registered. Web clients receive a new cookie; native clients receive `token`.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetPersonCookie' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device]
+                properties:
+                  device: { $ref: '#/components/schemas/DeviceView' }
+                  token: { type: string, description: "Present only for clientKind native." }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: '`that device key is already registered` (no code).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    patch:
+      tags: [Devices]
+      operationId: renameDevice
+      summary: Rename one of the person's devices
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 64 }
+      responses:
+        '200': { $ref: '#/components/responses/DeviceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Devices]
+      operationId: revokeDevice
+      summary: Revoke a device
+      description: |
+        Marks the device revoked, ends its sessions and open streams, and posts a
+        `device-revoked` system event (`{"kind": "device-revoked", "person", "devices": [deviceKey]}`)
+        in every room hubbed here where it holds a leaf. Any member may then
+        commit the leaf's removal; the first device to see the event does.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices/{id}/attest:
+    post:
+      tags: [Devices]
+      operationId: attestDevice
+      summary: Attach an attestation to a device
+      description: The attestation is made by another device holding the identity key; fog verifies and stores it.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attestation]
+              properties:
+                attestation: { $ref: '#/components/schemas/Base64UrlBytes' }
+      responses:
+        '200': { $ref: '#/components/responses/DeviceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices/{id}/keypackages:
+    post:
+      tags: [Devices]
+      operationId: publishKeyPackages
+      summary: Publish KeyPackages for a device
+      description: At most 100 unconsumed packages per device in total; the request is refused (400) if it would exceed that.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyPackages]
+              properties:
+                ciphersuite: { type: integer, description: 0/absent means 1. }
+                keyPackages:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/Base64UrlBytes' }
+                lastResort: { $ref: '#/components/schemas/Base64UrlBytes', description: Replaces the device's last-resort KeyPackage. }
+                replace: { type: boolean, description: 'Drop every package the device published that no one has taken, and its last-resort one, before filing these: what a device restored from a backup (holding none of their private keys) sends. Needs a new lastResort (400 otherwise).' }
+      responses:
+        '200':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keyPackages]
+                properties:
+                  keyPackages: { type: integer, description: Unconsumed packages now held for the device. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices/{id}/challenge:
+    get:
+      tags: [Devices]
+      operationId: deviceChallenge
+      summary: Get a nonce to prove possession of a device key
+      description: For a restored or re-signed-in device that already exists on fog. The nonce is single-use and expires.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nonce, message]
+                properties:
+                  nonce: { type: string }
+                  message: { type: string, description: 'Exactly the string to sign: `"fog-device-session/1\n" + nonce`.' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/devices/{id}/session:
+    post:
+      tags: [Devices]
+      operationId: deviceSession
+      summary: Bind the session to an existing device
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nonce, signature]
+              properties:
+                nonce: { type: string }
+                signature: { type: string, description: base64url ed25519 signature by the device key over the challenge `message`. }
+                clientKind: { type: string, enum: [web, native] }
+      responses:
+        '200':
+          description: Bound. Web clients receive a new cookie; native clients receive `token`.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetPersonCookie' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device]
+                properties:
+                  device: { $ref: '#/components/schemas/DeviceView' }
+                  token: { type: string, description: "Present only for clientKind native." }
+        '400':
+          description: Invalid JSON, or `challenge expired; ask for another`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: '`the signature does not match this device''s key` (no code).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/backup:
+    put:
+      tags: [Devices]
+      operationId: putBackup
+      summary: Store the person's client-encrypted backup
+      description: Opaque bytes, at most 64 MiB. fog cannot read them.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: X-Fog-Backup-Version
+          in: header
+          required: false
+          schema: { type: integer, format: int64 }
+          description: Client version counter. A non-zero version lower than the stored one is refused with 409.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, version, bytes]
+                properties:
+                  ok: { type: boolean, const: true }
+                  version: { type: integer, format: int64 }
+                  bytes: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: A newer backup exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, version]
+                properties:
+                  error: { type: string }
+                  version: { type: integer, format: int64, description: The stored version. }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    get:
+      tags: [Devices]
+      operationId: getBackup
+      summary: Fetch the person's backup blob
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: The blob.
+          headers:
+            X-Fog-Backup-Version:
+              schema: { type: integer, format: int64 }
+            Last-Modified:
+              schema: { type: string }
+              description: The stored `updatedAt` (RFC 3339, not HTTP-date).
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: '`no backup`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Devices]
+      operationId: deleteBackup
+      summary: Delete the person's backup
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/sessions:
+    get:
+      tags: [Devices]
+      operationId: listOwnSessions
+      summary: The person's live sessions
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: Newest activity first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions, current]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/PersonSessionView' }
+                  current: { type: integer, format: int64, description: 'Id of the session making this request; 0 when the caller is resolved from the operator session.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/me/sessions/{id}:
+    delete:
+      tags: [Devices]
+      operationId: revokeOwnSession
+      summary: Sign one of the person's sessions out
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Int64Id'
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: '`no such session` — not one of the caller''s sessions.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ----------------------------------------------------------------- Rooms
+  /api/chat/rooms:
+    get:
+      tags: [Rooms]
+      operationId: listRooms
+      summary: Rooms the person is in, joinable channels, pending invites
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      x-fog-notes:
+        - '`available` lists workspace-visible channels hubbed here that the person is not in; `joinable` is true when a GroupInfo for the current epoch is on file.'
+        - '`invites` is filtered to the session''s device: an invite addressed to a specific device key is shown only to that device (or to a session with no device).'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rooms, available, invites, me]
+                properties:
+                  rooms:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoomView' }
+                  available:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label, topicLabel, kind, joinable]
+                      properties:
+                        id: { $ref: '#/components/schemas/ULID' }
+                        label: { type: string }
+                        topicLabel: { type: string }
+                        kind: { $ref: '#/components/schemas/RoomKind' }
+                        joinable: { type: boolean }
+                  invites:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, roomId, invitedBy, seq]
+                      properties:
+                        id: { type: integer, format: int64 }
+                        roomId: { $ref: '#/components/schemas/ULID' }
+                        invitedBy: { $ref: '#/components/schemas/PersonAddr' }
+                        seq: { type: integer, format: int64 }
+                  me:
+                    type: object
+                    required: [addr, handle, displayName]
+                    properties:
+                      addr: { $ref: '#/components/schemas/PersonAddr' }
+                      handle: { type: string }
+                      displayName: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Rooms]
+      operationId: createRoom
+      summary: Create a room hubbed here
+      description: |
+        The client has already created the MLS group locally with `groupId`; the
+        actor's device becomes leaf 0. Requires a device-bound session (428
+        otherwise), from a device the caller's identity key attests (403
+        `forbidden` otherwise). The room's id is minted here and bound to this household: 26
+        Crockford characters, the first 16 of a ULID followed by 10 derived from
+        them and this fog's instance id, so no other household can mint it.
+      security: [ { personCookie: [] }, { personBearer: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRoomInput' }
+      x-fog-notes:
+        - A channel needs a non-empty `label`. `workspaceVisible` defaults to true for channels and is forced false for other kinds.
+        - A DM is 2–9 distinct addresses including the creator; DMs are idempotent by participant set (an existing DM with the same set is returned).
+        - '`policy` defaults to `DefaultPolicy(kind)`: join `invite`, history `since-join`, households `hub-peers`, hints `["mentions"]`; channels get join `open-household` and history `shared`; DMs strip add/remove capabilities.'
+      responses:
+        '200':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [room]
+                properties:
+                  room: { $ref: '#/components/schemas/RoomView' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '428': { $ref: '#/components/responses/NeedDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /api/chat/rooms/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Rooms]
+      operationId: getRoom
+      summary: One room with participants and the public tree's leaves
+      description: A current participant reads it whole. Anyone else, former and banned participants included, may read only the summary of a workspace-visible channel hubbed here — `room` with no `roles`, and empty `participants` and `leaves`; any other room is 403 `forbidden`.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [room, participants, leaves, groupInfoEpoch, impact]
+                properties:
+                  room: { $ref: '#/components/schemas/RoomView' }
+                  participants:
+                    type: array
+                    items: { $ref: '#/components/schemas/ParticipantView' }
+                  leaves:
+                    type: array
+                    description: Members of the public MLS ratchet tree the hub (or replica) holds.
+                    items:
+                      type: object
+                      required: [index, identity, signatureKey]
+                      properties:
+                        index: { type: integer, description: Leaf index. }
+                        identity: { $ref: '#/components/schemas/PersonAddr' }
+                        signatureKey: { $ref: '#/components/schemas/Base64UrlKey' }
+                  groupInfoEpoch: { type: integer, format: int64, description: Epoch of the GroupInfo on file (0 when none). }
+                  impact: { type: string, description: The server-generated impact sentence. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+    patch:
+      tags: [Rooms]
+      operationId: updateRoom
+      summary: Change labels, visibility, per-person notify, a role, archive, or leave
+      description: |
+        `notify` is the caller's own setting, kept by their home fog; it only
+        needs participation. Everything else is hub state: on a replica the
+        request is relayed to the hub (`POST /fed/v1/chat/rooms/{id}/update`),
+        which alone decides it, and the replica shows the result from the hub's
+        snapshot. Every field is checked against the caller's role in the room
+        policy before any is written (`canChangeRoomName`, `canChangeRoomTopic`,
+        `canChangePolicy` for visibility and archive, `canChangeRoles` for role),
+        so a refused request changes nothing.
+
+        Roles move only below the caller's rank (a role holding `*` ranks above
+        all others, the rest by index, banned lowest): the target's current role
+        and the new one must both rank below the caller's, except that a `*`
+        holder may make a peer. Nobody changes their own role, so an owner is
+        changed by no one. The role must exist in the policy. Setting `banned`
+        (1) takes the person out of the room at once, with a `banned` system
+        event; a banned person may not be added back or join by themselves until
+        someone who outranks banned sets them another role (a former
+        participant's only role that can change). A ban reaches anyone who was
+        ever in the room, and anyone of this household who never was (by
+        canonical address); a never-joined person's ban gives them nothing of
+        the room.
+
+        `leave` takes the caller out of the room — every device of theirs — with
+        a `left` system event: MLS forbids a commit that removes its own
+        committer, so the hub counts them out and members' devices commit the
+        removal of their leaves.
+
+        `acceptHub` is local and never relayed: on a live replica, a caller
+        whose role holds `canChangePolicy` (in the hub's policy as the replica
+        holds it) agrees to this fog becoming the room's hub. The agreement
+        stands for an hour, is used by one adoption, and is kept in memory (a
+        restart forgets it). Without one, the old hub's
+        `POST /fed/v1/chat/rooms/{id}/adopt` is refused. 400 when the room isn't
+        a live replica; 403 without the capability.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                acceptHub: { type: boolean, description: 'Agree to this fog taking the room over from its hub (see above).' }
+                label: { type: string }
+                topic: { type: string }
+                workspaceVisible: { type: boolean, description: Channels only; ignored for other kinds. }
+                notify: { type: string, enum: [all, mentions, none] }
+                archive: { type: boolean }
+                leave: { type: boolean, description: Take the caller out of the room. }
+                leaveDevice: { type: boolean, description: 'Take only the calling device out of the room: the hub marks its leaf as its own departure (a `device-left` system line), any member may then remove it, and the person stays with their role and other devices. Needs a device-bound session.' }
+                role:
+                  type: object
+                  required: [addr, role]
+                  properties:
+                    addr: { $ref: '#/components/schemas/PersonAddr' }
+                    role: { type: integer, description: 'Role index; see the ranking rule above.' }
+      responses:
+        '200':
+          description: The room after the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [room]
+                properties:
+                  room: { $ref: '#/components/schemas/RoomView' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /api/chat/rooms/{id}/migrate:
+    post:
+      tags: [Rooms]
+      operationId: migrateRoom
+      summary: Hand the room's hub to another household
+      description: |
+        Moves the ordering role — which fog assigns `seq`, holds the canonical log
+        and blobs, and fans out to followers — to the household `to`. The MLS group
+        is untouched; keys stay on devices. The caller must be a participant with
+        `canChangePolicy`, this fog must be the room's hub, and `to` must be a paired
+        household that has a current participant in the room. `to` adopts only if
+        one of its own people in the room, holding `canChangePolicy`, agreed within
+        the last hour (`PATCH /api/chat/rooms/{id}` with `acceptHub: true` there).
+
+        Sequence: the room is **frozen** (`replicaStatus: frozen`; writers get 503
+        `moving`); queued fan-out to `to` is flushed; this fog asks `to` to adopt at
+        exactly the frozen seq (`POST /fed/v1/chat/rooms/{id}/adopt`); on success
+        this fog becomes a live follower of `to`, enqueues a `moved` notify item
+        (`newHub: to`) to every other follower, syncs from the new hub (picking up
+        its `hub-moved` system event), and pushes a `rooms` stream frame to local
+        members. Any failure before adoption unfreezes the room with nothing changed.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, description: Instance id of the household that becomes the hub. Trimmed. }
+      x-fog-notes:
+        - '400 `bad_request`: `to` is empty or this fog''s own instance (`pick another household`), not a paired peer with a URL (`that household is not paired`), or has nobody in the room (`that household has nobody in this room`).'
+        - '403 `forbidden`: the room is hubbed elsewhere (`the room is hubbed by another household`), the caller is not a participant, or the role lacks `canChangePolicy`.'
+        - 'A refusal by the new hub (its 409 `adopt_failed`, or a short `seq` in its ack) surfaces here as 500 with `code: ""` and the hub''s message (`the new hub only reached seq N of M`); the room is unfrozen.'
+      responses:
+        '200':
+          description: Adopted. This fog is now a follower.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, hubInstance, seq]
+                properties:
+                  ok: { type: boolean, const: true }
+                  hubInstance: { type: string, description: The new hub's instance id (equals `to`). }
+                  seq: { type: integer, format: int64, description: The room's seq as this fog now holds it. }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /api/chat/rooms/{id}/read:
+    post:
+      tags: [Rooms]
+      operationId: markRead
+      summary: Set the person's read mark for a room
+      description: '`seq` is clamped to the room''s current seq. Read marks live on the home fog only.'
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq]
+              properties:
+                seq: { type: integer, format: int64 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/rooms/{id}/typing:
+    post:
+      tags: [Rooms]
+      operationId: typing
+      summary: Broadcast a typing signal
+      description: 'Ephemeral. Published to local stream subscribers as `{kind: ephemeral, signal: typing}` and relayed best-effort to other households.'
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '204': { description: Sent. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+
+  # ---------------------------------------------------------------- Events
+  /api/chat/rooms/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Events]
+      operationId: listEvents
+      summary: Page the room's ciphertext log
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: after
+          in: query
+          schema: { type: integer, format: int64 }
+          description: Return events with seq > after, oldest first.
+        - name: before
+          in: query
+          schema: { type: integer, format: int64 }
+          description: When > 0, return the `limit` events with seq < before, oldest first (`after` is ignored except as a floor).
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500 }
+          description: Defaults to 200 when absent, 0 or > 500.
+      x-fog-notes:
+        - With history rule `since-join` the floor is the participant's `joinedSeq - 1`; events at or below it are never returned. A participant who left sees nothing past their `leftSeq`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events, seq, epoch]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventView' }
+                  seq: { type: integer, format: int64, description: The room's current seq. }
+                  epoch: { type: integer, format: int64, description: The room's current epoch. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+    post:
+      tags: [Events]
+      operationId: submitEvent
+      summary: Submit one MLS message
+      description: |
+        Requires a device-bound session. On a room hubbed here the hub validates and
+        sequences the event; on a replica the event is relayed over the signed
+        channel to the hub (`POST /fed/v1/chat/rooms/{id}/submit`) and the hub's
+        answer is returned, with the hub's error codes preserved.
+      security: [ { personCookie: [] }, { personBearer: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitInput' }
+      x-fog-notes:
+        - '`id` must be a 26-character ULID; a replayed id returns the original event with `replayed: true` (idempotent).'
+        - '`mls_private`: the PrivateMessage must carry application data (its content type is in the clear): an encrypted commit or proposal is 400 `bad_request`. The sender must hold `canSendMessage`; `payload` epoch must satisfy `room.epoch - 2 <= epoch <= room.epoch` (EpochSlack), else 409 `epoch_stale`; the sender device must be a leaf of the tree under the sender''s address, else 403.'
+        - '`mls_commit`: epoch must equal the room epoch exactly. The commit must keep RFC 9420 §12.2''s rules on which leaves it touches (400 otherwise): inline proposals only (a commit referencing a standalone proposal is 400 unsupported); no Update proposal (an inline Update is the committer''s own, which RFC 9420 forbids), PreSharedKey or ReInit; no Remove of the committer or of the same leaf twice; signature keys unique across the tree; a member''s path keeps its leaf''s identity and signature key (the device key); an external commit carries one ExternalInit and at most one Remove, of the joiner''s own leaf. Every proposal is authorized against the policy: an Add needs `canAddParticipant` unless it adds the actor''s own device, must name a live device of an active person that the person''s identity key attests (fog checks the attestation; a remote person''s through their fog''s directory), and may not add a banned person; a Remove of another''s leaf needs `canRemoveParticipant` unless the hub already counts that person out; a GroupContextExtensions proposal may carry only the 0xF0F0 policy extension, needs `canChangePolicy`, and only a `*` holder may change the roles in it. External (NewMemberCommit) joins: the device must be one the person''s identity key attests; then a current participant (whose identity key must be the one they joined with — a different one takes them out with an `identity-reset` event), a Welcome pending for that very device, or a home member of an open-household channel hubbed here. Banned people are refused.'
+        - '`mls_commit` is also verified against the group''s public state before any of the above takes effect: its signature by the sender''s leaf over the content and the current GroupContext, each added KeyPackage''s and leaf''s signature, the committer''s path leaf''s signature, a path key for exactly the filtered direct path, and the new tree''s parent hashes; `groupInfo`, when sent, must match the next epoch''s GroupContext and be signed by a member. A failure is 400 `bad_request` and nothing changes. A room without verified state yet answers 409 `need_group_info`.'
+        - '`mls_proposal` is never accepted (400 `bad_request`: standalone proposals are not supported).'
+        - '`hints` is filtered to what the policy allows: only `{"mentions": [addr...]}` (max 50 valid addresses) survives; anything else is dropped.'
+        - 'On a replica whose `replicaStatus` is not `live` the answer is 410 `archived`. A replica whose hub is unreachable answers 500 `hub unreachable: ...` with `code: ""`.'
+        - 'While this fog (as hub) is handing the room over (`replicaStatus: frozen`, see `POST /api/chat/rooms/{id}/migrate`) the answer is 503 `moving`. A replica relaying to a hub that is mid-move receives the hub''s 503, which `translateRemote` does not map, so the client sees 500 with `code: ""`.'
+      responses:
+        '200':
+          description: Accepted (or replayed).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event, replayed]
+                properties:
+                  event: { $ref: '#/components/schemas/EventView' }
+                  replayed: { type: boolean }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409': { $ref: '#/components/responses/EpochStale' }
+        '410': { $ref: '#/components/responses/Archived' }
+        '428': { $ref: '#/components/responses/NeedDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+        '503': { $ref: '#/components/responses/Moving' }
+
+  /api/chat/rooms/{id}/groupinfo:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Events]
+      operationId: getGroupInfo
+      summary: The current GroupInfo, for external joins
+      description: |
+        Readable when an external join by the calling device would be authorized
+        (see `submitEvent`); a session without a device may read it as a current
+        participant. On a replica the request is relayed to the hub with the
+        device's key.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      x-fog-notes:
+        - 409 `epoch_stale` when no GroupInfo for the room's current epoch is on file (`no current group info; a member must publish one`). The body carries only `error` and `code`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groupInfo, epoch]
+                properties:
+                  groupInfo: { $ref: '#/components/schemas/Base64UrlBytes' }
+                  epoch: { type: integer, format: int64 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409':
+          description: '`code: epoch_stale`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+    put:
+      tags: [Events]
+      operationId: putGroupInfo
+      summary: Publish the GroupInfo for the current epoch
+      description: Requires a device-bound session and participation. `epoch` must equal the room's current epoch, and the GroupInfo must match the hub's verified state for it exactly (GroupContext, a member's signature, the ratchet tree if carried); otherwise 400. In a room from before the hub kept verified state, the first matching one whose tree holds exactly the members the hub knows seeds it. On a replica the request is relayed to the hub.
+      security: [ { personCookie: [] }, { personBearer: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [epoch, groupInfo]
+              properties:
+                epoch: { type: integer, format: int64 }
+                groupInfo: { $ref: '#/components/schemas/Base64UrlBytes' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409':
+          description: '`code: epoch_stale`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '428': { $ref: '#/components/responses/NeedDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /api/chat/stream:
+    get:
+      tags: [Events]
+      operationId: chatStream
+      summary: WebSocket stream of events and ephemera
+      description: |
+        A WebSocket (`Upgrade: websocket`). Authentication is the `fog_session`
+        cookie, a bearer token, or — only on this path — the bearer as a `token`
+        query parameter, because browsers cannot set headers on a WebSocket.
+
+        **Client → server.** The first text frame must arrive within 15 seconds and
+        is the hello: `{"since": {"<roomId>": <seq>, ...}}` (see `StreamHello`).
+        Every later client frame is read and ignored (pings and cursor updates carry
+        no meaning; all writes go over HTTP). Frames larger than 1 MiB close the
+        connection.
+
+        **Server → client** (see `StreamFrame`; all frames are JSON text):
+        * `event` — `{kind, roomId, event}`: one `EventView`. Sent during replay for
+          every event after the client's cursor in each room the person is in
+          (500 per page, oldest first), and afterwards live as events land.
+        * `synced` — `{kind, cursors, online}`: replay is complete; `cursors` is the
+          current seq per room, `online` the addresses of people currently connected
+          to this fog.
+        * `rooms` — `{kind, roomId?}`: the person's room set or a room's metadata
+          changed; refetch `GET /api/chat/rooms`. When the person was just added to
+          `roomId`, the server also replays that room from seq 0 (up to 500 events)
+          before continuing.
+        * `invite` — `{kind, roomId}`: a new invite for the person; fetch
+          `GET /api/chat/invites`.
+        * `ephemeral` — `{kind, roomId, person, signal}` with `signal` one of
+          `typing`, `presence:online`, `presence:offline`.
+
+        Connecting publishes `presence:online` to the person's rooms and
+        disconnecting publishes `presence:offline`. A client that cannot accept a
+        frame within 10 seconds is disconnected; it reconnects with its cursors and
+        misses nothing.
+      security: [ { personCookie: [] }, { personBearer: [] }, { personTokenQuery: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: token
+          in: query
+          required: false
+          schema: { type: string }
+          description: A person session token (the bearer), accepted on this path only.
+      responses:
+        '101':
+          description: Switching protocols. Frames are described above.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StreamFrame' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+
+  # --------------------------------------------------------------- Invites
+  /api/chat/invites:
+    get:
+      tags: [Invites]
+      operationId: listInvites
+      summary: Pending invites (MLS Welcomes) for the person
+      description: Invites addressed to a specific device key are shown only to a session bound to that device (a session with no device sees all).
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/InviteView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/invites/{id}/accept:
+    post:
+      tags: [Invites]
+      operationId: acceptInvite
+      summary: Mark an invite accepted
+      description: Records `acceptedAt` for the invite addressed to the caller. Joining the group itself is the client processing the Welcome; the room appears once the hub's add commit is in the log.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ----------------------------------------------------------------- Blobs
+  /api/chat/blobs:
+    post:
+      tags: [Blobs]
+      operationId: putBlob
+      summary: Upload an encrypted attachment
+      description: |
+        Raw ciphertext body, at most 200 MiB, stored content-addressed by SHA-256.
+        The caller must be a participant of `room`. On a replica the bytes are
+        relayed to the hub (`POST /fed/v1/chat/rooms/{id}/blobs`). A new blob must
+        fit the storage quotas — 10 GiB of one person's uploads, 20 GiB of one
+        room's, 200 GiB in all, beside what chunked uploads under way reserved —
+        or the answer is 507 `quota`. A declared `Content-Length` is checked
+        against them before the body is read, and the body must be exactly that
+        long (400 otherwise). A chunked relay reserves its declared `total` at its
+        first piece, beside at most 2 GiB reserved in all (512 MiB by one person,
+        1 GiB by one household), and every later piece must declare the same
+        total; only a piece that adds bytes keeps the reservation from lapsing
+        after an hour.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: room
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ULID' }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: Stored (or already present).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlobRef' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+        '507':
+          description: '`code: quota` — the attachment would pass a storage quota.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/chat/blobs/{sha}:
+    get:
+      tags: [Blobs]
+      operationId: getBlob
+      summary: Download an encrypted attachment
+      description: |
+        The caller must be a participant of the blob's room. A former participant
+        may fetch only blobs stored before they left (blobs stored before fog kept
+        that are current participants' only). Served with `http.ServeContent`, so
+        `Range` requests work.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/BlobSha'
+        - name: room
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ULID' }
+          description: On a replica that does not hold the bytes yet, names the replica room so fog fetches the blob from the hub once, then serves it.
+      responses:
+        '200':
+          description: The ciphertext.
+          headers:
+            Content-Type: { schema: { type: string, const: application/octet-stream } }
+            Cache-Control: { schema: { type: string, const: 'private, max-age=31536000, immutable' } }
+            Content-Length: { schema: { type: integer } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '206': { description: 'Partial content, for a Range request.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  # ----------------------------------------------------------- Preferences
+  /api/chat/me/prefs:
+    get:
+      tags: [Preferences]
+      operationId: getPrefs
+      summary: The person's chat preferences
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK. All fields are present; unset preferences are zero values.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prefs' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Preferences]
+      operationId: putPrefs
+      summary: Replace the person's chat preferences
+      description: The whole object is replaced. `ntfyTopic` is trimmed and must be a single path segment of at most 64 characters.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Prefs' }
+      responses:
+        '200':
+          description: The stored preferences.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Prefs' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/preview:
+    get:
+      tags: [Preferences]
+      operationId: linkPreview
+      summary: Fetch link metadata for the sender's device to encrypt into a message
+      description: Only when the person's `previews` preference is on (403 `previews_off` otherwise). fog refuses private and local addresses.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: '`code: previews_off`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '502':
+          description: The page could not be fetched or is not one fog will fetch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------------------------------------------------------ Push
+  /api/chat/push/vapid:
+    get:
+      tags: [Push]
+      operationId: vapidKey
+      summary: The VAPID public key for Web Push
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey: { type: string, description: The VAPID application server key as produced by the notifier (base64url). }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503':
+          description: '`push is not available on this fog`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/chat/me/devices/{id}/push:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      tags: [Push]
+      operationId: pushSubscribe
+      summary: Store a Web Push subscription for a device
+      description: The endpoint must be a public https address — not localhost, `.local`, `.lan` or a private, loopback or link-local address, checked by resolving it now (400 otherwise) and again on the address actually dialed at each send, which drops a subscription whose endpoint turns private.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string, format: uri, description: Must start with `https://`. }
+                keys:
+                  type: object
+                  required: [p256dh, auth]
+                  properties:
+                    p256dh: { type: string }
+                    auth: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Push]
+      operationId: pushUnsubscribe
+      summary: Remove every push subscription of a device
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NoSuchDevice' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # -------------------------------------------------------------- Webhooks
+  /api/chat/rooms/{id}/webhooks:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      summary: Incoming webhooks of a room
+      description: Any participant may list. Tokens are never returned; only the create response shows a URL.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [webhooks, botInRoom, botAddr]
+                properties:
+                  webhooks:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatWebhook' }
+                  botInRoom: { type: boolean, description: Whether the fog bot holds a seat in this room. }
+                  botAddr: { type: string, description: The fog bot's person address, or "" when there is no bot. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+    post:
+      tags: [Webhooks]
+      operationId: createWebhook
+      summary: Create an incoming webhook
+      description: Requires `canChangePolicy` in the room and the fog bot present in the room (409 `bot_not_in_room` otherwise).
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+      responses:
+        '200':
+          description: Created. The URL contains the secret and is shown once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name, url]
+                properties:
+                  id: { type: integer, format: int64 }
+                  name: { type: string }
+                  url: { type: string, format: uri, description: '`<publicURL>/hooks/chat/<token>`.' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409':
+          description: '`code: bot_not_in_room`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/chat/rooms/{id}/webhooks/{hook}:
+    delete:
+      tags: [Webhooks]
+      operationId: deleteWebhook
+      summary: Delete an incoming webhook
+      description: Requires `canChangePolicy` in the room.
+      security: [ { personCookie: [] }, { personBearer: [] }, { operatorSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: hook
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '429': { $ref: '#/components/responses/ChatRateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /hooks/chat/{token}:
+    post:
+      tags: [Webhooks]
+      operationId: incomingWebhook
+      summary: Post a message as the fog bot through a webhook
+      description: |
+        Public; the token in the path is the credential. Rate limited per IP. The
+        body is either JSON `{"text": "..."}` or plain text (any body not starting
+        with `{`, or JSON without a non-empty `text`, is taken verbatim). At most
+        64 KiB; text longer than 8000 bytes is truncated with `…`. The message is
+        encrypted by the bot's device and posted with `system: "webhook:<name>"`.
+      security: [ { webhookToken: [] } ]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string }
+          text/plain:
+            schema: { type: string }
+      responses:
+        '202':
+          description: Queued into the room.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBody' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`fog is not in this room any more` (no code).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  # ------------------------------------------------------------------ Apps
+  /app/v1/chat/rooms:
+    get:
+      tags: [Apps]
+      operationId: appChatRooms
+      summary: Rooms the fog bot is in (and so an app may post to)
+      description: Archived rooms are omitted. Needs `chat` in the app's `uses` (403 otherwise).
+      security: [ { appToken: [] } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rooms]
+                properties:
+                  rooms:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, kind, label, topic]
+                      properties:
+                        id: { $ref: '#/components/schemas/ULID' }
+                        kind: { $ref: '#/components/schemas/RoomKind' }
+                        label: { type: string }
+                        topic: { type: string, description: The room's `topicLabel`. }
+        '401': { $ref: '#/components/responses/AppUnauthorized' }
+        '403':
+          description: '`chat needs "chat" in this app''s uses` (no code).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /app/v1/chat/rooms/{id}/messages:
+    post:
+      tags: [Apps]
+      operationId: appChatPost
+      summary: Post a message as the fog bot with an app badge
+      description: 'Needs `chat` in the app''s `uses`, the operator''s grant (403 otherwise). Posted with `system: "app:<appName>"`, which clients show as the app, never as fog. The bot must be in the room (403 otherwise). Text past 8,000 characters is cut; 60 posts a minute per app.'
+      security: [ { appToken: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        '200':
+          description: Posted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [seq, id]
+                properties:
+                  seq: { type: integer, format: int64 }
+                  id: { $ref: '#/components/schemas/ULID' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/AppUnauthorized' }
+        '403':
+          description: '`chat needs "chat" in this app''s uses`, or `fog is not in that room; someone in it must add fog first` (no code).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  # ------------------------------------------------------------ Federation
+  /fed/v1/chat/people/{handle}/keys:
+    get:
+      tags: [Federation]
+      operationId: fedPersonKeys
+      summary: Key material for one of this fog's people (MIMI keyMaterial)
+      description: |
+        The calling peer must hold the `chat` grant. Only people its
+        `people.directory` grant names are visible (a missing or unreadable
+        config names nobody); others are 404 `not_found`. Consumes one
+        KeyPackage per device within the peer's budget — 120 an hour in all, 12
+        an hour of one person's, and 120 an hour of one person's across every
+        asker — and past it serves each device's last-resort package
+        (`lastResort: true`), unconsumed.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Handle'
+        - $ref: '#/components/parameters/Ciphersuite'
+      responses:
+        '200': { $ref: '#/components/responses/FedKeyMaterial' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+
+  /fed/v1/chat/rooms/{id}/submit:
+    post:
+      tags: [Federation]
+      operationId: fedSubmit
+      summary: A follower relays one of its people's events to the hub
+      description: |
+        The room must be hubbed here and the calling household must have a current
+        or former participant, or a pending invite, in it (403 `forbidden`
+        otherwise). `actor` must be an address of the calling household (a fog may
+        only speak for its own people). The hub applies `chat.Submit` exactly as for
+        a local device.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor, deviceKey, input]
+              properties:
+                actor: { $ref: '#/components/schemas/PersonAddr' }
+                deviceKey: { $ref: '#/components/schemas/Base64UrlKey' }
+                input: { $ref: '#/components/schemas/SubmitInput' }
+      responses:
+        '200':
+          description: Accepted (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event, replayed]
+                properties:
+                  event: { $ref: '#/components/schemas/ChatEvent' }
+                  replayed: { type: boolean }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409': { $ref: '#/components/responses/EpochStale' }
+        '410': { $ref: '#/components/responses/Archived' }
+        '428': { $ref: '#/components/responses/NeedDevice' }
+        '500': { $ref: '#/components/responses/ChatError' }
+        '503': { $ref: '#/components/responses/Moving' }
+
+  /fed/v1/chat/rooms/{id}/update:
+    post:
+      tags: [Federation]
+      operationId: fedUpdateRoom
+      summary: A follower relays a room change, or an identity reset, for one of its people
+      description: |
+        With `patch`, the hub applies it as `PATCH /api/chat/rooms/{id}` would for
+        its own people (labels, visibility, a role, archive, leave), under the
+        same rules. With `identityReset: true`, the calling household reports that
+        an operator reset that person's identity there; the hub takes them out of
+        the room with an `identity-reset` system event. `actor` must belong to the
+        calling household, which must have someone in the room.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor]
+              properties:
+                actor: { $ref: '#/components/schemas/PersonAddr' }
+                patch:
+                  type: object
+                  properties:
+                    label: { type: string }
+                    topic: { type: string }
+                    workspaceVisible: { type: boolean }
+                    archive: { type: boolean }
+                    leave: { type: boolean }
+                    role:
+                      type: object
+                      required: [addr, role]
+                      properties:
+                        addr: { $ref: '#/components/schemas/PersonAddr' }
+                        role: { type: integer }
+                identityReset: { type: boolean }
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBody' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /fed/v1/chat/rooms/{id}/adopt:
+    post:
+      tags: [Federation]
+      operationId: fedAdopt
+      summary: The old hub asks this fog to become the room's hub
+      description: |
+        The room must already be a replica of the calling peer (`hubInstance` equals
+        the caller's instance id), and one of this fog's people in the room, holding
+        `canChangePolicy`, must have agreed within the last hour (`acceptHub`); the
+        agreement is used up by the attempt. This fog syncs the replica from the
+        caller, checks it reached exactly the frozen `seq`, and vets what it was
+        handed before taking it on: the policy parses and every participant's role
+        exists in it; the creator is a participant; a DM's set is 2–9 people and
+        covers every participant, and only a DM has one; the verified public state
+        names this group, epoch and tree. It copies the blobs it lacks
+        (`GET /fed/v1/chat/rooms/{id}/blobs` then per-blob fetches, best effort,
+        each digest checked; at most 10,000 blobs and 20 GiB in all),
+        flips the room to hubbed-here and live, appends a `system` event with payload
+        `{"kind": "hub-moved", "from": <caller>, "to": <this fog>, "by": by}` as its
+        first act, and pushes a `rooms` stream frame to local members.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seq, epoch, by]
+              properties:
+                seq: { type: integer, format: int64, description: The seq the old hub froze at; adoption requires the replica to reach exactly this. }
+                epoch: { type: integer, format: int64, description: The old hub's epoch. Carried but not checked by the current server. }
+                by: { $ref: '#/components/schemas/PersonAddr' }
+      x-fog-notes:
+        - 'Note the asymmetry with the rest of this plane: every failure — not a replica of the caller, no member''s agreement, sync error, seq mismatch, a handed-over room that fails vetting, store error — is 409 `adopt_failed`, not 403/500. `seq` in the 409 body is the seq the replica reached (0 when it is not a replica of the caller).'
+      responses:
+        '200':
+          description: Adopted (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [seq]
+                properties:
+                  seq: { type: integer, format: int64, description: The room's seq after adoption (the frozen seq plus the `hub-moved` system event). }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '409':
+          description: '`code: adopt_failed`; `seq` is how far the replica got.'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    required: [seq]
+                    properties:
+                      seq: { type: integer, format: int64 }
+
+  /fed/v1/chat/rooms/{id}:
+    get:
+      tags: [Federation]
+      operationId: fedRoom
+      summary: Public snapshot of a room hubbed here
+      description: |
+        Everything a follower needs to mirror the room; no secrets are held by the
+        hub. A household with no one left in the room (and no pending invite)
+        gets a departed snapshot instead — `departed: true`, its own people's
+        participant rows, and nothing of the room as it is since — and the
+        follower marks them out and archives its replica.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoomSnapshot' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /fed/v1/chat/rooms/{id}/events:
+    get:
+      tags: [Federation]
+      operationId: fedEvents
+      summary: Gap fill — events after a seq
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: after
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500 }
+          description: Defaults to 500 when absent, 0 or > 500.
+      x-fog-notes:
+        - No history floor is applied here; the follower applies the policy's history rule when serving its own people. A household with no one left in the room (and no pending invite) gets only events up to the seq at which its last person left, and that seq as `seq`.
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events, seq, epoch]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatEvent' }
+                  seq: { type: integer, format: int64 }
+                  epoch: { type: integer, format: int64 }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /fed/v1/chat/rooms/{id}/groupinfo:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    get:
+      tags: [Federation]
+      operationId: fedGroupInfo
+      summary: The current GroupInfo, on behalf of a remote person
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - name: actor
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/PersonAddr' }
+          description: Must belong to the calling household.
+        - name: deviceKey
+          in: query
+          schema: { $ref: '#/components/schemas/Base64UrlKey' }
+          description: The device that means to join by it. The hub applies the self-join rules to it (an attested device; a current participant's identity key unchanged); a non-participant without one is refused.
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groupInfo, epoch]
+                properties:
+                  groupInfo: { $ref: '#/components/schemas/Base64UrlBytes' }
+                  epoch: { type: integer, format: int64 }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409':
+          description: '`code: epoch_stale` — no GroupInfo for the current epoch.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ChatError' }
+    post:
+      tags: [Federation]
+      operationId: fedPutGroupInfo
+      summary: Publish a GroupInfo on behalf of a remote member
+      security: [ { fedSignature: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor, epoch, groupInfo]
+              properties:
+                actor: { $ref: '#/components/schemas/PersonAddr' }
+                epoch: { type: integer, format: int64 }
+                groupInfo: { $ref: '#/components/schemas/Base64UrlBytes' }
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkBody' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '409':
+          description: '`code: epoch_stale`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /fed/v1/chat/rooms/{id}/blob/{sha}:
+    get:
+      tags: [Federation]
+      operationId: fedBlob
+      summary: Fetch an attachment's ciphertext from the hub
+      description: The blob must belong to the room.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/BlobSha'
+      x-fog-notes:
+        - The body is streamed with `io.Copy` and is **not** signed (no Fog-Signature on the response), unlike every other 200 on this plane. `Range` is not honoured.
+        - '`X-Fog-Blob-Seq` carries the room seq at which the hub stored the blob, so a follower holds its own former members to what they may fetch. A household with no one left in the room may fetch only blobs stored before its last person left.' 
+      responses:
+        '200':
+          description: The ciphertext.
+          headers:
+            Content-Type: { schema: { type: string, const: application/octet-stream } }
+            Content-Length: { schema: { type: integer } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+
+  /fed/v1/chat/rooms/{id}/blobs:
+    get:
+      tags: [Federation]
+      operationId: fedBlobList
+      summary: List the attachments a room hubbed here holds
+      description: Used by a new hub during adoption to copy blobs across. The calling household must have a stake in the room, as for every other room route on this plane.
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: OK (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [blobs]
+                properties:
+                  blobs:
+                    type: array
+                    items: { type: string, pattern: '^[0-9a-f]{64}$' }
+                    description: SHA-256 hex of each blob stored for the room; empty array when none.
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Federation]
+      operationId: fedPutBlob
+      summary: A follower relays an attachment upload to the hub
+      security: [ { fedSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: actor
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/PersonAddr' }
+        - name: upload
+          in: query
+          schema: { type: string, maxLength: 64 }
+          description: 'Names a piece-by-piece upload: the federation plane seals each request whole, so an attachment larger than 16 MiB crosses in pieces of at most 16 MiB, in order, with `offset` and `total`. The piece that completes it stores the blob (checked whole) and answers `{sha256, size}`; earlier ones answer `{received}`. A piece at the wrong offset, or declaring another total than the upload began with, is 400, naming where the upload stands. Pieces abandoned for an hour are dropped. With `abort=1` (and `upload`) the follower gives the upload up: its pieces and its reservation go at once, answered `{ok}`.'
+        - name: offset
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: total
+          in: query
+          schema: { type: integer, format: int64, maximum: 209715200 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary, description: 'The whole blob (at most 16 MiB), or one piece of it.' }
+      responses:
+        '200':
+          description: Stored (signed), or `{received}` for a piece that doesn't complete an upload.
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BlobRef' }
+        '400': { $ref: '#/components/responses/ChatBadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+        '404': { $ref: '#/components/responses/ChatNotFound' }
+        '500': { $ref: '#/components/responses/ChatError' }
+
+  /fed/v1/chat/notify:
+    post:
+      tags: [Federation]
+      operationId: fedNotify
+      summary: The hub pushes a batch of events, invites and household-cuts to a follower
+      description: |
+        Body at most 8 MiB. Items whose `hub` is not the calling peer's instance are
+        ignored (a hub may only speak for rooms it hubs). Events land in the replica
+        in hub order; a seq gap triggers a pull from `GET /fed/v1/chat/rooms/{id}/events`.
+        Invites the follower refuses are reported in `refused` and the hub records
+        those people as having left.
+      security: [ { fedSignature: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: '#/components/schemas/NotifyItem' }
+      x-fog-notes:
+        - 'Refusal codes emitted today: `third_household` (the room holds people from a household this fog isn''t paired with, and its grant to the hub says `acceptThirdHouseholds: false`) and `room_id_taken` (this fog holds a replica of that id whose current hub is another household — a hand-over this fog followed included — or holds no replica and the id is bound to this fog or to another household paired with it; no invite ever deletes a replica), and `invites_full` (this fog already watches 64 rooms for this hub''s unaccepted invites, 8 for this inviting person, or 512 in all, counting only rooms in their seven-day watch none of its people accepted; answered alike whoever the invite names). `invites_full` is not a refusal: the hub keeps the invitee in the room and sends the invite again an hour later; only the other codes take the invitee out. An invite for someone who doesn''t live here, or whom the hub''s `people.directory` grant doesn''t show, is never refused: it is answered as a filed one is, and this fog makes the same calls back to the hub (the room snapshot, then its log) either way, after answering.'
+      responses:
+        '200':
+          description: Processed (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, refused]
+                properties:
+                  ok: { type: boolean, const: true }
+                  refused:
+                    type: array
+                    items:
+                      type: object
+                      required: [roomId, person, code]
+                      properties:
+                        roomId: { $ref: '#/components/schemas/ULID' }
+                        person: { $ref: '#/components/schemas/PersonAddr' }
+                        code: { type: string, enum: [third_household, room_id_taken, invites_full] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+
+  /fed/v1/chat/ephemeral:
+    post:
+      tags: [Federation]
+      operationId: fedEphemeral
+      summary: Best-effort typing/presence relay
+      description: |
+        Body at most 4 KiB. Always answers 204 once authenticated, whether or not
+        the signal was accepted. Accepted when: the room exists here; on a room
+        hubbed here `person` belongs to the calling household, on a replica the
+        caller is the room's hub; `person` is a participant; and `signal` is one of
+        the three values. A hub re-fans an accepted signal to its other followers.
+      security: [ { fedSignature: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roomId, person, signal]
+              properties:
+                roomId: { $ref: '#/components/schemas/ULID' }
+                person: { $ref: '#/components/schemas/PersonAddr' }
+                signal: { type: string, enum: [typing, 'presence:online', 'presence:offline'] }
+      responses:
+        '204': { description: Received (accepted or silently dropped). }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+
+  /fed/v1/chat/departures:
+    post:
+      tags: [Federation]
+      operationId: fedDepartures
+      summary: A household's word that its people left rooms hubbed here
+      description: |
+        Body at most 1 MiB, at most 200 items. Each names a room hubbed here and a
+        person of the calling household whose identity was reset, or who was
+        deleted, there. The household's signature is the authority: the person
+        need not be in its directory any more. For each current participant the
+        hub appends an `identity-reset` departure; items naming another
+        household's people, rooms it doesn't know, or people already out are
+        ignored. A room that moved on is answered in `moved` with its new hub
+        (the follower re-queues the departure there); one frozen mid-move in
+        `retry` (the follower keeps the batch and tries again). The follower
+        queues these (`fed_outbox` kind `chat-departure`) and retries until it
+        gets this signed answer.
+      security: [ { fedSignature: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [roomId, person]
+                    properties:
+                      roomId: { $ref: '#/components/schemas/ULID' }
+                      person: { $ref: '#/components/schemas/PersonAddr' }
+      responses:
+        '200':
+          description: Applied (signed).
+          headers: { $ref: '#/components/headers/FedSigned' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, moved]
+                properties:
+                  ok: { type: boolean }
+                  moved:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        roomId: { $ref: '#/components/schemas/ULID' }
+                        person: { $ref: '#/components/schemas/PersonAddr' }
+                        hub: { type: string, description: The room's hub now. }
+                  retry:
+                    type: array
+                    nullable: true
+                    items:
+                      type: object
+                      properties:
+                        roomId: { $ref: '#/components/schemas/ULID' }
+                        person: { $ref: '#/components/schemas/PersonAddr' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/FedForbidden' }
+
+components:
+  securitySchemes:
+    personCookie:
+      type: apiKey
+      in: cookie
+      name: fog_session
+      description: |
+        A session (`auth.CookieName`). Minted by join, login, passkey login,
+        device registration and device session binding; 30-day TTL; HttpOnly,
+        SameSite=Lax; Domain and Secure set when a base domain is configured. The
+        session may or may not be bound to a device — routes marked 428
+        `need_device` require one.
+    personBearer:
+      type: http
+      scheme: bearer
+      description: |
+        The same person session token sent as `Authorization: Bearer <token>`.
+        Native clients obtain it from `POST /api/chat/me/devices` or
+        `POST /api/chat/me/devices/{id}/session` with `clientKind: native`.
+    personTokenQuery:
+      type: apiKey
+      in: query
+      name: token
+      description: The person session token as `?token=` — accepted only by `GET /api/chat/stream`.
+    operatorSession:
+      type: apiKey
+      in: cookie
+      name: fog_session
+      description: |
+        The same session cookie as `personCookie` — there is one login and one
+        cookie. The name is kept as a separate scheme to mark the routes that
+        additionally require the session's person to hold the `operator` role;
+        a member presenting a valid session is refused there with 401. Responses
+        that report it set `operator: true`.
+    appToken:
+      type: http
+      scheme: bearer
+      description: 'A managed app''s `FOG_API_TOKEN` as `Authorization: Bearer`. Rate limited per app (429 with Retry-After).'
+    fedSignature:
+      type: apiKey
+      in: header
+      name: Fog-Signature
+      description: |
+        Signed federation requests (internal/fed/sign.go). Three headers:
+        `Fog-Instance` (the caller's instance id, used to pick the peer's stored
+        ed25519 public key), `Fog-Timestamp` (RFC 3339 UTC, within ±5 minutes) and
+        `Fog-Signature` — base64url (unpadded) ed25519 signature over
+        `"fogfed1\n" + METHOD + "\n" + requestTarget + "\n" + timestamp + "\n" +
+        hex(sha256(body))`, where requestTarget is the path *and* query. The peer
+        must exist, be paired, and hold the `chat` grant on this fog. Refusals are
+        403 with codes `missing_instance`, `unknown_peer`, `key_unusable`,
+        `bad_signature`, or `forbidden` (no chat grant / wrong household). Every
+        JSON 200 on this plane is signed back with the same three headers using the
+        pseudo-method `RESPONSE`.
+    webhookToken:
+      type: apiKey
+      in: query
+      name: token
+      description: |
+        The incoming-webhook secret. It is carried as the `{token}` **path segment**
+        of `POST /hooks/chat/{token}` — never as a query parameter or header; `in:
+        query` is only because OpenAPI has no path location for apiKey. The token is
+        shown once in the response of `POST /api/chat/rooms/{id}/webhooks`.
+
+  parameters:
+    RoomId:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ULID' }
+      description: Room id.
+    DeviceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+      description: One of the caller's own, unrevoked devices; anything else is 404 `no such device`.
+    Int64Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Handle:
+      name: handle
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Handle' }
+    JoinSecret:
+      name: secret
+      in: path
+      required: true
+      schema: { type: string }
+      description: The invite secret from the join link.
+    BlobSha:
+      name: sha
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      description: SHA-256 of the ciphertext, lowercase hex.
+    Ciphersuite:
+      name: ciphersuite
+      in: query
+      required: false
+      schema: { type: integer, default: 1 }
+      description: MLS ciphersuite id; 0/absent means 1.
+    OnlyDevice:
+      name: device
+      in: query
+      required: false
+      schema: { type: integer, format: int64 }
+      description: Restrict to one device id (and consume only its KeyPackage).
+
+  headers:
+    SetPersonCookie:
+      description: '`fog_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000` plus `Domain`/`Secure` when a base domain is configured.'
+      schema: { type: string }
+    FedSigned:
+      description: Present on signed 200s — `Fog-Instance`, `Fog-Timestamp`, `Fog-Signature` over `RESPONSE`, the request target, the timestamp and the body digest.
+      schema: { type: string }
+
+  responses:
+    Ok:
+      description: Done.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OkBody' }
+    DeviceResponse:
+      description: The device.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [device]
+            properties:
+              device: { $ref: '#/components/schemas/DeviceView' }
+    BadRequest:
+      description: Invalid JSON body, or a validation message in `error` (no code).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ChatBadRequest:
+      description: '`code: bad_request` from the chat service (bad input, unsupported message, group mismatch, unknown device or person), or a plain `error` for malformed JSON/base64.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: '`authentication required` — no valid person or operator session.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    AppUnauthorized:
+      description: '`FOG_API_TOKEN required` or `unrecognized token`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: '`code: forbidden` — not a participant, role does not allow it, not your leaf, join refused, or fixed membership.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    FedForbidden:
+      description: 'Signature or relationship refusal: `missing_instance`, `unknown_peer`, `key_unusable`, `bad_signature`, or `forbidden` (no chat grant, actor not of the calling household, or the household has no stake in the room).'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found (plain `error`).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ChatNotFound:
+      description: '`code: not_found`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoSuchDevice:
+      description: '`no such device` — not one of the caller''s live devices.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NeedDevice:
+      description: '`code: need_device` — the session is not bound to a device (428 Precondition Required).'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Archived:
+      description: '`code: archived` — the room is archived, or the replica is not live.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    EpochStale:
+      description: '`code: epoch_stale` with the room''s current `epoch` and `seq` so the client can sync and retry.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/EpochStaleError' }
+    TooManyRequests:
+      description: 'Rate limited (plain `error`; `Retry-After: 60` on app routes).'
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Moving:
+      description: '`code: moving` — this fog is the hub and is handing the room to another household; retry shortly.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ChatRateLimited:
+      description: 'Per-person budget across every `/api/chat/*` call exceeded: `code: rate_limited`, `Retry-After: 60`.'
+      headers:
+        Retry-After:
+          schema: { type: integer, const: 60 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: The Go error text in `error` (no code).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ChatError:
+      description: 'An unmapped chat-service error: `code: ""`. On a replica this includes `hub unreachable: ...`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    FedKeyMaterial:
+      description: OK (signed).
+      headers: { $ref: '#/components/headers/FedSigned' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/KeyMaterial' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          description: Present on chat-service and federation refusals; may be "" on an unmapped 500.
+          enum:
+            - need_device
+            - not_found
+            - epoch_stale
+            - forbidden
+            - bad_request
+            - archived
+            - identity_set
+            - previews_off
+            - bot_not_in_room
+            - rate_limited
+            - moving
+            - adopt_failed
+            - missing_instance
+            - unknown_peer
+            - key_unusable
+            - bad_signature
+            - ''
+    EpochStaleError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [epoch, seq]
+          properties:
+            epoch: { type: integer, format: int64 }
+            seq: { type: integer, format: int64 }
+    OkBody:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, const: true }
+
+    RFC3339:
+      type: string
+      description: UTC timestamp, RFC 3339 (`2026-09-04T12:00:00Z`). Empty-string means unset where the field is not omitted.
+    ULID:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    Handle:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9_.-]{1,31}$'
+    PersonAddr:
+      type: string
+      description: '`fog:<instanceId>/<handle>`.'
+      pattern: '^fog:[^/]+/.+$'
+    Base64UrlKey:
+      type: string
+      description: 32-byte ed25519 public key, base64url without padding.
+      contentEncoding: base64url
+    Base64UrlBytes:
+      type: string
+      description: Opaque bytes, base64url without padding (`people.EncodeKey`).
+      contentEncoding: base64url
+    StdBase64Bytes:
+      type: string
+      description: 'Opaque bytes, standard base64 with padding (Go `[]byte` via encoding/json).'
+      contentEncoding: base64
+    RoomKind:
+      type: string
+      enum: [channel, group, dm]
+    EventKind:
+      type: string
+      enum: [mls_private, mls_commit, mls_proposal, system]
+
+    Person:
+      type: object
+      description: store.Person as marshalled directly.
+      required: [id, handle, displayName, role, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        handle: { $ref: '#/components/schemas/Handle' }
+        displayName: { type: string }
+        role: { type: string, enum: [operator, member, guest] }
+        status: { type: string, enum: [active, suspended] }
+        identityKey:
+          $ref: '#/components/schemas/StdBase64Bytes'
+          description: 'Omitted when unset. NOTE: standard base64, not base64url — the `identityKey` field beside `person` in `GET /api/chat/me` and in directory/key-material objects is base64url.'
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        lastSeenAt: { $ref: '#/components/schemas/RFC3339' }
+    PersonAdminView:
+      allOf:
+        - $ref: '#/components/schemas/Person'
+        - type: object
+          required: [devices, verifiedDevices, credentials, hasIdentity]
+          properties:
+            devices: { type: integer }
+            verifiedDevices: { type: integer }
+            credentials:
+              type: array
+              description: Distinct credential kinds the person holds.
+              items: { type: string, enum: [passkey, password] }
+            hasIdentity: { type: boolean, description: '`identityKey` itself is stripped from this view.' }
+    PersonCredential:
+      type: object
+      required: [id, kind, label, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [passkey, password] }
+        label: { type: string }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        lastUsedAt: { $ref: '#/components/schemas/RFC3339' }
+    PersonInvite:
+      type: object
+      required: [id, handleHint, displayHint, role, createdBy, createdAt, expiresAt]
+      properties:
+        id: { type: integer, format: int64 }
+        handleHint: { type: string }
+        displayHint: { type: string }
+        role: { type: string, enum: [member, guest] }
+        createdBy: { type: string, description: Operator username. }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        expiresAt: { $ref: '#/components/schemas/RFC3339' }
+        usedAt: { $ref: '#/components/schemas/RFC3339' }
+        usedBy: { type: integer, format: int64 }
+
+    PersonSessionView:
+      type: object
+      description: store.PersonSessionView — one live person session.
+      required: [id, clientKind, createdAt, expiresAt, lastSeenAt]
+      properties:
+        id: { type: integer, format: int64 }
+        deviceId: { type: integer, format: int64, description: Omitted when the session is not device-bound. }
+        deviceName: { type: string }
+        clientKind: { type: string, enum: [web, native] }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        expiresAt: { $ref: '#/components/schemas/RFC3339' }
+        lastSeenAt: { $ref: '#/components/schemas/RFC3339' }
+        userAgent: { type: string }
+        remoteAddr: { type: string }
+
+    DeviceView:
+      type: object
+      required: [id, name, kind, deviceKey, verified, keyPackages, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string, enum: [web, ios, android, desktop] }
+        deviceKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        attestation:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: ed25519 signature by the identity key; present only when `verified`.
+        verified: { type: boolean }
+        keyPackages: { type: integer, description: Unconsumed KeyPackages on file. }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        lastSeenAt: { $ref: '#/components/schemas/RFC3339' }
+        current: { type: boolean, description: True when this is the device bound to the calling session (omitted when false). }
+    DirectoryDevice:
+      type: object
+      required: [id, name, kind, deviceKey, verified, keyPackages]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string }
+        deviceKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        attestation: { $ref: '#/components/schemas/Base64UrlBytes' }
+        verified: { type: boolean }
+        keyPackages: { type: integer, description: Local devices only; 0 for a peer's devices. }
+    DirectoryPerson:
+      type: object
+      required: [handle, displayName, role, devices]
+      properties:
+        handle: { $ref: '#/components/schemas/Handle' }
+        displayName: { type: string }
+        role: { type: string }
+        identityKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        devices:
+          type: array
+          items: { $ref: '#/components/schemas/DirectoryDevice' }
+    KeyMaterialDevice:
+      type: object
+      required: [id, name, kind, deviceKey, verified, keyPackage]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string }
+        deviceKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        attestation: { $ref: '#/components/schemas/Base64UrlBytes' }
+        verified: { type: boolean }
+        keyPackage:
+          oneOf:
+            - $ref: '#/components/schemas/Base64UrlBytes'
+            - type: 'null'
+          description: One fresh MLS KeyPackage, consumed by this response — or, past the caller's budget or once none is left, the device's last-resort package (see `lastResort`); null when it has neither.
+        lastResort: { type: boolean, description: '`keyPackage` is the device''s last-resort package, not consumed and served to others too.' }
+    KeyMaterial:
+      type: object
+      description: MIMI keyMaterial for one person.
+      required: [handle, displayName, ciphersuite, devices]
+      properties:
+        handle: { $ref: '#/components/schemas/Handle' }
+        displayName: { type: string }
+        identityKey: { $ref: '#/components/schemas/Base64UrlKey' }
+        ciphersuite: { type: integer }
+        devices:
+          type: array
+          items: { $ref: '#/components/schemas/KeyMaterialDevice' }
+
+    Role:
+      type: object
+      required: [index, name, capabilities]
+      properties:
+        index: { type: integer, description: '1 banned, 2 member, 3 admin, 4 owner; custom roles 5+.' }
+        name: { type: string }
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - canSendMessage
+              - canReact
+              - canEditOwn
+              - canDeleteOwn
+              - canAddParticipant
+              - canRemoveParticipant
+              - canDeleteOtherMessage
+              - canChangeRoomName
+              - canChangeRoomTopic
+              - canChangeRoomAvatar
+              - canPin
+              - canChangePolicy
+              - canChangeRoles
+              - canShareHistory
+              - '*'
+    Policy:
+      type: object
+      description: |
+        Room policy in the shape of draft-ietf-mimi-room-policy, carried in the MLS
+        GroupContext as extension 0xF0F0. `Validate` requires roles 1 (banned, no
+        capabilities) and 2 (member), some role holding `*`, known rule values,
+        known hints, and retention 0–3650 days.
+      required: [roles, join, history, households, hints, retention]
+      properties:
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+        join: { type: string, enum: [open-household, invite] }
+        history: { type: string, enum: [shared, since-join] }
+        households: { type: string, enum: [hub-peers] }
+        hints:
+          type: array
+          items: { type: string, enum: [mentions] }
+        retention:
+          type: object
+          required: [days]
+          properties:
+            days: { type: integer, minimum: 0, maximum: 3650, description: 0 = forever. }
+
+    ChatRoom:
+      type: object
+      description: store.ChatRoom public fields.
+      required: [id, hubInstance, kind, label, topicLabel, workspaceVisible, epoch, seq, replicaStatus, createdBy, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/ULID' }
+        hubInstance: { type: string, description: 'Instance id of the hub; "" when this fog is the hub.' }
+        kind: { $ref: '#/components/schemas/RoomKind' }
+        label: { type: string, description: What the room chose to reveal for listing; the real name is encrypted content. }
+        topicLabel: { type: string }
+        workspaceVisible: { type: boolean }
+        epoch: { type: integer, format: int64 }
+        seq: { type: integer, format: int64 }
+        replicaStatus: { type: string, description: 'On a follower: `live` (writable via relay) or `archived` (read-only). On the hub: `live`, or `frozen` while a hand-over is in flight (writers get 503 `moving`); older hub rows may carry "".' }
+        createdBy: { $ref: '#/components/schemas/PersonAddr' }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        archivedAt: { $ref: '#/components/schemas/RFC3339' }
+    RoomView:
+      allOf:
+        - $ref: '#/components/schemas/ChatRoom'
+        - type: object
+          required: [policy, participants, myRole, readSeq, unread, hubHere, notify, households, roles]
+          properties:
+            policy: { $ref: '#/components/schemas/Policy' }
+            participants: { type: integer, description: Current (not left) participants. }
+            myRole: { type: integer, description: The caller's role index; 0 if not a participant. }
+            readSeq: { type: integer, format: int64 }
+            unread: { type: integer, format: int64, description: '`seq - readSeq` when positive.' }
+            hubHere: { type: boolean, description: '`hubInstance == ""`.' }
+            notify: { type: string, description: 'The caller''s per-room setting: all | mentions | none; "" if not a participant.' }
+            dm:
+              type: array
+              description: DMs only — the other participants' addresses.
+              items: { $ref: '#/components/schemas/PersonAddr' }
+            dmNames:
+              type: array
+              description: Display names parallel to `dm` (remote people as `Name · Household`).
+              items: { type: string }
+            households: { type: integer, description: Distinct home instances among current participants. }
+            roles:
+              type: object
+              description: Each current participant's role index, by address — what clients check moderation acts (deletes of others' messages, pins) and shared history against.
+              additionalProperties: { type: integer }
+    ParticipantView:
+      type: object
+      required: [addr, handle, displayName, homeInstance, roleIndex, joinedSeq, online]
+      properties:
+        addr: { $ref: '#/components/schemas/PersonAddr' }
+        handle: { type: string }
+        displayName: { type: string }
+        homeInstance: { type: string }
+        roleIndex: { type: integer }
+        joinedSeq: { type: integer, format: int64 }
+        leftSeq: { type: integer, format: int64, description: Omitted while the participant is current. }
+        online: { type: boolean, description: Connected to this fog's stream right now. }
+    ChatParticipant:
+      type: object
+      description: store.ChatParticipant, as carried in a RoomSnapshot.
+      required: [addr, homeInstance, roleIndex, joinedSeq, notify]
+      properties:
+        addr: { $ref: '#/components/schemas/PersonAddr' }
+        homeInstance: { type: string }
+        roleIndex: { type: integer }
+        joinedSeq: { type: integer, format: int64 }
+        leftSeq: { type: integer, format: int64 }
+        notify: { type: string, description: The hub's copy; a replica keeps its own people's setting. }
+        identityKey: { $ref: '#/components/schemas/Base64UrlKey', description: The identity key the person held when they joined; absent when not known. }
+
+    CreateRoomInput:
+      type: object
+      required: [kind, groupId, groupInfo]
+      properties:
+        kind: { $ref: '#/components/schemas/RoomKind' }
+        label: { type: string, description: Required for channels. Trimmed to 64 runes. }
+        topic: { type: string }
+        groupId:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: Client-chosen MLS group id, 8–64 bytes, unique on this fog.
+        groupInfo:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: 'The new group''s MLSMessage(GroupInfo) at epoch 0, with the ratchet_tree extension: this group, only the caller''s device in it, its tree matching the tree hash and signed by that leaf. The hub verifies every later commit against the public state it starts. Not needed when an existing DM is returned.'
+        policy:
+          $ref: '#/components/schemas/Policy'
+          description: Defaults to `DefaultPolicy(kind)`.
+        participants:
+          type: array
+          description: DMs only — the other people's addresses (the creator is implied). 2–9 people in total.
+          items: { $ref: '#/components/schemas/PersonAddr' }
+        workspaceVisible: { type: boolean, description: Channels only; defaults to true for channels. }
+
+    ChatEvent:
+      type: object
+      description: store.ChatEvent as the store marshals it (federation plane). `hints` is not included here.
+      required: [roomId, seq, id, epoch, kind, hubAt, payload]
+      properties:
+        roomId: { $ref: '#/components/schemas/ULID' }
+        seq: { type: integer, format: int64, description: 'Hub-assigned, strictly increasing per room.' }
+        id: { $ref: '#/components/schemas/ULID' }
+        epoch: { type: integer, format: int64 }
+        kind: { $ref: '#/components/schemas/EventKind' }
+        sender: { $ref: '#/components/schemas/PersonAddr' }
+        senderDevice:
+          $ref: '#/components/schemas/Base64UrlKey'
+          description: The sending device's key, base64url.
+        sentAt: { $ref: '#/components/schemas/RFC3339' }
+        hubAt: { $ref: '#/components/schemas/RFC3339' }
+        payload:
+          $ref: '#/components/schemas/StdBase64Bytes'
+          description: 'The MLSMessage (PrivateMessage for mls_private, PublicMessage for mls_commit). NOTE: standard base64 with padding — Go `[]byte`. For kind `system` the decoded bytes are plaintext JSON minted by the hub, with no `sender`/`senderDevice`; the shapes are `hub-moved`, the departures and `device-revoked` (see the introduction).'
+        expiresAt: { $ref: '#/components/schemas/RFC3339' }
+        senderRole: { type: integer, description: 'The sender''s role index in the room when the hub sequenced the event (`mls_private` only); clients judge moderation acts by it.' }
+    EventView:
+      allOf:
+        - $ref: '#/components/schemas/ChatEvent'
+        - type: object
+          properties:
+            hints:
+              $ref: '#/components/schemas/Hints'
+              description: Present only when the sender declared hints the policy permits.
+    Hints:
+      type: object
+      description: Sender-declared, policy-bounded, unencrypted hints. Only `mentions` exists.
+      properties:
+        mentions:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/PersonAddr' }
+    SubmitInput:
+      type: object
+      required: [id, kind, payload]
+      properties:
+        id: { $ref: '#/components/schemas/ULID' }
+        kind:
+          type: string
+          enum: [mls_private, mls_commit]
+          description: '`mls_proposal` is rejected (unsupported).'
+        payload:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: The MLSMessage, at most 1 MiB. Decoded with `DecodeKey` (base64url or standard, padded or not).
+        sentAt: { $ref: '#/components/schemas/RFC3339' }
+        hints: { $ref: '#/components/schemas/Hints' }
+        welcome:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: Commits only — the MLSMessage(Welcome) for leaves the commit adds; the hub files it as invites for the added people/devices.
+        expiresAt: { $ref: '#/components/schemas/RFC3339' }
+        groupInfo:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: Required with every commit (400 without) — the post-commit GroupInfo, so the hub always holds a current one for joiners and for newcomers checking a Welcome. It must match the epoch the commit makes, or the commit is refused.
+
+    InviteView:
+      type: object
+      required: [id, roomId, invitedBy, seq, welcome, createdAt, room]
+      properties:
+        id: { type: integer, format: int64 }
+        roomId: { $ref: '#/components/schemas/ULID' }
+        invitedBy: { $ref: '#/components/schemas/PersonAddr' }
+        seq: { type: integer, format: int64, description: Seq of the add commit. }
+        welcome:
+          $ref: '#/components/schemas/Base64UrlBytes'
+          description: The MLS Welcome, base64url (`EncodeKey`).
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        room:
+          type: object
+          required: [id, kind, label, epoch, seq]
+          properties:
+            id: { $ref: '#/components/schemas/ULID' }
+            kind: { $ref: '#/components/schemas/RoomKind' }
+            label: { type: string }
+            epoch: { type: integer, format: int64 }
+            seq: { type: integer, format: int64 }
+
+    BlobRef:
+      type: object
+      required: [sha256, size]
+      properties:
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        size: { type: integer, format: int64 }
+
+    Prefs:
+      type: object
+      description: chat.Prefs. Every field is always serialized.
+      required: [dnd, receipts, previews, ntfyTopic, pushEnabled]
+      properties:
+        dnd:
+          type: object
+          required: [enabled, start, end, tz]
+          properties:
+            enabled: { type: boolean }
+            start: { type: string, description: '`HH:MM` local time.' }
+            end: { type: string, description: '`HH:MM`; may be earlier than start (crosses midnight).' }
+            tz: { type: string, description: IANA zone; server local time when empty. }
+        receipts: { type: boolean, description: Send encrypted read receipts. }
+        previews: { type: boolean, description: Allow `GET /api/chat/preview` (fog then sees the link). }
+        ntfyTopic: { type: string, maxLength: 64 }
+        pushEnabled: { type: boolean }
+    Preview:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+        title: { type: string }
+        description: { type: string }
+        image: { type: string, format: uri }
+        site: { type: string }
+
+    ChatWebhook:
+      type: object
+      required: [id, roomId, name, createdBy, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        roomId: { $ref: '#/components/schemas/ULID' }
+        name: { type: string }
+        createdBy: { $ref: '#/components/schemas/PersonAddr' }
+        createdAt: { $ref: '#/components/schemas/RFC3339' }
+        lastUsedAt: { $ref: '#/components/schemas/RFC3339' }
+
+    StreamHello:
+      type: object
+      description: The client's first WebSocket frame.
+      properties:
+        since:
+          type: object
+          description: Room id → last seq the client holds. Missing rooms replay from 0.
+          additionalProperties: { type: integer, format: int64 }
+    StreamFrame:
+      type: object
+      description: A server→client WebSocket frame. Fields other than `kind` are omitted when empty.
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [event, synced, rooms, invite, ephemeral] }
+        roomId: { $ref: '#/components/schemas/ULID' }
+        event: { $ref: '#/components/schemas/EventView' }
+        person: { $ref: '#/components/schemas/PersonAddr' }
+        signal: { type: string, enum: [typing, 'presence:online', 'presence:offline'] }
+        cursors:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+        rooms:
+          type: array
+          items: { type: string }
+          description: Declared on the struct but never populated by the current server.
+        online:
+          type: array
+          items: { $ref: '#/components/schemas/PersonAddr' }
+        error: { type: string, description: Declared on the struct but never populated by the current server. }
+        extra:
+          type: object
+          additionalProperties: { type: string }
+          description: Declared on the struct but never populated by the current server.
+
+    RoomSnapshot:
+      type: object
+      description: What a follower needs to mirror a room — everything public.
+      required: [room, groupId, policy, participants, tree, groupInfoEpoch]
+      properties:
+        room: { $ref: '#/components/schemas/ChatRoom' }
+        groupId:
+          $ref: '#/components/schemas/StdBase64Bytes'
+          description: The MLS group id (standard base64).
+        policy: { type: string, description: The policy as a JSON string (see Policy). }
+        participants:
+          type: array
+          items: { $ref: '#/components/schemas/ChatParticipant' }
+        tree: { type: string, description: The hub's serialized public ratchet tree (opaque to clients). }
+        groupInfo:
+          $ref: '#/components/schemas/StdBase64Bytes'
+          description: GroupInfo on file, if any (standard base64).
+        groupInfoEpoch: { type: integer, format: int64 }
+        publicState: { type: string, description: The hub's verified public state of the MLS group (opaque), so a hand-over keeps verifying. }
+        dm: { type: string, description: 'A DM''s fixed set, comma-separated addresses: the replica holds it for its people''s clients and in case the hub moves there.' }
+        departed: { type: boolean, description: 'The asking household has no one left in the room: `participants` holds only its own people''s rows, and `room` only id, kind, creator and the seq its last person left at.' }
+    NotifyItem:
+      type: object
+      required: [type, roomId, hub]
+      properties:
+        type: { type: string, enum: [event, invite, left, moved] }
+        roomId: { $ref: '#/components/schemas/ULID' }
+        hub: { type: string, description: Instance id of the hub; must equal the calling peer's instance or the item is ignored. }
+        event: { $ref: '#/components/schemas/ChatEvent' }
+        invite: { $ref: '#/components/schemas/NotifyInvite' }
+        newHub:
+          type: string
+          description: '`moved` items — the instance id the room''s hub moved to. The receiving follower re-points its replica at `newHub` and syncs; if it is not paired with `newHub` the replica is marked `archived`. Ignored when empty.'
+        left:
+          type: array
+          description: '`left` items — these people are no longer in the room (a household cut).'
+          items: { $ref: '#/components/schemas/PersonAddr' }
+    NotifyInvite:
+      type: object
+      required: [person, deviceKey, invitedBy, seq, welcome, room]
+      properties:
+        person: { $ref: '#/components/schemas/PersonAddr' }
+        deviceKey: { type: string, description: 'base64url device key the Welcome is for; "" for any device.' }
+        invitedBy: { $ref: '#/components/schemas/PersonAddr' }
+        seq: { type: integer, format: int64 }
+        welcome:
+          $ref: '#/components/schemas/StdBase64Bytes'
+          description: The MLS Welcome (standard base64 here; base64url when re-served on `/api/chat/invites`).
+        room: { $ref: '#/components/schemas/RoomSnapshot' }

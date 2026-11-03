@@ -1,0 +1,22 @@
+# tty1 stays what Debian makes it — agetty, a login prompt, a bash shell for
+# the admin account the installer created. This service only keeps the text
+# agetty prints above that prompt honest: name, URLs, health, refreshed
+# whenever they change (see cmd/fog-console).
+[Unit]
+Description=Fog console banner on /etc/issue
+# Wants= actually pulls network-online.target into the boot; After= alone
+# orders against it only if something else requested it.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/fog-console
+Restart=always
+RestartSec=5
+# It writes /etc/issue and /run/agetty.reload; nothing under /home, ever.
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+{
+  "name": "@fog/chat-sdk",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "ts-mls": "^1.6.4"
+  }
+}

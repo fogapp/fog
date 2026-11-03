@@ -1,0 +1,27 @@
+# The wizard on the machine's own display: a cage (Wayland kiosk) session
+# running Chromium fullscreen against the local agent. On a headless box
+# there is no DRM device and this simply doesn't start — fog.local carries
+# the whole experience instead.
+[Unit]
+Description=Fog installer kiosk
+After=fog-setup.service seatd.service
+Wants=fog-setup.service
+ConditionPathExistsGlob=/dev/dri/card*
+
+[Service]
+User=kiosk
+Environment=XDG_RUNTIME_DIR=/run/user/kiosk
+ExecStartPre=/bin/mkdir -p /run/user/kiosk
+ExecStartPre=/bin/chown kiosk:kiosk /run/user/kiosk
+PermissionsStartOnly=true
+# fog-kiosk records the scale it chose here and reads the wizard's override
+# from here. Kept across restarts — a restart is exactly when both matter.
+RuntimeDirectory=fog-kiosk
+RuntimeDirectoryPreserve=yes
+# fog-kiosk picks chromium's scale from the attached panel, then execs cage.
+ExecStart=/usr/local/bin/fog-kiosk
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical.target

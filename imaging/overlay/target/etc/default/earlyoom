@@ -1,0 +1,3 @@
+# A runaway app container dies before the things that keep the box
+# manageable: fogd, the Docker engine, and sshd.
+EARLYOOM_ARGS="-r 0 --avoid '(^|/)(fogd|dockerd|containerd|sshd|systemd)$'"

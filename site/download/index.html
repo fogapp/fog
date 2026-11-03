@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Fog</title>
+<style>
+  :root {
+    --fog-50:#f6f7f9; --fog-100:#eceef2; --fog-200:#d5dae2; --fog-300:#b1bac9;
+    --fog-400:#8694ab; --fog-500:#677691; --fog-700:#434c62; --fog-800:#3a4153;
+    --fog-900:#343947; --fog-950:#22252f;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body {
+    background:var(--fog-950); color:var(--fog-100);
+    font:16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  main { max-width:640px; margin:0 auto; padding:4rem 1.25rem 6rem; }
+  h1 { display:flex; align-items:center; gap:.6rem; justify-content:center;
+       font-size:2rem; font-weight:600; color:#fff; }
+  h1 svg { width:2.6rem; height:2.6rem; }
+  .tagline { text-align:center; color:var(--fog-400); margin:.4rem 0 3rem; font-size:.95rem; }
+  .card { background:color-mix(in srgb, var(--fog-900) 50%, transparent);
+          border:1px solid var(--fog-800); border-radius:.75rem; padding:1.5rem; margin-bottom:1.25rem; }
+  .step { display:flex; gap:1rem; }
+  .step + .step { margin-top:1.4rem; }
+  .num { flex:none; width:1.9rem; height:1.9rem; border-radius:999px; background:var(--fog-700);
+         color:#fff; display:grid; place-items:center; font-size:.9rem; font-weight:600; }
+  .step h3 { font-size:1rem; color:#fff; margin-bottom:.2rem; }
+  .step p { font-size:.9rem; color:var(--fog-200); }
+  .step p.small, .small { font-size:.8rem; color:var(--fog-400); margin-top:.3rem; }
+  a { color:var(--fog-300); }
+  a:hover { color:#fff; }
+  .dl { display:block; text-align:center; background:var(--fog-500); color:#fff;
+        font-weight:600; text-decoration:none; border-radius:.5rem; padding:.8rem 1rem;
+        transition:background .15s; }
+  .dl:hover { background:var(--fog-400); color:#fff; }
+  .dl small { display:block; font-weight:400; font-size:.75rem; color:var(--fog-100); opacity:.75; }
+  code { background:var(--fog-900); border:1px solid var(--fog-800); border-radius:.3rem;
+         padding:.1rem .35rem; font-size:.85em; }
+  .checksum { font-family:ui-monospace, monospace; font-size:.72rem; color:var(--fog-400);
+              word-break:break-all; margin-top:.6rem; }
+  .requirements { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.75rem; }
+  .requirements div { background:var(--fog-900); border-radius:.5rem; padding:.75rem;
+                      font-size:.85rem; color:var(--fog-200); }
+  .requirements b { display:block; color:#fff; font-size:.8rem; margin-bottom:.15rem; }
+  footer { text-align:center; color:var(--fog-500); font-size:.8rem; margin-top:3rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6.1 12 9.6 8.5l1.64 1.64"/><path d="M7.5 10.6v-1.7h1.3v.35"/>
+      <path d="M7.1 11.2V15.5"/><path d="M8.6 15.5v-3h.78"/><path d="M7.1 15.5h2.82"/>
+      <path d="M12.8 15.5a2.1 2.1 0 0 1-.45-4.1 2.9 2.9 0 0 1 5.6-.7"/>
+    </svg>
+    fog
+  </h1>
+  <p class="tagline">Turn any spare PC into your home server — apps, backups, and updates, all from one dashboard.</p>
+
+  <div class="card">
+    <div class="requirements">
+      <div><b>A computer to dedicate</b>x86-64 with UEFI — a mini-PC, NUC, or old desktop. 24&nbsp;GB disk minimum.</div>
+      <div><b>A USB stick</b>4&nbsp;GB or larger. It will be erased.</div>
+      <div><b>An Ethernet cable</b>Home servers work best wired to your router.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="step">
+      <div class="num">1</div>
+      <div>
+        <h3>Download the installer</h3>
+        <p style="margin-bottom:.7rem">One image, about 2&nbsp;GB. It carries everything — installation never needs the internet.</p>
+        <a class="dl" id="dl" href="fog-installer-x86_64.img">
+          Download fog-installer-x86_64.img
+          <small id="dl-note">for UEFI x86-64 machines</small>
+        </a>
+        <p class="checksum">sha256 <span id="sha">— see fog-installer-x86_64.img.sha256 beside the download</span></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">2</div>
+      <div>
+        <h3>Flash it to the USB stick</h3>
+        <p>Open <a href="https://etcher.balena.io/" rel="noopener">balenaEtcher</a> (free, all platforms), choose the downloaded image, choose your stick, and hit <em>Flash</em>.</p>
+        <p class="small" id="os-hint">Prefer the terminal? <code>dd if=fog-installer-x86_64.img of=/dev/sdX bs=4M status=progress</code> works too — mind the target device.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">3</div>
+      <div>
+        <h3>Boot the server from it</h3>
+        <p>Plug the stick and the Ethernet cable into the server machine and power it on. Most machines boot the stick automatically; otherwise tap the boot-menu key (usually F12, F10, or Esc) and pick the USB entry.</p>
+        <p class="small">With a screen attached, the setup wizard appears right there. Headless? Open <code>http://fog.local</code> from your phone or laptop — same wizard.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <div>
+        <h3>Answer four questions</h3>
+        <p>Name your server, pick the disk, create your account — a few minutes later you're on your dashboard, installing your first app. The stick becomes your recovery tool; keep it in a drawer.</p>
+        <p class="small">Pull the stick out during the final restart. Leave it in and the machine boots the installer again — it recognizes the server it just built and says so, so nothing is at risk either way.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="color:#fff;font-size:1rem;margin-bottom:.4rem">Already have a Fog backup?</h3>
+    <p style="font-size:.9rem;color:var(--fog-200)">The same installer restores a server: choose <em>Restore from a backup</em> on the first screen and hand it your encrypted recovery kit. It verifies the kit before touching any disk.</p>
+  </div>
+
+  <footer>Fog is self-hosted — after this page, everything happens on your own hardware.</footer>
+</main>
+<script>
+  // Light OS-awareness for the step-2 hint. No tracking, nothing leaves the page.
+  var p = navigator.platform || "", hint = document.getElementById("os-hint");
+  if (/Mac/.test(p)) hint.innerHTML = 'Prefer the terminal? <code>sudo dd if=fog-installer-x86_64.img of=/dev/rdiskN bs=4m</code> (find N with <code>diskutil list</code>) — mind the target device.';
+  if (/Win/.test(p)) hint.innerHTML = 'On Windows, <a href="https://rufus.ie" rel="noopener">Rufus</a> also works: pick the image, pick the stick, write in DD mode.';
+</script>
+</body>
+</html>

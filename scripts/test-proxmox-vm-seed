@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# proxmox-vm.sh hands a new VM everything in a cloud-init seed it builds
+# itself. A broken seed fails silently on a Proxmox node — the VM boots,
+# cloud-init skips what it can't parse, and the script waits out its timeout —
+# so the files are checked here instead, with no node: the script's seed
+# functions are sourced under FOG_VM_SEED_FUNCTIONS_ONLY=1 and their output
+# compared to what each network shape must produce. Where cloud-init itself
+# is installed, its schema check runs too.
+set -eu
+cd "$(dirname "$0")/.."
+
+fail=0
+check() { # <name> <expected> <actual>
+  if [ "$2" = "$3" ]; then
+    echo "ok   $1"
+  else
+    fail=1
+    {
+      echo "FAIL $1"
+      echo "  expected:"; printf '%s\n' "$2" | sed 's/^/    /'
+      echo "  actual:";   printf '%s\n' "$3" | sed 's/^/    /'
+    } >&2
+  fi
+}
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+seed() { # <dir> [VAR=value...] — builds a seed with those parameters
+  local d=$1; shift
+  mkdir -p "$d/seed"
+  printf '#!/bin/sh\necho install\n' > "$d/install.sh"
+  echo 'ssh-ed25519 AAAAtest fog@test' > "$d/key.pub"
+  env "$@" FOG_VM_SEED_FUNCTIONS_ONLY=1 FOG_SSH_KEYS="$d/key.pub" bash -c '
+    set -e; d=$1; set --   # the script parses its own arguments
+    . ./proxmox-vm.sh; trap - ERR
+    VMID=150
+    seed_env "$d/env" " 192.168.1.252 gitea.lan"
+    seed_setup_script "$d/setup.sh"
+    seed_meta_data "$d/seed"
+    seed_network_config "$d/seed" BC:24:11:AA:BB:CC
+    seed_user_data "$d/seed" "$d/install.sh" "$d/env" "$d/setup.sh"' _ "$d"
+}
+
+# The file write_files would create at <path>, decoded from the user-data.
+written() { # <user-data> <path>
+  awk -v p="$2" '$0 ~ "- path: "p"$" {f=1} f && $1=="content:" {print $2; exit}' "$1" | base64 -d
+}
+
+# --- DHCP, with a password that would break unquoted YAML or shell -----------
+pw="p'w\"d \$x: #y"
+seed "$tmp/dhcp" FOG_ADMIN_USER=admin "FOG_ADMIN_PASSWORD=$pw"
+check "dhcp: network-config" \
+'version: 2
+ethernets:
+  eth0:
+    match:
+      macaddress: "BC:24:11:AA:BB:CC"
+    set-name: eth0
+    dhcp4: true' "$(cat "$tmp/dhcp/seed/network-config")"
+check "dhcp: install.sh carried byte for byte" \
+  "$(cat "$tmp/dhcp/install.sh")" "$(written "$tmp/dhcp/seed/user-data" /root/fog-install.sh)"
+written "$tmp/dhcp/seed/user-data" /root/fog-vm.env > "$tmp/dhcp/env.out"
+check "dhcp: admin password survives the env file" \
+  "$pw" "$(bash -c '. "$1"; printf %s "$FOG_ADMIN_PASSWORD"' _ "$tmp/dhcp/env.out")"
+check "dhcp: ssh key survives the env file" \
+  "ssh-ed25519 AAAAtest fog@test" "$(bash -c '. "$1"; printf %s "$SSH_KEYS_B64" | base64 -d' _ "$tmp/dhcp/env.out")"
+written "$tmp/dhcp/seed/user-data" /root/fog-vm-setup.sh > "$tmp/dhcp/setup.out"
+check "dhcp: setup script parses" "" "$(bash -n "$tmp/dhcp/setup.out" 2>&1)"
+check "meta-data: hostname" "local-hostname: fog" "$(grep '^local-hostname' "$tmp/dhcp/seed/meta-data")"
+
+# --- static IPv4, SLAAC, DNS, MTU ---------------------------------------------
+seed "$tmp/static" FOG_IPV4=192.168.1.60/24 FOG_GATEWAY=192.168.1.1 FOG_DNS=192.168.1.11 \
+  FOG_SEARCHDOMAIN=lan FOG_MTU=9000 FOG_IPV6=auto FOG_HOSTNAME=fog2
+check "static: network-config" \
+'version: 2
+ethernets:
+  eth0:
+    match:
+      macaddress: "BC:24:11:AA:BB:CC"
+    set-name: eth0
+    accept-ra: true
+    addresses:
+      - "192.168.1.60/24"
+    routes:
+      - to: default
+        via: "192.168.1.1"
+    mtu: 9000
+    nameservers:
+      addresses: ["192.168.1.11"]
+      search: ["lan"]' "$(cat "$tmp/static/seed/network-config")"
+
+# --- DHCP for v4 beside a static v6 -------------------------------------------
+seed "$tmp/v6" FOG_IPV6=fd00::60/64
+check "v6: network-config" \
+'version: 2
+ethernets:
+  eth0:
+    match:
+      macaddress: "BC:24:11:AA:BB:CC"
+    set-name: eth0
+    dhcp4: true
+    addresses:
+      - "fd00::60/64"' "$(cat "$tmp/v6/seed/network-config")"
+
+if command -v cloud-init >/dev/null 2>&1; then
+  for d in dhcp static v6; do
+    check "$d: cloud-init accepts user-data" "" \
+      "$(cloud-init schema -c "$tmp/$d/seed/user-data" >/dev/null 2>&1 || echo invalid)"
+    check "$d: cloud-init accepts network-config" "" \
+      "$(cloud-init schema -c "$tmp/$d/seed/network-config" --schema-type network-config >/dev/null 2>&1 || echo invalid)"
+  done
+else
+  echo "cloud-init not installed — schema check skipped"
+fi
+
+# --- no password stays on the VM's disk -------------------------------------
+# cloud-init caches the user-data it ran (the env file with the passwords)
+# and logs; the setup script's last act is to scrub them, now and again
+# once cloud-final is done. Run its scrub against a scratch tree laid out
+# like a VM that just ran the seed, and require the password gone.
+pw='PW-$(rm -rf /);"x'
+v="$tmp/vm"
+mkdir -p "$v/var/lib/cloud/instances/fog-150-1/handlers" "$v/var/lib/cloud/seed/nocloud" "$v/var/lib/cloud/data" "$v/var/log"
+ln -s instances/fog-150-1 "$v/var/lib/cloud/instance"
+for f in user-data.txt user-data.txt.i obj.pkl vendor-data.txt vendor-data2.txt.i; do
+  printf 'FOG_ADMIN_PASSWORD=%s\n' "$pw" > "$v/var/lib/cloud/instances/fog-150-1/$f"
+done
+printf '%s' "$pw" > "$v/var/lib/cloud/seed/nocloud/user-data"
+printf '%s' "$pw" > "$v/var/lib/cloud/data/user-data.json"
+printf 'runcmd ... %s\n' "$pw" > "$v/var/log/cloud-init.log"
+printf '%s\n' "$pw" > "$v/var/log/cloud-init-output.log"
+printf 'unrelated\n' > "$v/var/log/syslog"
+eval "$(sed -n '/^scrub_cloud_init() {/,/^}/p' "$tmp/dhcp/setup.out")"
+scrub_cloud_init "$v"
+left=$(grep -rlF -- "$pw" "$v" 2>/dev/null || true)
+check "cloud-init caches and logs: no password left" "" "$left"
+check "cloud-init scrub: unrelated logs kept" "unrelated" "$(cat "$v/var/log/syslog")"
+grep -q 'systemd-run --no-block --unit=fog-cloud-init-scrub --collect --property=After=cloud-final.service' "$tmp/dhcp/setup.out" \
+  && check "cloud-init scrub: runs again after cloud-final" yes yes \
+  || check "cloud-init scrub: runs again after cloud-final" yes no
+# ...and before the node is told the install is done.
+order=$(grep -n -x -e 'scrub_cloud_init' -e 'echo ok > "$STATE/status"' "$tmp/dhcp/setup.out" | cut -d: -f2 | tr '\n' ' ')
+check "cloud-init scrub: before status ok" 'scrub_cloud_init echo ok > "$STATE/status" ' "$order"
+
+# --- the seed ISO is never readable by others, not even for a moment --------
+# A stub genisoimage writes the "ISO" and records the umask it ran under; a
+# world-readable umask there was a window in which the passwords were readable.
+mkdir -p "$tmp/iso/bin" "$tmp/iso/seed"
+cat > "$tmp/iso/bin/genisoimage" <<'STUB'
+#!/bin/sh
+umask > "$STUB_UMASK"
+while [ $# -gt 0 ]; do [ "$1" = -output ] && { echo iso > "$2"; }; shift; done
+STUB
+chmod +x "$tmp/iso/bin/genisoimage"
+PATH="$tmp/iso/bin:$PATH" STUB_UMASK="$tmp/iso/umask" FOG_VM_SEED_FUNCTIONS_ONLY=1 bash -c '
+  set -e; iso=$1 dir=$2; set --; . ./proxmox-vm.sh; trap - ERR
+  seed_iso "$iso" "$dir"' _ "$tmp/iso/seed.iso" "$tmp/iso/seed"
+check "seed ISO: written under umask 077" "0077" "$(cat "$tmp/iso/umask")"
+check "seed ISO: mode 0600" "-rw-------" "$(ls -l "$tmp/iso/seed.iso" | cut -c1-10)"
+
+if [ "$fail" != 0 ]; then
+  echo "proxmox-vm.sh's cloud-init seed is not what a VM needs" >&2
+  exit 1
+fi
+echo "proxmox-vm seed: every shape builds as expected"

@@ -1,0 +1,117 @@
+# Gitea Actions reads workflows from .gitea/workflows (and, for compatibility,
+# .github/workflows) using GitHub Actions syntax. This needs a registered
+# runner on the Gitea instance to do anything; `make check` runs the same
+# checks locally and is what release.sh gates on, so the release path stays
+# protected whether or not a runner exists.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # go:embed requires internal/ui/dist to exist. The placeholder index.html
+      # is tracked precisely so the backend can build without a frontend build.
+      # gofmt -l lists what it would change and exits 0 either way, so the
+      # gate is on its output being empty. Same check as `make fmt`.
+      - name: Format
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "$out"; echo "not gofmt'd: run gofmt -w on the files above"; exit 1; fi
+      - name: Vet
+        run: go vet ./...
+      # -race because most of what these tests protect is concurrent: the app
+      # lock, the stats sampler, the live deploy buffer. This also fails when
+      # a generated TypeScript file (api.gen.ts and the others tsgen writes)
+      # no longer matches the Go structs.
+      - name: Test
+        run: go test -race -timeout 30m ./...
+      # A Go function no binary and no test reaches fails the build. Same
+      # check as `make deadcode`'s Go half.
+      - name: Dead code
+        run: scripts/deadcode.sh
+      # The setup binary ships in the USB installer image for both PC and ARM
+      # targets; a change that only compiles on the host arch must fail here,
+      # not at image-build time. Build only — nothing to keep.
+      - name: Cross-compile fog-setup
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/fog-setup
+          GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/fog-setup
+
+  frontend:
+    runs-on: ubuntu-latest
+    # The runner's ubuntu-latest label maps to node:20-bullseye (glibc 2.31),
+    # and rollup's native binary wants GLIBC_2.32. Naming a newer image here
+    # keeps the build independent of how the runner maps its labels.
+    container: node:22-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: frontend
+      # The chat SDK is compiled as part of the frontend (tsconfig include,
+      # vite alias) but lives outside it, so its bare imports only resolve
+      # through this link. Same link as `make clients/chat-sdk/node_modules`.
+      - name: Link chat SDK dependencies
+        run: ln -sfn ../../frontend/node_modules clients/chat-sdk/node_modules
+      # tsc, then eslint for the hooks rules tsc can't see.
+      - name: Typecheck and lint
+        run: npm run lint
+        working-directory: frontend
+      # Files, exports and dependencies nothing uses.
+      - name: Unused code
+        run: npm run knip
+        working-directory: frontend
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Every shell script must at least parse, checked with the interpreter
+      # its shebang names — the overlay bin scripts and the scripts/ helpers
+      # carry no .sh extension, so the patterns name them too.
+      - name: Shell syntax
+        run: |
+          for f in $(git ls-files '*.sh' 'imaging/overlay/*/usr/local/bin/*' 'scripts/*'); do
+            case "$(head -1 "$f")" in
+              '#!/bin/sh'*) sh -n "$f" ;;
+              '#!'*) bash -n "$f" ;;
+              *) continue ;;
+            esac
+            echo "syntax ok: $f"
+          done
+      # Best effort: not every runner image ships shellcheck, and its absence
+      # must not fail CI. Error severity only — bash -n above is the syntax
+      # gate; this one is for real bugs, not style.
+      - name: Shellcheck
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            git ls-files '*.sh' 'imaging/overlay/*/usr/local/bin/*' 'scripts/*' | xargs shellcheck -S error
+          else
+            echo "shellcheck not in this runner image — skipped"
+          fi
+      # Pins install.sh's and the Proxmox scripts' source-URL guessing to the Go
+      # resolver's shapes (internal/selfupdate/resolve.go).
+      - name: Source resolution fixture
+        run: scripts/test-source-resolution
+      # Builds proxmox-vm.sh's cloud-init seed for each network shape and
+      # checks it — a bad seed otherwise only shows as a VM that never finishes.
+      - name: Proxmox VM seed
+        run: scripts/test-proxmox-vm-seed
