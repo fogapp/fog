@@ -224,6 +224,17 @@ func TestPreflightRefusals(t *testing.T) {
 			t.Fatalf("a hub artifact belongs in any hub, got %v", res.Errors)
 		}
 	})
+	// Fin was Manor: a Manor artifact restores into Fin, never the reverse.
+	t.Run("software that was renamed", func(t *testing.T) {
+		manor := writeArtifact(t, good, func(m *Manifest) { m.App = "manor" })
+		if res := PreflightArtifact(manor, "fin", "fin", secrets(nil), false, false); hasError(res, "is for") {
+			t.Fatalf("a manor artifact belongs in fin, got %v", res.Errors)
+		}
+		fin := writeArtifact(t, good, func(m *Manifest) { m.App = "fin" })
+		if res := PreflightArtifact(fin, "manor", "manor", secrets(nil), false, false); !hasError(res, `artifact is for "fin" but manor runs "manor"`) {
+			t.Fatalf("a fin artifact must not restore into manor, got %v", res.Errors)
+		}
+	})
 	t.Run("unknown software warns and defers to the app", func(t *testing.T) {
 		res := PreflightArtifact(writeArtifact(t, good, nil), "hub-new", "", secrets(nil), false, false)
 		if hasError(res, "is for") {
@@ -235,10 +246,15 @@ func TestPreflightRefusals(t *testing.T) {
 	})
 
 	t.Run("wrong format", func(t *testing.T) {
-		path := writeArtifact(t, good, func(m *Manifest) { m.Format = "fog-backup/2" })
+		path := writeArtifact(t, good, func(m *Manifest) { m.Format = "fog-backup/9" })
 		res := PreflightArtifact(path, "hub", "hub", secrets(nil), false, false)
 		if !hasError(res, "declares format") {
 			t.Fatalf("got %v", res.Errors)
+		}
+		// fog-backup/2 is the same artifact uncompressed: accepted.
+		path = writeArtifact(t, good, func(m *Manifest) { m.Format = ArtifactFormatV2 })
+		if res := PreflightArtifact(path, "hub", "hub", secrets(nil), false, false); hasError(res, "declares format") {
+			t.Fatalf("fog-backup/2 refused: %v", res.Errors)
 		}
 	})
 

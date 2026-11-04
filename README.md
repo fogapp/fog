@@ -26,10 +26,11 @@ own git-repo apps and third-party container apps alike.
   [sealed apps and LAN-only routes](docs/sealed-network.md).
 - **Storage** — NAS shares, a managed Postgres shared across apps, and
   **Files**: a plain directory tree with a Finder-grade browser, share links,
-  a WebDAV mount, and hardlink snapshots. Apps keep their libraries in
+  a WebDAV mount, and nightly snapshots. Apps keep their libraries in
   `Files/Apps/<Name>`.
-- **Backups** — nightly backups with retention and restore, a recovery kit for
-  Fog itself, and encrypted offsite copies in object storage.
+- **Backups** — nightly incremental backups (each night costs what changed,
+  every backup restores on its own), a recovery kit for Fog itself, and
+  encrypted offsite copies in object storage.
 - **People** — household accounts with passkeys, and Fog as the
   [OpenID provider](docs/signin-contract.md) for the apps, so one person signs
   in everywhere.

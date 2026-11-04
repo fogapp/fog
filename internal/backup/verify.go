@@ -146,7 +146,31 @@ func (m *Manager) verifyArtifact(ctx context.Context, appName string, b *store.B
 	// (a) The bytes on disk are still the bytes fog verified at download,
 	// and (b) the database dump actually restores — one read of the
 	// artifact serves both.
-	return m.testRestore(ctx, appName, filepath.Join(b.Path, "artifact.tar"), b.Manifest, b.SHA256)
+	//
+	// The store copy is the one tested whenever there is one: it is what
+	// a restore will read, and every pass from it counts toward the app's
+	// graduation (retireClassic).
+	var dir string
+	var release func()
+	var err error
+	fromStore := b.StoreSnapshot != "" && b.StoreError == ""
+	if fromStore {
+		dir, release, err = m.materialize(ctx, b)
+	} else {
+		dir, release, err = m.BackupFiles(ctx, b)
+	}
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := m.testRestore(ctx, appName, filepath.Join(dir, "artifact.tar"), b.Manifest, b.SHA256); err != nil {
+		return err
+	}
+	if fromStore {
+		m.notePass(appName)
+		m.retireClassic(appName)
+	}
+	return nil
 }
 
 // TestRestore proves an artifact's database dump restores: it is extracted

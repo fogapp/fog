@@ -286,6 +286,10 @@ func (m *Manager) housekeep(ctx context.Context, t *store.OffsiteTarget, r *Read
 		if err != nil {
 			hkErrs = append(hkErrs, "blob sweep: "+err.Error())
 		}
+		stored, err = m.sweepPacks(ctx, t, r, stored)
+		if err != nil {
+			hkErrs = append(hkErrs, "pack sweep: "+err.Error())
+		}
 		if err := m.pruneHidden(t, policy); err != nil {
 			hkErrs = append(hkErrs, "pruning hidden copies: "+err.Error())
 		}
@@ -507,12 +511,12 @@ func (m *Manager) syncApps(ctx context.Context, t *store.OffsiteTarget, r *Reade
 				m.Log.Warn("offsite: backup is on an unavailable share; skipped", "app", app.Name, "backup", ref.ID)
 				continue
 			}
-			if _, err := os.Stat(ref.Path); err != nil {
-				continue // pruned locally between listing and now, or never landed
-			}
 			b, err := m.Store.BackupByID(ref.ID)
 			if err != nil {
 				continue // the row went with the prune
+			}
+			if !backup.HasFiles(b) {
+				continue // pruned locally between listing and now, or never landed
 			}
 			if err := m.syncOne(ctx, t, r, up, p, ix, &app, b, subject); err != nil {
 				errs = append(errs, app.Name+" "+stampOfBackup(b)+": "+err.Error())
@@ -527,13 +531,24 @@ func (m *Manager) syncApps(ctx context.Context, t *store.OffsiteTarget, r *Reade
 
 func (m *Manager) syncOne(ctx context.Context, t *store.OffsiteTarget, r *Reader, up *Uploader, p *jobs.Progress,
 	ix copyIndex, app *store.App, b *store.Backup, subject string) error {
+	if m.storeBacked(b) {
+		return m.syncOneStore(ctx, t, r, up, p, ix, app, b, subject)
+	}
 	stamp := stampOfBackup(b)
 	p.Current(app.Name + " " + stamp)
 	// A delegated artifact is re-hashed on the way out: what leaves the
 	// house must be what fog verified at download. A mismatch is local
 	// corruption — an alarm, not an upload.
+	dir, release := b.Path, func() {}
+	if m.BackupFiles != nil {
+		var err error
+		if dir, release, err = m.BackupFiles(ctx, b); err != nil {
+			return err
+		}
+	}
+	defer release()
 	if b.Format == backup.ArtifactFormat && b.SHA256 != "" {
-		sum, err := fsx.FileSHA256(filepath.Join(b.Path, "artifact.tar"))
+		sum, err := fsx.FileSHA256(filepath.Join(dir, "artifact.tar"))
 		if err != nil {
 			return fmt.Errorf("reading artifact: %w", err)
 		}
@@ -543,7 +558,7 @@ func (m *Manager) syncOne(ctx context.Context, t *store.OffsiteTarget, r *Reader
 			return errors.New("artifact changed on disk since it was verified — not copied")
 		}
 	}
-	src, names, err := DirSource(b.Path)
+	src, names, err := DirSource(dir)
 	if err != nil {
 		return err
 	}
@@ -959,8 +974,9 @@ func (m *Manager) pruneHidden(t *store.OffsiteTarget, policy Policy) error {
 // sync would not upload it again. When in doubt, it has not.
 func (m *Manager) goneLocally(c *store.OffsiteCopy) bool {
 	switch c.Kind {
-	case store.OffsiteKindBlob:
-		// Blobs are uploaded from what a snapshot needs, not from a row.
+	case store.OffsiteKindBlob, kindPack, kindStore:
+		// Blobs and the store's pieces are uploaded from what a snapshot
+		// needs, not from a row.
 		return true
 	case store.OffsiteKindKit:
 		if m.BackupRoot == nil {

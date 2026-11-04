@@ -43,8 +43,8 @@ func TestCatalogFollowsTheSourceSetting(t *testing.T) {
 	}
 
 	got, unsourced := read()
-	if _, ok := got["manor"]; ok || unsourced == 0 {
-		t.Fatalf("no base: manor shown=%v, unsourced=%d", ok, unsourced)
+	if _, ok := got["fin"]; ok || unsourced == 0 {
+		t.Fatalf("no base: fin shown=%v, unsourced=%d", ok, unsourced)
 	}
 	if _, ok := got["sonarr"]; !ok {
 		t.Fatal("image apps must stay")
@@ -68,8 +68,8 @@ func TestCatalogFollowsTheSourceSetting(t *testing.T) {
 	if unsourced != 0 {
 		t.Errorf("unsourced = %d with a base", unsourced)
 	}
-	if r := got["manor"].Spec.Source.Repo; r != "ssh://git@git.example.com/you/manor.git" {
-		t.Errorf("manor repo %q", r)
+	if r := got["fin"].Spec.Source.Repo; r != "ssh://git@git.example.com/you/fin.git" {
+		t.Errorf("fin repo %q", r)
 	}
 	if r := got["fit-collector"].Spec.Source.Repo; r != "ssh://git@github.com/me/fit.git" {
 		t.Errorf("fit-collector repo %q", r)

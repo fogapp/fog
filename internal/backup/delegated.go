@@ -31,8 +31,13 @@ import (
 )
 
 const (
-	// ArtifactFormat is the contract version fog speaks.
+	// ArtifactFormat names the contract family on a backup row: a row with
+	// it is a delegated artifact, whichever version produced it.
 	ArtifactFormat = "fog-backup/1"
+	// ArtifactFormatV2 is fog-backup/2: the same artifact with its inner
+	// payloads uncompressed, so the store can share unchanged bytes between
+	// nights (docs/backup-contract.md, Versioning).
+	ArtifactFormatV2 = "fog-backup/2"
 	// defaultDelegatedTimeout bounds produce + download when the spec
 	// doesn't say otherwise. Generous: a timeout that fails a slow but
 	// progressing dump is worse than a long wait.
@@ -47,6 +52,9 @@ const (
 	// (spec.backup.maxBytes) or fleet-wide (SettingBackupMaxBytes).
 	DefaultMaxArtifactBytes = 50 << 30
 )
+
+// KnownArtifactFormat reports whether fog reads an artifact of format f.
+func KnownArtifactFormat(f string) bool { return f == ArtifactFormat || f == ArtifactFormatV2 }
 
 // artifactInfo is the app's claim about the finished artifact; fog verifies
 // both fields independently after download.
@@ -182,8 +190,8 @@ func (m *Manager) delegatedBackup(ctx context.Context, app *store.App, spec *app
 	if err := json.Unmarshal(manifest, &ms); err != nil {
 		return 0, fmt.Errorf("artifact manifest is not valid JSON: %w", err)
 	}
-	if ms.Format != ArtifactFormat {
-		return 0, fmt.Errorf("artifact declares format %q, expected %q", ms.Format, ArtifactFormat)
+	if !KnownArtifactFormat(ms.Format) {
+		return 0, fmt.Errorf("artifact declares format %q, expected %q or %q", ms.Format, ArtifactFormat, ArtifactFormatV2)
 	}
 	if msg, _ := checkIdentity(ms.App, identity, app.Name); msg != "" {
 		return 0, errors.New(msg)

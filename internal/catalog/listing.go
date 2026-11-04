@@ -66,8 +66,8 @@ func shots(id string, alts ...string) []Screenshot {
 const firstParty = "Built from your own repository"
 
 var listings = map[string]Listing{
-	"manor": {
-		About: "Manor is a household's financial life in one place. It pulls bank, card, brokerage, crypto, property, and equity-compensation data into a single normalised ledger, keeps it current on its own, and gives you the views a good personal finance app would — cashflow, budget, subscriptions, net worth, portfolio performance, taxes.\n\n" +
+	"fin": {
+		About: "Fin is a household's financial life in one place. It pulls bank, card, brokerage, crypto, property, and equity-compensation data into a single normalised ledger, keeps it current on its own, and gives you the views a good personal finance app would — cashflow, budget, subscriptions, net worth, portfolio performance, taxes.\n\n" +
 			"Every number traces back to the transactions that produced it, and everything stays on your hardware. It is built for one household — a few people, one or more admins — so it favours clarity and correctness over multi-tenant scale.",
 		Highlights: []string{
 			"Plaid, CSV imports, Coinbase and on-chain wallets land in one ledger",
@@ -77,7 +77,7 @@ var listings = map[string]Listing{
 			"Recurring charges and transfers detected from cadence, not tagging",
 			"Passkey sign-in, MCP access for agents, webhooks",
 		},
-		Logo: tile("manor"), Developer: firstParty, License: "Private",
+		Logo: tile("fin"), Developer: firstParty, License: "Private",
 	},
 	"hub": {
 		About: "Hub is a private home base for a household: the people, plans, and paperwork that keep the place running. One household per instance, one login per person, and everything else — photos, calendars, mail, documents — pulled in from the self-hosted services you already run.\n\n" +
@@ -569,7 +569,7 @@ var listings = map[string]Listing{
 	},
 
 	"gitea": {
-		About: "Gitea is a git host with the trimmings: repositories, pull requests, issues, a package registry, and Actions, in a single light binary. It is where the household's own code lives — and the household's own apps — Hub, Manor, Office, Feed, Hook — deploy from a Gitea just like it.\n\n" +
+		About: "Gitea is a git host with the trimmings: repositories, pull requests, issues, a package registry, and Actions, in a single light binary. It is where the household's own code lives — and the household's own apps — Hub, Fin, Office, Feed, Hook — deploy from a Gitea just like it.\n\n" +
 			"Fog configures it from the environment on every boot, so the clone URLs it prints follow the address you give it.",
 		Highlights: []string{
 			"Pull requests, code review, and protected branches",

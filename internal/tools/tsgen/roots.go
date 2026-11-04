@@ -46,6 +46,7 @@ var apiRoots = []root{
 	{"internal/server", "appVersionsResponse", "AppVersionsResponse"},
 	{"internal/build", "RepoDoc", ""},
 	{"internal/backup", "AppBackupStatus", ""},
+	{"internal/backup", "StoreSummary", "BackupStoreSummary"},
 	{"internal/store", "Backup", "BackupRecord"},
 	{"internal/updates", "AppUpdateStatus", ""},
 	{"internal/updates", "CheckResult", "UpdateCheckResult"},

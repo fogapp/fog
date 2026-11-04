@@ -149,8 +149,8 @@
     }
   },
   {
-    "id": "manor",
-    "title": "Manor",
+    "id": "fin",
+    "title": "Fin",
     "description": "Personal finance hub — portfolios, budgets, net worth, and automations.",
     "category": "Personal cloud",
     "icon": "🏦",
@@ -163,10 +163,10 @@
         }
       },
       "env": {
+        "FIN_WEBAUTHN_ORIGINS": "https://{{fqdn}}",
+        "FIN_WEBAUTHN_RP_ID": "{{fqdn}}",
         "GIT_SHA": "{{commit}}",
-        "JOB_CONCURRENCY": "1",
-        "MANOR_WEBAUTHN_ORIGINS": "https://{{fqdn}}",
-        "MANOR_WEBAUTHN_RP_ID": "{{fqdn}}"
+        "JOB_CONCURRENCY": "1"
       },
       "secrets": [
         "SECRET_KEY_BASE",
@@ -207,7 +207,7 @@
       "needs": {
         "postgres": {
           "databases": [
-            "manor_production"
+            "fin_production"
           ],
           "extensions": [
             "citext",
@@ -219,7 +219,7 @@
             "DATABASE_NAME": "dbname",
             "DATABASE_PORT": "port",
             "DATABASE_USER": "user",
-            "MANOR_DATABASE_PASSWORD": "password"
+            "FIN_DATABASE_PASSWORD": "password"
           }
         }
       },
@@ -228,7 +228,7 @@
         "mode": "delegated",
         "timeout": "45m"
       },
-      "notes": "First visit: register your passkey (or restore a fog-backup/1 artifact from a previous instance), then set MANOR_OPEN_REGISTRATION=false in Config → Environment. Passkeys are pinned to MANOR_WEBAUTHN_RP_ID — pick the hostname once and keep it; a restore under a different RP ID invalidates every passkey (preflight makes that explicit). Add the deploy key and webhook (Overview tab) to the Gitea repo for push-to-deploy."
+      "notes": "First visit: register your passkey (or restore a fog-backup/1 artifact from a previous instance), then set FIN_OPEN_REGISTRATION=false in Config → Environment. Passkeys are pinned to FIN_WEBAUTHN_RP_ID — pick the hostname once and keep it; a restore under a different RP ID invalidates every passkey (preflight makes that explicit). Add the deploy key and webhook (Overview tab) to the Gitea repo for push-to-deploy."
     },
     "options": [
       {
@@ -268,8 +268,11 @@
         "generate": "alnum32"
       }
     ],
-    "firstParty": "manor",
-    "about": "Manor is a household's financial life in one place. It pulls bank, card, brokerage, crypto, property, and equity-compensation data into a single normalised ledger, keeps it current on its own, and gives you the views a good personal finance app would — cashflow, budget, subscriptions, net worth, portfolio performance, taxes.\n\nEvery number traces back to the transactions that produced it, and everything stays on your hardware. It is built for one household — a few people, one or more admins — so it favours clarity and correctness over multi-tenant scale.",
+    "formerly": [
+      "manor"
+    ],
+    "firstParty": "fin",
+    "about": "Fin is a household's financial life in one place. It pulls bank, card, brokerage, crypto, property, and equity-compensation data into a single normalised ledger, keeps it current on its own, and gives you the views a good personal finance app would — cashflow, budget, subscriptions, net worth, portfolio performance, taxes.\n\nEvery number traces back to the transactions that produced it, and everything stays on your hardware. It is built for one household — a few people, one or more admins — so it favours clarity and correctness over multi-tenant scale.",
     "highlights": [
       "Plaid, CSV imports, Coinbase and on-chain wallets land in one ledger",
       "Cashflow, budgets, subscriptions, and net worth over time",
@@ -278,7 +281,7 @@
       "Recurring charges and transfers detected from cadence, not tagging",
       "Passkey sign-in, MCP access for agents, webhooks"
     ],
-    "logo": "/store/manor/tile.svg",
+    "logo": "/store/fin/tile.svg",
     "developer": "Built from your own repository",
     "license": "Private",
     "footprint": {
@@ -4338,7 +4341,7 @@
       }
     ],
     "projectUrl": "https://github.com/go-gitea/gitea",
-    "about": "Gitea is a git host with the trimmings: repositories, pull requests, issues, a package registry, and Actions, in a single light binary. It is where the household's own code lives — and the household's own apps — Hub, Manor, Office, Feed, Hook — deploy from a Gitea just like it.\n\nFog configures it from the environment on every boot, so the clone URLs it prints follow the address you give it.",
+    "about": "Gitea is a git host with the trimmings: repositories, pull requests, issues, a package registry, and Actions, in a single light binary. It is where the household's own code lives — and the household's own apps — Hub, Fin, Office, Feed, Hook — deploy from a Gitea just like it.\n\nFog configures it from the environment on every boot, so the clone URLs it prints follow the address you give it.",
     "highlights": [
       "Pull requests, code review, and protected branches",
       "Issues, milestones, labels, and a wiki per repository",

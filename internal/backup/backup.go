@@ -1,5 +1,5 @@
 // Package backup snapshots and restores app state: Fog-managed volumes as
-// tar.gz plus pg_dump of managed databases, staged under a backup directory
+// an uncompressed tar per volume plus pg_dump of managed databases, staged under a backup directory
 // (local by default; point it at a NAS mount in settings). Snapshots capture
 // DB and files together so blobs and rows stay consistent: a legacy snapshot
 // freezes the app's containers (compose pause — SIGSTOP, not a restart) while
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/apps"
+	"gitea.lan/matthew/fog/internal/chunkstore"
 	"gitea.lan/matthew/fog/internal/execx"
 	"gitea.lan/matthew/fog/internal/fsx"
 	"gitea.lan/matthew/fog/internal/loop"
@@ -97,6 +99,19 @@ type Manager struct {
 	// holds it (dirgate.go).
 	dirGate sync.RWMutex
 	moving  atomic.Bool
+
+	// chunks is the incremental store, opened on first use (chunked.go).
+	chunks chunkHandle
+	// HealChunks, when set, repairs damaged store chunks from another copy
+	// (the offsite locker) and returns the ids it could not.
+	HealChunks func(ctx context.Context, cs *chunkstore.Store, ids []string) ([]string, error)
+	// RepointSnapshot, when set, is told the new ids of store snapshots
+	// after the store is rewritten, for records outside the backups table
+	// (Drive snapshots).
+	RepointSnapshot func(moved map[string]string)
+	// ThinDrive, when set, removes Drive's oldest snapshot for the space
+	// guard and reports whether there was one to remove.
+	ThinDrive func() bool
 }
 
 // composeTimeout bounds the stop/up bracketing a restore.
@@ -131,7 +146,7 @@ const (
 )
 
 // ReservedDirs lists the backups-root directories that are not an app's.
-var ReservedDirs = []string{KitsDirName, FilesDirName}
+var ReservedDirs = []string{KitsDirName, FilesDirName, StoreDirName}
 
 // IsReservedDir reports whether name, a directory directly under the
 // backups root, belongs to fog rather than to an app.
@@ -197,6 +212,9 @@ func (m *Manager) RemoveAppBackups(appName string) error {
 		return err
 	}
 	defer release()
+	if err := m.dropSeriesFromStore(appName); err != nil {
+		m.Log.Warn("backup store: removing an app's snapshots", "app", appName, "err", err)
+	}
 	return os.RemoveAll(filepath.Join(m.baseDir(), appName))
 }
 
@@ -222,12 +240,44 @@ func (d *snapshotDir) cleanup() {
 // newSnapshotDir makes a fresh directory for a snapshot of appName, named
 // by the time. A second snapshot in the same second gets a "-N" suffix
 // rather than writing into the first one's directory.
+//
+// A name is taken while any backup row still carries it, not only while its
+// directory exists: the store retires directories, and the stamp is also
+// how a backup is named offsite.
 func (m *Manager) newSnapshotDir(appName string) (*snapshotDir, error) {
-	dir, err := fsx.MkdirStamped(filepath.Join(m.baseDir(), appName), time.Now(), 0o700)
-	if err != nil {
+	parent := filepath.Join(m.baseDir(), appName)
+	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return nil, err
 	}
-	return &snapshotDir{path: dir}, nil
+	used := map[string]bool{}
+	if app, err := m.Store.AppByName(appName); err == nil {
+		if list, err := m.Store.ListBackups(app.ID, 1000); err == nil {
+			for _, b := range list {
+				used[b.Path] = true
+			}
+		}
+	}
+	now := time.Now()
+	for range 1000 {
+		stamp := fsx.FreeStamp(now, func(s string) bool {
+			p := filepath.Join(parent, s)
+			if used[p] {
+				return true
+			}
+			_, err := os.Lstat(p)
+			return err == nil
+		})
+		dir := filepath.Join(parent, stamp)
+		err := os.Mkdir(dir, 0o700)
+		if err == nil {
+			return &snapshotDir{path: dir}, nil
+		}
+		if !os.IsExist(err) {
+			return nil, err
+		}
+		used[dir] = true // lost a race for it; the next name
+	}
+	return nil, fmt.Errorf("no free snapshot name under %s", parent)
 }
 
 type Meta struct {
@@ -254,7 +304,11 @@ func (m *Manager) BackupApp(ctx context.Context, appName, kind string) (_ int64,
 	}
 	defer release()
 	if m.Engine == nil {
-		return m.backupApp(ctx, appName, kind)
+		id, err := m.backupApp(ctx, appName, kind)
+		if err == nil {
+			m.storeBackup(ctx, appName, id)
+		}
+		return id, err
 	}
 	done := m.Engine.JoinOp(appName, "taking a snapshot")
 	defer done()
@@ -264,6 +318,11 @@ func (m *Manager) BackupApp(ctx context.Context, appName, kind string) (_ int64,
 		id, err = m.backupApp(ctx, appName, kind)
 		return err
 	})
+	if err == nil {
+		// The store reads the finished snapshot directory, not the app, so
+		// the app's lock is not needed for it.
+		m.storeBackup(ctx, appName, id)
+	}
 	return id, err
 }
 
@@ -360,8 +419,11 @@ func (m *Manager) backupApp(ctx context.Context, appName, kind string) (int64, e
 			return 0, fmt.Errorf("volume %s: %w", v.Name, err)
 		}
 		src := m.volumePath(appName, v)
-		tarPath := filepath.Join(dir, "volume-"+v.Name+".tar.gz")
-		if _, err := execx.Output(ctx, "tar", "-czf", tarPath, "-C", filepath.Dir(src), filepath.Base(src)); err != nil {
+		// Uncompressed: the store compresses each chunk itself, and an
+		// archive compressed as a whole changes end to end when one file
+		// in it does, so nothing could be shared with the night before.
+		tarPath := filepath.Join(dir, "volume-"+v.Name+".tar")
+		if _, err := execx.Output(ctx, "tar", "-cf", tarPath, "-C", filepath.Dir(src), filepath.Base(src)); err != nil {
 			return 0, fmt.Errorf("tar %s: %w", v.Name, err)
 		}
 		meta.Volumes = append(meta.Volumes, v.Name)
@@ -490,7 +552,12 @@ func (m *Manager) restoreApp(ctx context.Context, b *store.Backup, appRow *store
 		return m.delegatedRestore(ctx, b, appRow, spec, forgetSecrets)
 	}
 
-	meta, err := m.readMeta(b.Path)
+	dir, release, err := m.BackupFiles(ctx, b)
+	if err != nil {
+		return err
+	}
+	defer release()
+	meta, err := m.readMeta(dir)
 	if err != nil {
 		return err
 	}
@@ -498,7 +565,7 @@ func (m *Manager) restoreApp(ctx context.Context, b *store.Backup, appRow *store
 	// A snapshot rotting on the NAS must fail the restore here, while the
 	// live volumes are still intact — not halfway through replacing them.
 	for _, vol := range meta.Volumes {
-		if err := verifyTarGz(ctx, filepath.Join(b.Path, "volume-"+vol+".tar.gz")); err != nil {
+		if err := verifyTarGz(ctx, volumeArchive(dir, vol)); err != nil {
 			return fmt.Errorf("snapshot archive for %s is unreadable — refusing to touch live data: %w", vol, err)
 		}
 	}
@@ -536,7 +603,7 @@ func (m *Manager) restoreApp(ctx context.Context, b *store.Backup, appRow *store
 		if _, err := checkVolumeDir(loc); err != nil {
 			return fmt.Errorf("volume %s: %w", vol, err)
 		}
-		if err := swapInVolume(ctx, filepath.Join(b.Path, "volume-"+vol+".tar.gz"), vol, dst); err != nil {
+		if err := swapInVolume(ctx, volumeArchive(dir, vol), vol, dst); err != nil {
 			return err
 		}
 	}
@@ -549,7 +616,7 @@ func (m *Manager) restoreApp(ctx context.Context, b *store.Backup, appRow *store
 		pgExts = spec.Needs.Postgres.Extensions
 	}
 	for _, db := range meta.Databases {
-		if err := m.PG.RestoreDatabase(ctx, db, pg.RoleName(appRow.Name), filepath.Join(b.Path, "db-"+db+".dump"), pgExts); err != nil {
+		if err := m.PG.RestoreDatabase(ctx, db, pg.RoleName(appRow.Name), filepath.Join(dir, "db-"+db+".dump"), pgExts); err != nil {
 			return err
 		}
 	}
@@ -562,10 +629,21 @@ func (m *Manager) restoreApp(ctx context.Context, b *store.Backup, appRow *store
 	return nil
 }
 
+// volumeArchive is a volume's archive in a snapshot directory: volume-<name>.tar
+// since the store, volume-<name>.tar.gz before it.
+func volumeArchive(dir, vol string) string {
+	plain := filepath.Join(dir, "volume-"+vol+".tar")
+	if _, err := os.Stat(plain); err == nil {
+		return plain
+	}
+	return plain + ".gz"
+}
+
 // verifyTarGz proves an archive is fully readable (a truncated gzip stream
-// fails only at its tail, so the whole thing must be walked).
+// fails only at its tail, so the whole thing must be walked). tar tells a
+// gzipped archive from a plain one by itself.
 func verifyTarGz(ctx context.Context, path string) error {
-	cmd := execx.Command(ctx, "tar", "-tzf", path)
+	cmd := execx.Command(ctx, "tar", "-tf", path)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr // entry listing goes to the default null stdout
 	if err := cmd.Run(); err != nil {
@@ -592,7 +670,7 @@ func swapInVolume(ctx context.Context, archive, vol, dst string) error {
 		return err
 	}
 	defer os.RemoveAll(staging)
-	if _, err := execx.Output(ctx, "tar", "-xzf", archive, "-C", staging); err != nil {
+	if _, err := execx.Output(ctx, "tar", "-xf", archive, "-C", staging); err != nil {
 		return fmt.Errorf("untar %s: %w", vol, err)
 	}
 	// The snapshot was created as `tar -C <parent> <vol>`, so the extracted
@@ -648,12 +726,8 @@ func (m *Manager) readMeta(dir string) (*Meta, error) {
 // three versions ago is undone by rolling back, not by restoring the
 // data from before it.
 func (m *Manager) prune(appID int64) {
-	keep := 7
-	if v, _ := m.Store.GetSetting(SettingBackupRetention); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			keep = n
-		}
-	}
+	hist, _ := m.Store.GetSetting(SettingBackupHistory)
+	policy := PolicyFor(hist)
 	list, err := m.Store.ListBackups(appID, 1000)
 	if err != nil || len(list) <= 1 {
 		return
@@ -663,8 +737,8 @@ func (m *Manager) prune(appID int64) {
 		preUpdateKeep = 3
 	)
 	cutoff := time.Now().UTC().Add(-preUpdateAge)
-	var doomed []store.Backup
-	regular, preUpdate := 0, 0
+	var doomed, regular []store.Backup
+	preUpdate := 0
 	for _, b := range list { // newest first
 		if b.Kind == "pre-update" || b.Kind == "pre-rollback" {
 			preUpdate++
@@ -673,11 +747,15 @@ func (m *Manager) prune(appID int64) {
 			}
 			continue
 		}
-		regular++
-		if regular > keep {
+		regular = append(regular, b)
+	}
+	keep := keepByHistory(regular, policy)
+	for _, b := range regular {
+		if !keep[b.ID] {
 			doomed = append(doomed, b)
 		}
 	}
+	sort.Slice(doomed, func(i, j int) bool { return doomed[i].ID > doomed[j].ID })
 	if len(doomed) == len(list) {
 		doomed = doomed[1:] // doomed[0] is list[0], the newest — spare it
 	}
@@ -697,6 +775,7 @@ func (m *Manager) prune(appID int64) {
 		if err := os.RemoveAll(b.Path); err != nil {
 			continue
 		}
+		m.dropFromStore(&b)
 		m.Store.DeleteBackup(b.ID)
 	}
 }
@@ -800,6 +879,9 @@ func (m *Manager) runDue(ctx context.Context, now time.Time) {
 		m.Notify("Backups complete", "snapshots taken: "+strings.Join(ran, ", "), true)
 	}
 	m.maybeWriteKit(ctx)
+	if global != "" && !m.Moving() {
+		m.maintainStore(ctx)
+	}
 }
 
 // maybeWriteKit keeps the encrypted recovery kit at most a day old whenever

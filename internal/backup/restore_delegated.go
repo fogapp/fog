@@ -184,9 +184,14 @@ func (m *Manager) RestoreAppFromArtifact(ctx context.Context, appName, artifactP
 
 // delegatedRestore restores one of fog's own recorded artifacts.
 func (m *Manager) delegatedRestore(ctx context.Context, b *store.Backup, appRow *store.App, spec *apps.AppSpec, forgetSecrets bool) error {
-	artifact := filepath.Join(b.Path, "artifact.tar")
+	dir, release, err := m.BackupFiles(ctx, b)
+	if err != nil {
+		return err
+	}
+	defer release()
+	artifact := filepath.Join(dir, "artifact.tar")
 	if _, err := os.Stat(artifact); err != nil {
-		return fmt.Errorf("backup %d has no artifact.tar on disk", b.ID)
+		return fmt.Errorf("backup %d has no artifact.tar", b.ID)
 	}
 	// Restoring one of our own verified artifacts back into the app it came
 	// from is identity-preserving by construction; the app-side preflight
@@ -511,6 +516,7 @@ func (m *Manager) DeleteBackup(ctx context.Context, id int64, force bool) error 
 		// The app is gone; the row would have cascaded with it, but the
 		// files may remain — delete both unconditionally.
 		os.RemoveAll(b.Path)
+		m.dropFromStore(b)
 		return m.Store.DeleteBackup(b.ID)
 	}
 	remove := func() error {
@@ -523,6 +529,7 @@ func (m *Manager) DeleteBackup(ctx context.Context, id int64, force bool) error 
 		if err := os.RemoveAll(b.Path); err != nil {
 			return err
 		}
+		m.dropFromStore(b)
 		return m.Store.DeleteBackup(b.ID)
 	}
 	if m.Engine == nil {

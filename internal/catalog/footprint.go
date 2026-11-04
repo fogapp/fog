@@ -78,7 +78,7 @@ func railsApp(memMB, peakMB uint64, cpu, cpuWhen, diskGrows string) *Footprint {
 }
 
 var footprints = map[string]*Footprint{
-	"manor":  railsApp(700, 1500, CPUModerate, "syncing accounts and prices", "with statements and documents"),
+	"fin":    railsApp(700, 1500, CPUModerate, "syncing accounts and prices", "with statements and documents"),
 	"hub":    railsApp(700, 1500, CPUModerate, "importing photos and mail", "with the chronicle's photos and files"),
 	"office": railsApp(700, 1500, CPULight, "", "with your documents"),
 	"feed":   railsApp(1000, 3000, CPUHeavy, "ingesting and transcribing", "with the archive — media is kept forever"),

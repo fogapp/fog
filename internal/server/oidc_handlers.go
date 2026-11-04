@@ -874,7 +874,7 @@ func (s *Server) renderEndSessionConfirm(w http.ResponseWriter, v url.Values, cl
 	s.renderSigninPageTo(w, http.StatusOK, "Sign out of fog?", who+" asked to sign you out of fog, which signs you out of every app.", v.Get("post_logout_redirect_uri"), form)
 }
 
-// handleSigninAsk files "Kim asked to use Manor" in the operator's Inbox.
+// handleSigninAsk files "Kim asked to use Fin" in the operator's Inbox.
 func (s *Server) handleSigninAsk(w http.ResponseWriter, r *http.Request) {
 	pc, ok := s.resolvePerson(r)
 	if !ok {

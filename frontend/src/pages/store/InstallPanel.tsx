@@ -147,10 +147,14 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
 
   // Everything that must be true before an artifact install can proceed. The
   // server preflights again — this is so the answer arrives on the form.
-  const nameMismatch = !!artifact && name.trim() !== artifact.app;
+  // The artifact must come from the software this entry installs — its ID,
+  // or a name that software had before a rename (Fin was Manor). What the
+  // operator calls this instance in fog is a label and never enters into it.
+  const software = [entry.id, ...(entry.formerly ?? [])];
+  const wrongSoftware = !!artifact && !software.includes(artifact.app);
   const unmatched = fingerprinted.filter(([k]) => !matches[k]).map(([k]) => k);
   const identityUnconfirmed = !!artifact?.identityHost && !confirmIdentity;
-  const restoreBlocked = !!artifact && (nameMismatch || unmatched.length > 0 || identityUnconfirmed);
+  const restoreBlocked = !!artifact && (wrongSoftware || unmatched.length > 0 || identityUnconfirmed);
 
   // Companion apps ("also install…") — resolved against the catalog, with
   // already-installed ones surfaced instead of offered again.
@@ -342,10 +346,10 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
                 </button>
               </div>
 
-              {nameMismatch && (
+              {wrongSoftware && (
                 <p className="text-xs text-warn">
-                  Name this app “{artifact.app}” to restore this artifact — a delegated app's name in
-                  Fog has to match the one its artifact declares, or its own backups can't verify.
+                  This artifact was made by “{artifact.app}”, not {entry.title} — it can only be restored
+                  into the software that made it.
                 </p>
               )}
 
@@ -453,7 +457,7 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
       </button>
       {restoreBlocked && (
         <p className="text-center text-xs text-ink-muted">
-          {nameMismatch ? `Rename the app to “${artifact?.app}” to continue.`
+          {wrongSoftware ? `Choose an artifact made by ${entry.title}.`
             : unmatched.length > 0 ? `Waiting on ${unmatched.join(", ")} to match the artifact.`
             : "Confirm the host change to continue."}
         </p>

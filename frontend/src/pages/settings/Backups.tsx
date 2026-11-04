@@ -11,6 +11,7 @@ import Button from "../../components/Button";
 import Field from "../../components/Field";
 import SettingRow, { SettingRows } from "../../components/SettingRow";
 import Toggle from "../../components/Toggle";
+import Segmented from "../../components/Segmented";
 import { Section } from "../../components/Section";
 import { LoadError, Loading, StaleNote, errorText, phaseOf } from "../../components/Async";
 import { formatBytes, timeAgo, timeUntil } from "../../lib/format";
@@ -174,8 +175,8 @@ function StatusSection() {
   );
 }
 
-// The Files line of the fleet table: fog's own root, backed up as
-// hardlink snapshots.
+// The Files line of the fleet table: fog's own root, backed up nightly
+// into the same store as the apps.
 function FilesRow({ files, onSnapshot, busy }: { files: FilesBackupStatus; onSnapshot: () => void; busy: boolean }) {
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-4 py-3 text-sm ${files.stale ? "border-warn/30 bg-warn/10" : "border-veil-edge bg-veil"}`}>
@@ -247,12 +248,38 @@ function BackupLocation() {
   );
 }
 
+const HISTORY = [
+  { id: "month", label: "A month" },
+  { id: "quarter", label: "3 months" },
+  { id: "year", label: "A year" },
+  { id: "two-years", label: "2 years" },
+] as const;
+
+// What the backups add up to, in a sentence: how far back they go and what
+// they take on the disk. How they are stored is fog's business.
+function HistoryLine() {
+  const status = useQuery(backupsStatusQuery);
+  const s = status.data?.store;
+  if (!s) return null;
+  return (
+    <p className="text-sm text-ink-muted">
+      {s.oldestAt ? <>Backups go back to {new Date(s.oldestAt).toLocaleDateString(undefined, { dateStyle: "long" })}</> : "No backups yet"}
+      {s.usedBytes > 0 && <> · {formatBytes(s.usedBytes)} on the backup disk</>}
+      {s.encrypted && " · encrypted"}
+    </p>
+  );
+}
+
 function PolicySection() {
-  const { value, set, SaveButton, loading } = useSettingsForm(["backup_retention", "backup_hour_utc"]);
-  // The two switches apply on click, like every switch: only the fields
-  // above wait for Save.
+  const { value, set, SaveButton, loading } = useSettingsForm(["backup_hour_utc"]);
+  // The switches apply on click, like every switch: only the field above
+  // waits for Save.
   const beforeUpdate = useSettingToggle("backup_before_update", { errorLabel: "Couldn't save the preference" });
   const drive = useSettingToggle("files_backup", { errorLabel: "Couldn't save the preference" });
+  const history = useSettingToggle("backup_history", { errorLabel: "Couldn't save the preference" });
+  const encrypt = useSettingToggle("backup_store_encrypt", { errorLabel: "Couldn't save the preference" });
+  const status = useQuery(backupsStatusQuery);
+  const pending = status.data?.store?.encryptPending;
 
   return (
     <Section
@@ -266,17 +293,43 @@ function PolicySection() {
         ) : (
           <>
             <BackupLocation />
+            <HistoryLine />
             <div className="grid grid-cols-2 gap-4">
               <Field label="Nightly backup hour (UTC)" value={value("backup_hour_utc")} onChange={set("backup_hour_utc")}
                 placeholder="empty = off" />
-              <Field label="Retention (per app)" value={value("backup_retention")} onChange={set("backup_retention")}
-                placeholder="7" />
             </div>
           </>
         )}
         {SaveButton}
       </div>
       <SettingRows>
+        <SettingRow
+          label="Keep history for"
+          hint="Every night for the last two weeks, then one a week, then one a month. Each backup only costs what changed since the last, so a long history takes little room. If the backup disk fills up, the oldest go first."
+          error={history.error}
+        >
+          <Segmented
+            label="Keep history for"
+            options={HISTORY}
+            value={history.value === undefined ? undefined : ((history.value || "year") as (typeof HISTORY)[number]["id"])}
+            disabled={history.isPending}
+            onChange={(v) => history.set(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Encrypt backups on the backup disk"
+          hint={pending
+            ? "Fog applies this tonight, after the nightly backups."
+            : "Anyone who can read the backup disk can then read nothing without this server's recovery kit. Off by default: an unencrypted disk can be restored even if the recovery kit is lost."}
+          error={encrypt.error}
+        >
+          <Toggle
+            checked={encrypt.value === "on"}
+            disabled={encrypt.value === undefined || encrypt.isPending}
+            onChange={(on) => encrypt.set(on ? "on" : "off")}
+            aria-label="Encrypt backups on the backup disk"
+          />
+        </SettingRow>
         <SettingRow
           label="Snapshot apps before updates and rollbacks"
           hint="Applies to apps with backups on. An app can override this on its own Backups → Schedule."
@@ -291,7 +344,7 @@ function PolicySection() {
         </SettingRow>
         <SettingRow
           label={<>Include <Link to={paths.files()} className="underline">Drive</Link> in nightly backups</>}
-          hint="Hardlink snapshots under the backup directory: every night is a full copy that costs only what changed. Any file or folder can be left out from its detail pane."
+          hint="Every night is a full copy that costs only what changed. Any file or folder can be left out from its detail pane."
           error={drive.error}
         >
           <Toggle

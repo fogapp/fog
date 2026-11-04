@@ -66,14 +66,20 @@ type Backup struct {
 	SHA256     string `json:"sha256,omitempty"`
 	Manifest   string `json:"manifest,omitempty"`
 	VerifiedAt string `json:"verifiedAt,omitempty"`
+	// The incremental store's copy (docs/store-contract.md): the snapshot
+	// holding the same bytes, when it last read back whole and matched, and
+	// why it did not when it failed.
+	StoreSnapshot   string `json:"storeSnapshot,omitempty"`
+	StoreVerifiedAt string `json:"storeVerifiedAt,omitempty"`
+	StoreError      string `json:"storeError,omitempty"`
 }
 
-const backupCols = `id, app_id, kind, path, size_bytes, created_at, format, sha256, manifest, verified_at`
+const backupCols = `id, app_id, kind, path, size_bytes, created_at, format, sha256, manifest, verified_at, store_snapshot, store_verified_at, store_error`
 
 func scanBackup(sc scanner) (Backup, error) {
 	var b Backup
 	err := sc.Scan(&b.ID, &b.AppID, &b.Kind, &b.Path, &b.SizeBytes, &b.CreatedAt,
-		&b.Format, &b.SHA256, &b.Manifest, &b.VerifiedAt)
+		&b.Format, &b.SHA256, &b.Manifest, &b.VerifiedAt, &b.StoreSnapshot, &b.StoreVerifiedAt, &b.StoreError)
 	return b, err
 }
 
@@ -102,6 +108,30 @@ func (s *Store) CreateArtifactBackupAt(appID int64, kind, path string, size int6
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// SetBackupStore records the store snapshot that holds a backup: verified
+// is when it was read back and matched ("" when it has not been), errMsg
+// why it failed (empty on success).
+func (s *Store) SetBackupStore(id int64, snapshot, verified, errMsg string) error {
+	_, err := s.db.Exec(`UPDATE backups SET store_snapshot = ?, store_verified_at = ?, store_error = ? WHERE id = ?`,
+		snapshot, verified, errMsg, id)
+	return err
+}
+
+// RepointBackupStore moves every row naming store snapshot from to to (the
+// store was rewritten and its snapshots have new ids).
+func (s *Store) RepointBackupStore(from, to string) error {
+	_, err := s.db.Exec(`UPDATE backups SET store_snapshot = ? WHERE store_snapshot = ?`, to, from)
+	return err
+}
+
+// OldestBackupAt is the created_at of the oldest backup of any app, "" with
+// none — how far back history goes.
+func (s *Store) OldestBackupAt() (string, error) {
+	var at sql.NullString
+	err := s.db.QueryRow(`SELECT MIN(created_at) FROM backups`).Scan(&at)
+	return at.String, err
 }
 
 // SetBackupVerified stamps a backup as proven restorable (test-restore loop).

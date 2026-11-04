@@ -6,8 +6,10 @@ that can list and fetch objects — fogd, the `fog-locker` command, a script
 written years from now — can read one given the bucket credentials and the
 passphrase. This page is the bytes.
 
-Fog's backups are already whole, verified files, so a locker holds them as
-plain objects: no chunker, no repository and no lock files. A writer only adds,
+A locker holds fog's backups as plain sealed objects: no repository and no
+lock files. Backups held in fog's incremental store go up as the store's own
+packs (§6), so a night copies only what changed; the store does the
+chunking, the locker only holds its pieces. A writer only adds,
 and retention hides rather than destroys, so the bucket key needs no right to
 delete, the bucket can be locked against change, and a locker copies
 byte-for-byte to any other provider.
@@ -42,6 +44,9 @@ exception: `locker.json`.
 | `files/snapshots/<stamp>.json` | yes | `FilesSnapshot` — a Files-tree snapshot manifest with blob ids (§3.4) |
 | `files/blobs/<aa>/<blob-id>` | yes | the content of one file; `<aa>` is the id's first two hex characters |
 | `index/<stamp>.json` | yes | `Index` — the rollup written last on every successful run (§3.5) |
+| `store/<store-id>/store.json` | yes | the incremental store's `store.json` (§6) |
+| `store/<store-id>/key` | yes | an encrypted store's key in hex; empty for a plain store (§6) |
+| `store/<store-id>/packs/<aa>/<pack>` | yes | one pack of the store, byte for byte (§6) |
 
 A target probe's scratch objects are not in any locker: they go under
 `<prefix>/fog-locker/1/probe/probe/`, created and hidden in one pass.
@@ -51,8 +56,8 @@ backup directory on disk, so a local snapshot and its offsite copy share a
 name. `<app>` is fog's name for the installation.
 
 Rule for writers: **the objects a document refers to exist before the
-document does.** Blobs before a Files manifest; the snapshot before its
-row; everything before the index. A reader that finds a document can trust
+document does.** Blobs before a Files manifest; the snapshot (or the packs)
+before its row; everything before the index. A reader that finds a document can trust
 every name in it.
 
 ## 3. Documents
@@ -316,7 +321,8 @@ aad     = "fog-locker/1" ‖ 0x00 ‖ <object name> ‖ 0x00 ‖ header
    rolls the machine back. Fog's setup screen restores exactly the kit its
    preview showed, by name and digest, or nothing.
 4. Open the index (§3.5) → everything else by name.
-5. For an app: fetch and open `apps/<app>/<stamp>.snapshot`, check
+5. For an app: a row with `store_snapshot` is rebuilt from packs (§6);
+   otherwise fetch and open `apps/<app>/<stamp>.snapshot`, check
    `snapshot_sha256` from the row, unpack into fog's backup directory,
    restore. For Files: open the manifest, fetch each blob, write each
    file.
@@ -328,6 +334,7 @@ any machine with Go installed:
 fog-locker lockers       --endpoint … --region … --bucket … --prefix … --key-id …
 fog-locker ls            … [--locker <id>]
 fog-locker restore-kit   … --out ./kit.enc
+fog-locker restore-backup … --app hub --stamp 20261104-030000 --out ./hub
 fog-locker fetch         … --object apps/hub/20260827-010314.snapshot --out ./hub.tar
 fog-locker restore-files … --stamp 20260827-011500 --out ./files
 ```
@@ -335,3 +342,51 @@ fog-locker restore-files … --stamp 20260827-011500 --out ./files
 `--locker` may be left out when the prefix holds only one. The secret key
 and the passphrase are prompted for on the terminal with echo off (or passed
 as `--secret` / `--passphrase`); nothing is read from the environment.
+
+## 6. Store-backed backups
+
+Fog keeps its backups in an incremental store
+([store-contract.md](store-contract.md)): content-addressed chunks in
+packs, one document per snapshot. A backup the store holds is copied
+offsite as the store's own pieces, not as a tar of its files:
+
+- `store/<store-id>/store.json` and `store/<store-id>/key`, once per
+  store: what a reader needs to open its packs. Both sealed like every
+  other object here, so a plain store's secret and an encrypted store's
+  key are only as readable as the rest of the locker — with the bucket
+  and the passphrase. A store rewritten (encryption turned on or off) has
+  a new id and a folder of its own.
+- `store/<store-id>/packs/<aa>/<pack>`: each pack, sealed as a whole,
+  plaintext byte for byte the local file. `<pack>` is the lowercase hex
+  SHA-256 of that plaintext; a reader checks it after opening. A pack is
+  uploaded once, however many backups use its chunks.
+- the row, `apps/<app>/<stamp>.json`, an `AppRow` (§3.3) with no
+  `.snapshot` object beside it and four more fields:
+
+  ```json
+  { "store": "<store id>", "store_snapshot": "<snapshot id>",
+    "store_doc": "<base64 of the snapshot document as the store wrote it>",
+    "packs": ["<pack>", "…"] }
+  ```
+
+  `packs` names every pack holding a chunk the snapshot uses (its entry
+  list included).
+
+**Reading one back**: fetch `store.json` and `key` into a scratch store
+folder, fetch every pack the row names (checking each against its name),
+write `store_doc` as `snapshots/<store_snapshot>.json`, and read the
+snapshot out with the store's own rules — every chunk checked against its
+id, every file against its digest, and a delegated artifact against the row's
+`artifact_sha256`. `fog-locker restore-backup` does exactly this.
+
+**Retention** works on rows as before. After it, a pack no stored row names
+is hidden — except one uploaded after the newest row, which most likely
+belongs to a backup whose upload has not finished. **Locks** are extended on
+packs like any other object; every stored pack is one a retained row names.
+
+**Repair**: when the store's nightly scrub finds a damaged chunk, fog fetches
+the pack the chunk lives in back from the locker — the same bytes it
+uploaded — and rewrites the chunk from it.
+
+A reader that predates this section reads every backup copied before the
+store and skips store-backed rows; nothing written before changes.

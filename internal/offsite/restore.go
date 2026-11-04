@@ -161,7 +161,7 @@ func (m *Manager) localBackups(app *store.App) map[string]store.Backup {
 		return out
 	}
 	for _, b := range list {
-		if _, err := os.Stat(b.Path); err != nil {
+		if !backup.HasFiles(&b) {
 			continue
 		}
 		out[stampOfBackup(&b)] = b
@@ -294,9 +294,22 @@ func (m *Manager) Fetch(ctx context.Context, p *jobs.Progress, targetName, appNa
 	if err := os.MkdirAll(staging, 0o700); err != nil {
 		return 0, err
 	}
-	if err := fetchUnpacked(ctx, r, r.Layout.AppSnapshot(appName, stamp), row.SnapshotSHA256, staging, p, nil); err != nil {
+	var ferr error
+	if row.StoreSnapshot != "" {
+		// A store-backed copy: its packs are fetched and the snapshot
+		// rebuilt from them, verified, into the staging directory.
+		os.Remove(staging)
+		ferr = FetchStoreSnapshot(ctx, r, &row, filepath.Dir(dest), staging, func(done, total int) {
+			if p != nil {
+				p.Current(fmt.Sprintf("%s %s · piece %d of %d", appName, stamp, done+1, total))
+			}
+		})
+	} else {
+		ferr = fetchUnpacked(ctx, r, r.Layout.AppSnapshot(appName, stamp), row.SnapshotSHA256, staging, p, nil)
+	}
+	if ferr != nil {
 		os.RemoveAll(staging)
-		return 0, err
+		return 0, ferr
 	}
 	if err := os.Rename(staging, dest); err != nil {
 		os.RemoveAll(staging)

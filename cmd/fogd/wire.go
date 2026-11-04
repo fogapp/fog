@@ -173,6 +173,10 @@ func (d *daemon) wireFiles() {
 	fm := files.New(d.cfg.DataDir, st, log)
 	d.fm = fm
 	fm.InstallTools = true
+	// Drive's snapshots live in the backups' incremental store.
+	fm.ChunkStore = d.bk.ChunkStore
+	d.bk.RepointSnapshot = fm.RepointStoreSnapshots
+	d.bk.ThinDrive = fm.ThinOldest
 	// A volume that names a Files folder resolves against the live root at
 	// deploy time, and the folder is made through Files so it is owned,
 	// indexed, and badged like everything else there.
@@ -223,6 +227,9 @@ func (d *daemon) wireOffsite() {
 		Passphrase:    func() string { return backup.KitPassphrase(st, d.vlt) },
 		ServerName:    func() string { v, _ := st.GetSetting(store.SettingServerName); return v },
 		BackupRoot:    bk.Root,
+		BackupFiles:   bk.BackupFiles,
+		ChunkStore:    bk.ChunkStore,
+		StoreKey:      bk.StoreKeyBytes,
 		PathAvailable: bk.PathAvailable,
 		HoldBackupDir: bk.HoldDir,
 		Jobs:          jobs.New(),
@@ -237,6 +244,8 @@ func (d *daemon) wireOffsite() {
 		FilesRoot:      fm.Root,
 		FilesJobs:      fm.Jobs,
 		FilesRestored:  func() { d.spawn("files walk after restore", func(ctx context.Context) { fm.Walk(ctx) }) }}
+	// Damage the nightly scrub finds is repaired from the locker's copy.
+	bk.HealChunks = d.off.HealChunks
 }
 
 // wireIssues builds the configuration scanner: spec-vs-reality

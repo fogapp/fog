@@ -7,6 +7,7 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   get,
   type AppBackupStatus,
+  type BackupStoreSummary,
   type CatalogResponse,
   type ComputeOverview,
   type DisksResponse,
@@ -130,5 +131,5 @@ export const errorGroupKey = ["error-group"] as const;
 // The fleet's backup freshness: one row per app, plus Drive's snapshots.
 export const backupsStatusQuery = queryOptions({
   queryKey: ["backups-status"],
-  queryFn: () => get<{ apps: AppBackupStatus[]; files: FilesBackupStatus }>("/api/backups/status"),
+  queryFn: () => get<{ apps: AppBackupStatus[]; files: FilesBackupStatus; store?: BackupStoreSummary }>("/api/backups/status"),
 });

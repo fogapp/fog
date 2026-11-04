@@ -27,7 +27,7 @@ import (
 )
 
 // SettingCatalogEnabled stores a JSON array of visible catalog ids; unset
-// means the default set (Manor + Hub).
+// means the default set (Fin + Hub).
 const SettingCatalogEnabled = "catalog_enabled"
 
 // deployLogTailBytes is how much of each historical deploy log travels with
@@ -115,26 +115,59 @@ type restoreFromReq struct {
 
 // resolveRestoreArtifact turns a restoreFrom request into an on-disk
 // artifact path, validating before the app row exists so a bad request
-// can't leave a half-created app behind.
-func (s *Server) resolveRestoreArtifact(rf *restoreFromReq) (string, error) {
-	artifact := rf.Path
+// can't leave a half-created app behind. A backup the store holds is read
+// back into the uploads directory; release removes that copy.
+func (s *Server) resolveRestoreArtifact(rf *restoreFromReq) (artifact string, release func(), err error) {
+	release = func() {}
+	artifact = rf.Path
 	if rf.BackupID != 0 {
 		b, err := s.store.BackupByID(rf.BackupID)
 		if err != nil {
-			return "", fmt.Errorf("no such backup %d", rf.BackupID)
+			return "", release, fmt.Errorf("no such backup %d", rf.BackupID)
 		}
 		if b.Format != backup.ArtifactFormat {
-			return "", fmt.Errorf("backup %d is a legacy volume snapshot — only fog-backup/1 artifacts can seed a new instance", rf.BackupID)
+			return "", release, fmt.Errorf("backup %d is a legacy volume snapshot — only fog-backup/1 artifacts can seed a new instance", rf.BackupID)
 		}
-		artifact = filepath.Join(b.Path, "artifact.tar")
+		return s.artifactCopy(b)
 	}
 	if artifact == "" {
-		return "", fmt.Errorf("restoreFrom needs a backupId or a path")
+		return "", release, fmt.Errorf("restoreFrom needs a backupId or a path")
 	}
 	if _, err := os.Stat(artifact); err != nil {
-		return "", fmt.Errorf("artifact not found at %s", artifact)
+		return "", release, fmt.Errorf("artifact not found at %s", artifact)
 	}
-	return artifact, nil
+	return artifact, release, nil
+}
+
+// artifactCopy is a recorded backup's artifact as a file: its own while
+// its snapshot directory exists, otherwise a verified copy out of the store
+// in the uploads directory.
+func (s *Server) artifactCopy(b *store.Backup) (string, func(), error) {
+	r, _, err := s.backup.OpenBackupFile(b, "artifact.tar")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("backup %d: %w", b.ID, err)
+	}
+	defer r.Close()
+	if f, ok := r.(*os.File); ok {
+		return f.Name(), func() {}, nil
+	}
+	dir := filepath.Join(s.cfg.DataDir, "uploads")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", func() {}, err
+	}
+	f, err := os.CreateTemp(dir, "artifact-*.tar")
+	if err != nil {
+		return "", func() {}, err
+	}
+	_, err = io.Copy(f, r)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return "", func() {}, fmt.Errorf("reading backup %d back: %w", b.ID, err)
+	}
+	return f.Name(), func() { os.Remove(f.Name()) }, nil
 }
 
 func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +178,10 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	artifact := ""
 	if req.RestoreFrom != nil {
 		var err error
-		if artifact, err = s.resolveRestoreArtifact(req.RestoreFrom); err != nil {
+		var release func()
+		artifact, release, err = s.resolveRestoreArtifact(req.RestoreFrom)
+		defer release()
+		if err != nil {
 			badRequest(w, err.Error())
 			return
 		}

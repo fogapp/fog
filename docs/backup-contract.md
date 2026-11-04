@@ -1,4 +1,4 @@
-# fog-backup/1 — the delegated backup contract
+# fog-backup/2 — the delegated backup contract
 
 Fog schedules, stores, verifies, and restores backups. It never learns how to
 dump an app. An app that opts into delegated backups (`backup.mode: delegated`
@@ -10,7 +10,7 @@ Reference implementation: feed. Adopters: fit, hook, hub, lucid, manor, office,
 once, stream, newtab (files only, in Go).
 
 > Fog's own **Drive** tree is not an app and does not use this contract:
-> fog snapshots it directly (hardlink snapshots under `<backupDir>/files/`;
+> fog snapshots it directly (into the incremental store beside the apps';
 > see [disaster-recovery.md](disaster-recovery.md)).
 
 ## Auth
@@ -290,9 +290,35 @@ from fog to start it again.
   not on failure events — the dead-man's switch is the backstop for every
   silent failure mode.
 
+## fog-backup/2 — uncompressed payloads
+
+Fog keeps every artifact in its incremental store
+([store-contract.md](store-contract.md)), which cuts bytes into chunks by
+content and stores each chunk once, compressed. A payload compressed as a
+whole defeats that: one changed row or file reshuffles the whole compressed
+stream, and nothing is shared with the night before. `fog-backup/2` is
+`fog-backup/1` with exactly that changed:
+
+| | fog-backup/1 | fog-backup/2 |
+|---|---|---|
+| `manifest.format`, descriptor `contract` | `fog-backup/1` | `fog-backup/2` |
+| primary dump | `pg_dump -Fc` (compressed) | `pg_dump -Fc -Z0` — still custom format, `pg_restore` reads it unchanged |
+| file components | `files/<component>.tar.zst` | `files/<component>.tar`, plain |
+
+Everything else — endpoints, auth, staging, preflight, restore-on-boot,
+`forget_secrets`, failure semantics — is identical. The artifact grows on
+the app's staging disk while it is produced; the store compresses what it
+keeps, so nothing grows at rest.
+
+- **Producers** write `fog-backup/2` only.
+- **Restorers** accept both: a component is read from the path its manifest
+  entry names, unpacked by its extension (`.tar.zst` with zstd, `.tar` as
+  is), so an app can restore any backup it has ever made.
+- **Fog** accepts both formats at backup, preflight and restore.
+
 ## Versioning
 
-`fog-backup/1` is frozen by this document. Additive manifest fields are
-allowed (consumers ignore unknown keys). Anything that changes restore
-behavior bumps the version; producers write only the newest version, restorers
-accept all versions they know.
+`fog-backup/1` and `fog-backup/2` are frozen by this document. Additive
+manifest fields are allowed (consumers ignore unknown keys). Anything that
+changes restore behavior bumps the version; producers write only the newest
+version, restorers accept all versions they know.

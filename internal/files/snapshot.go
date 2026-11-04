@@ -270,6 +270,9 @@ func (m *Manager) previous(mode string) (dir string, mf *snapManifest) {
 // job; callers go through StartSnapshot, whose exclusive job is what keeps
 // two runs from overlapping.
 func (m *Manager) RunSnapshot(ctx context.Context, p *jobs.Progress) (store.FileSnapshot, error) {
+	if m.ChunkStore != nil {
+		return m.runStoreSnapshot(ctx, p)
+	}
 	base, err := m.snapshotsDir()
 	if err != nil {
 		return store.FileSnapshot{}, err
@@ -983,7 +986,7 @@ type BackupStatus struct {
 	LastBytes      int64  `json:"lastBytes,omitempty"`
 	LastNewBytes   int64  `json:"lastNewBytes,omitempty"`
 	LastFiles      int64  `json:"lastFiles,omitempty"`
-	LastMode       string `json:"lastMode,omitempty" ts:"\"links\" | \"mirror\""`
+	LastMode       string `json:"lastMode,omitempty" ts:"\"links\" | \"mirror\" | \"store\""`
 	LastWarnings   int    `json:"lastWarnings,omitempty"`
 	LastVerifiedAt string `json:"lastVerifiedAt,omitempty"`
 	Stale          bool   `json:"stale"`
@@ -1050,7 +1053,8 @@ func (m *Manager) ListSnapshots() ([]store.FileSnapshot, error) {
 	offsite, _ := m.Store.OffsiteStatesOf(store.OffsiteKindFilesSnapshot)
 	out := []store.FileSnapshot{}
 	for _, r := range rows {
-		if _, err := os.Stat(filepath.Join(r.Path, snapshotManifest)); err == nil {
+		_, err := os.Stat(filepath.Join(r.Path, snapshotManifest))
+		if r.Mode == ModeStore || err == nil {
 			r.Offsite = offsite.Of(strconv.FormatInt(r.ID, 10))
 			out = append(out, r)
 		}
@@ -1072,7 +1076,7 @@ func (m *Manager) DeleteSnapshot(id int64) error {
 	links := 0
 	var row *store.FileSnapshot
 	for i := range rows {
-		if rows[i].Mode == "links" {
+		if rows[i].Mode == "links" || rows[i].Mode == ModeStore {
 			links++
 		}
 		if rows[i].ID == id {
@@ -1087,6 +1091,16 @@ func (m *Manager) DeleteSnapshot(id int64) error {
 	}
 	if links <= 1 {
 		return ErrLastSnapshot
+	}
+	if row.Mode == ModeStore {
+		cs, err := m.chunkStore()
+		if err != nil {
+			return err
+		}
+		if err := cs.Delete(row.StoreSnapshot); err != nil {
+			return err
+		}
+		return m.Store.DeleteFileSnapshot(id)
 	}
 	if err := os.RemoveAll(row.Path); err != nil {
 		return err
@@ -1125,6 +1139,9 @@ func snapNode(rel string, fi fs.FileInfo) Node {
 // directories are as big as the root's, so this is fine for the same
 // reason the root's are.
 func (m *Manager) SnapshotList(id int64, rel string, o ListOpts) (Listing, error) {
+	if row, err := m.Store.FileSnapshotByID(id); err == nil && row.Mode == ModeStore {
+		return m.storeList(row, rel, o)
+	}
 	root, _, err := m.snapshotRoot(id)
 	if err != nil {
 		return Listing{}, err
@@ -1238,6 +1255,9 @@ func sortNodes(nodes []Node, s Sort, desc bool) {
 
 // SnapshotOpenFile opens one file of a snapshot for reading.
 func (m *Manager) SnapshotOpenFile(id int64, rel string) (*os.File, Node, error) {
+	if row, err := m.Store.FileSnapshotByID(id); err == nil && row.Mode == ModeStore {
+		return m.storeOpenFile(row, rel)
+	}
 	root, _, err := m.snapshotRoot(id)
 	if err != nil {
 		return nil, Node{}, err
@@ -1268,6 +1288,10 @@ func (m *Manager) RestoreSnapshot(id int64, rels []string, to string, toSet bool
 			release()
 		}
 	}()
+	if row, err := m.Store.FileSnapshotByID(id); err == nil && row.Mode == ModeStore {
+		started = true // storeRestore releases on every path
+		return m.storeRestore(row, rels, to, toSet, c, release)
+	}
 	snap, row, err := m.snapshotRoot(id)
 	if err != nil {
 		return jobs.Job{}, err
@@ -1457,6 +1481,10 @@ func (m *Manager) VerifySnapshots(ctx context.Context, now time.Time) {
 	}
 	if _, err := m.snapshotsDir(); err != nil {
 		return // target away; not corruption
+	}
+	if r.Mode == ModeStore {
+		m.verifyStoreSnapshot(ctx, &r, now)
+		return
 	}
 	rng := rand.New(rand.NewSource(now.UnixNano()))
 	sample, _, err := sampleManifest(r.Path, rng, func(total int) int {

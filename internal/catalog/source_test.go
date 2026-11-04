@@ -48,7 +48,7 @@ func TestNoSourceHidesFirstPartyEntries(t *testing.T) {
 func TestBaseFillsRepositories(t *testing.T) {
 	got := available(Resolve(Entries(), exampleSources))
 	for id, repo := range map[string]string{
-		"manor":         "ssh://git@git.example.com/you/manor.git",
+		"fin":           "ssh://git@git.example.com/you/fin.git",
 		"fit":           "ssh://git@git.example.com/you/fit.git",
 		"fit-collector": "ssh://git@git.example.com/you/fit.git",
 	} {
@@ -74,15 +74,15 @@ func TestPublicRepoAndOverrides(t *testing.T) {
 	if e, ok := got["newtab"]; !ok || e.Spec.Source.Repo != "ssh://git@github.com/fogapp/newtab.git" {
 		t.Fatalf("a published entry with no base: %+v", e.Spec.Source)
 	}
-	if _, ok := got["manor"]; ok {
+	if _, ok := got["fin"]; ok {
 		t.Fatal("an unpublished entry shown with no base")
 	}
-	src := ParseSources("ssh://git@git.example.com/you/", `{"newtab":"ssh://git@git.example.com/fork/newtab.git","manor":"git@other:me/manor.git"}`)
+	src := ParseSources("ssh://git@git.example.com/you/", `{"newtab":"ssh://git@git.example.com/fork/newtab.git","fin":"git@other:me/fin.git"}`)
 	got = available(Resolve(entries, src))
 	if r := got["newtab"].Spec.Source.Repo; r != "ssh://git@git.example.com/fork/newtab.git" {
 		t.Errorf("override beats the public repo: got %q", r)
 	}
-	if r := got["manor"].Spec.Source.Repo; r != "git@other:me/manor.git" {
+	if r := got["fin"].Spec.Source.Repo; r != "git@other:me/fin.git" {
 		t.Errorf("override beats the base: got %q", r)
 	}
 	if r := got["hub"].Spec.Source.Repo; r != "ssh://git@git.example.com/you/hub.git" {

@@ -59,6 +59,9 @@ func (l Layout) ObjectsOf(c *store.OffsiteCopy) []string {
 			return []string{c.Key, l.AppRow(parts[1], strings.TrimSuffix(parts[2], ".snapshot"))}
 		}
 	}
+	if c.Kind == kindStore {
+		return []string{c.Key, l.StoreKey(c.Subject)}
+	}
 	return []string{c.Key}
 }
 

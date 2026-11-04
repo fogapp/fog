@@ -114,7 +114,8 @@ func TestPrune(t *testing.T) {
 
 	m := &Manager{Store: st}
 
-	// 10 regular snapshots with default keep=7: three go, seven stay.
+	// Ten snapshots on one day: the history keeps one per day, but the
+	// newest three always stay.
 	for i := 0; i < 10; i++ {
 		mk("scheduled")
 	}
@@ -122,8 +123,8 @@ func TestPrune(t *testing.T) {
 	preID := mk("pre-update")
 	m.prune(app.ID)
 	list, _ := st.ListBackups(app.ID, 100)
-	if len(list) != 8 {
-		t.Fatalf("want 7 regular + 1 pre-update, got %d", len(list))
+	if len(list) != 4 {
+		t.Fatalf("want 3 regular + 1 pre-update, got %d", len(list))
 	}
 	foundPre := false
 	for _, b := range list {
@@ -147,8 +148,8 @@ func TestPrune(t *testing.T) {
 	}
 	m.prune(app.ID)
 	list, _ = st.ListBackups(app.ID, 100)
-	if len(list) != 10 {
-		t.Fatalf("want 7 regular + 3 pre-update, got %d", len(list))
+	if len(list) != 6 {
+		t.Fatalf("want 3 regular + 3 pre-update, got %d", len(list))
 	}
 	kept := map[int64]bool{}
 	for _, b := range list {
@@ -161,6 +162,41 @@ func TestPrune(t *testing.T) {
 	}
 	if kept[preID] {
 		t.Fatal("the oldest pre-update snapshot outlived the count cap")
+	}
+}
+
+// The history keeps a backup per day for two weeks, per week for eight,
+// per month for a year — and nothing older.
+func TestKeepByHistory(t *testing.T) {
+	now := time.Date(2026, 11, 4, 3, 0, 0, 0, time.UTC)
+	var list []store.Backup
+	for d := 0; d < 800; d++ { // a nightly backup for 800 days, newest first
+		list = append(list, store.Backup{ID: int64(1000 - d), CreatedAt: now.AddDate(0, 0, -d).Format(time.RFC3339)})
+	}
+	keep := keepByHistory(list, PolicyFor(""))
+	kept := 0
+	oldest := now
+	for _, b := range list {
+		if keep[b.ID] {
+			kept++
+			t0, _ := time.Parse(time.RFC3339, b.CreatedAt)
+			oldest = t0
+		}
+	}
+	// 14 daily, weeks 3–8 beyond them, months beyond those up to 12.
+	if kept < 14+6+9 || kept > 14+8+12 {
+		t.Fatalf("kept %d backups", kept)
+	}
+	if age := now.Sub(oldest); age < 300*24*time.Hour || age > 370*24*time.Hour {
+		t.Fatalf("oldest kept is %v old, want about a year", age)
+	}
+	for _, b := range list[:14] {
+		if !keep[b.ID] {
+			t.Fatal("one of the last 14 nights was dropped")
+		}
+	}
+	if k := keepByHistory(list, PolicyFor("month")); len(k) > 14+4+1 {
+		t.Fatalf("a month's history kept %d", len(k))
 	}
 }
 
@@ -438,7 +474,7 @@ func TestLegacyBackupPausesRunningApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(b.Path, "volume-data.tar.gz")); err != nil {
+	if _, err := os.Stat(filepath.Join(b.Path, "volume-data.tar")); err != nil {
 		t.Fatalf("snapshot archive missing: %v", err)
 	}
 	log, err := os.ReadFile(dockerLog)
@@ -464,7 +500,7 @@ func TestLegacyBackupSkipsPauseWhenStopped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(b.Path, "volume-data.tar.gz")); err != nil {
+	if _, err := os.Stat(filepath.Join(b.Path, "volume-data.tar")); err != nil {
 		t.Fatalf("snapshot archive missing: %v", err)
 	}
 	log, err := os.ReadFile(dockerLog)
@@ -508,10 +544,16 @@ func TestSameSecondSnapshotsGetTheirOwnDirectories(t *testing.T) {
 	if paths[0] == paths[1] || paths[1] == paths[2] || paths[0] == paths[2] {
 		t.Fatalf("snapshots share a directory: %q", paths)
 	}
-	for _, p := range paths {
-		if _, err := os.Stat(filepath.Join(p, "meta.json")); err != nil {
-			t.Fatalf("snapshot %s incomplete: %v", p, err)
+	// Older directories are retired once the store holds them; every
+	// backup still reads whole, wherever it lives.
+	t.Cleanup(m.CloseChunkStore)
+	list, _ := st.ListBackups(1, 10)
+	for i := range list {
+		r, _, err := m.OpenBackupFile(&list[i], "meta.json")
+		if err != nil {
+			t.Fatalf("snapshot %s incomplete: %v", list[i].Path, err)
 		}
+		r.Close()
 	}
 }
 

@@ -31,6 +31,9 @@ func (r *Reader) RestoreFiles(ctx context.Context, stamp, dir string, onFile fun
 	if snap.Format != Format {
 		return 0, 0, fmt.Errorf("snapshot %s declares format %q", stamp, snap.Format)
 	}
+	if snap.StoreSnapshot != "" {
+		return r.restoreFilesFromStore(ctx, &snap, dir)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return 0, 0, err
 	}

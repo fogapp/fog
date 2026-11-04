@@ -178,7 +178,7 @@ export default function Domain() {
     <SettingsPage
       description={
         <>
-          One domain gives every app a clean address — <code>manor.your-domain.com</code> — with real
+          One domain gives every app a clean address — <code>fin.your-domain.com</code> — with real
           HTTPS. At home only by default; from anywhere, if you choose, in step 4.
         </>
       }

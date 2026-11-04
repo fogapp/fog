@@ -209,6 +209,7 @@ func (m *Manager) WriteRecoveryKit(ctx context.Context) error {
 		return err
 	}
 	m.pruneKits(dir)
+	m.Store.SetSetting(settingKitDue, "") // the kit carries the store's key now
 	m.Log.Info("recovery kit written", "path", out)
 	m.checkKitSize(out)
 	return nil

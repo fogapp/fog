@@ -87,6 +87,12 @@ func (m *Manager) syncFiles(ctx context.Context, t *store.OffsiteTarget, r *Read
 			m.Log.Warn("offsite: files snapshot is on an unavailable share; skipped", "snapshot", row.ID)
 			continue
 		}
+		if row.StoreSnapshot != "" && m.ChunkStore != nil {
+			if err := m.syncFilesStore(ctx, t, r, up, p, ix, row, subject); err != nil {
+				errs = append(errs, "files "+stampOfSnapshot(row)+": "+err.Error())
+			}
+			continue
+		}
 		mf, err := readSnapshotManifest(row.Path)
 		if err != nil {
 			continue // pruned locally, or a snapshot still being written

@@ -135,7 +135,8 @@ func (s *Server) handleInspectArtifact(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	path, err := s.resolveRestoreArtifact(&restoreFromReq{Path: req.Path})
+	path, release, err := s.resolveRestoreArtifact(&restoreFromReq{Path: req.Path})
+	defer release()
 	if err != nil {
 		badRequest(w, err.Error())
 		return
@@ -249,20 +250,15 @@ func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.Format == backup.ArtifactFormat {
-		f, err := os.Open(filepath.Join(b.Path, "artifact.tar"))
+		f, size, err := s.backup.OpenBackupFile(b, "artifact.tar")
 		if err != nil {
-			notFound(w, "artifact missing on disk")
+			notFound(w, "artifact missing: "+err.Error())
 			return
 		}
 		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			writeError(w, err)
-			return
-		}
 		w.Header().Set("Content-Type", "application/x-tar")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="backup-%d-%s.fogpack.tar"`, b.ID, filepath.Base(b.Path)))
-		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		io.Copy(w, f)
 		s.audit(r, "backup.download", strconv.FormatInt(b.ID, 10), nil)
 		return
@@ -273,30 +269,20 @@ func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 	// stream so it can be stored off-box. The bundle is for safekeeping and
 	// manual extraction — the upload-restore door only accepts fog-backup/1
 	// artifacts, so restoring one of these stays on-box.
-	entries, err := os.ReadDir(b.Path)
+	entries, err := s.backup.ListBackupFiles(b)
 	if err != nil {
-		notFound(w, "snapshot missing on disk")
+		notFound(w, "snapshot missing: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-tar")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="backup-%d-%s.snapshot.tar"`, b.ID, filepath.Base(b.Path)))
 	tw := tar.NewWriter(w)
 	for _, e := range entries {
-		if !e.Type().IsRegular() {
-			continue
-		}
-		info, err := e.Info()
+		f, size, err := s.backup.OpenBackupFile(b, e.Name)
 		if err != nil {
 			return // headers are sent; a truncated stream is the only remaining failure mode
 		}
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return
-		}
-		f, err := os.Open(filepath.Join(b.Path, e.Name()))
-		if err != nil {
-			return
-		}
+		hdr := &tar.Header{Name: e.Name, Mode: int64(e.Mode), Size: size, Typeflag: tar.TypeReg, ModTime: time.Now()}
 		if err := tw.WriteHeader(hdr); err != nil {
 			f.Close()
 			return

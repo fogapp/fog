@@ -93,8 +93,8 @@ func InspectArtifact(artifactPath string) (*Manifest, error) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, fmt.Errorf("manifest is not valid JSON: %w", err)
 	}
-	if m.Format != ArtifactFormat {
-		return nil, fmt.Errorf("artifact declares format %q, expected %q", m.Format, ArtifactFormat)
+	if !KnownArtifactFormat(m.Format) {
+		return nil, fmt.Errorf("artifact declares format %q, expected %q or %q", m.Format, ArtifactFormat, ArtifactFormatV2)
 	}
 	return &m, nil
 }
@@ -146,8 +146,8 @@ func PreflightArtifact(artifactPath, appName, identity string, secretFor func(ke
 	}
 	res.Manifest = &m
 
-	if m.Format != ArtifactFormat {
-		fail("artifact declares format %q, expected %q", m.Format, ArtifactFormat)
+	if !KnownArtifactFormat(m.Format) {
+		fail("artifact declares format %q, expected %q or %q", m.Format, ArtifactFormat, ArtifactFormatV2)
 	}
 	if msg, warn := checkIdentity(m.App, identity, appName); msg != "" {
 		fail("%s", msg)
@@ -369,7 +369,7 @@ func checkIdentity(artifactApp, identity, appName string) (fail, warn string) {
 		return "artifact declares no app", ""
 	case identity == "":
 		return "", fmt.Sprintf("the artifact is for %q; fog cannot confirm before %s boots that this is the same software — the app's own preflight refuses a mismatch", artifactApp, appName)
-	case artifactApp != identity:
+	case !apps.SameSoftware(artifactApp, identity):
 		return fmt.Sprintf("artifact is for %q but %s runs %q", artifactApp, appName, identity), ""
 	}
 	return "", ""

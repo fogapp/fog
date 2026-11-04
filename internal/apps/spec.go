@@ -36,7 +36,7 @@ type AppSpec struct {
 	Health  *Health  `json:"health,omitempty"`
 	Command []string `json:"command,omitempty"`
 	// Processes are additional long-running processes sharing the app's
-	// image, env, and volumes (e.g. Manor's solid_queue worker).
+	// image, env, and volumes (e.g. Fin's solid_queue worker).
 	Processes []Process `json:"processes,omitempty"`
 	// Aux are sidecar containers the app needs beside it — its own database,
 	// a Redis broker, an ML worker. They run their own images on a private
@@ -619,7 +619,7 @@ var nameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 // and a backup test holds the two lists together).
 var reserved = map[string]bool{
 	"fog": true, "caddy": true, "fog-postgres": true, "postgres": true,
-	"fog-recovery": true, "files": true,
+	"fog-recovery": true, "files": true, "fog-store": true,
 }
 
 // AllVolumes is the app's volumes followed by every sidecar's — one

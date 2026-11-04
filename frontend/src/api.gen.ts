@@ -19,7 +19,7 @@ export interface AppSpec {
   health?: HealthSpec;
   command?: string[];
   // Processes are additional long-running processes sharing the app's
-  // image, env, and volumes (e.g. Manor's solid_queue worker).
+  // image, env, and volumes (e.g. Fin's solid_queue worker).
   processes?: ProcessSpec[];
   // Aux are sidecar containers the app needs beside it — its own database,
   // a Redis broker, an ML worker. They run their own images on a private
@@ -365,6 +365,21 @@ export interface AppBackupStatus {
   offsite?: "" | "verified" | "stored" | "uploading" | "pending";
 }
 
+// StoreSummary is the store at a glance, for people: how far back backups
+// go and what they take up, nothing about how.
+export interface BackupStoreSummary {
+  // UsedBytes is what the store occupies on the backup disk.
+  usedBytes: number;
+  // OldestAt is the oldest backup fog holds (RFC3339), "" with none.
+  oldestAt?: string;
+  // Encrypted says whether the backups on the disk are encrypted;
+  // EncryptPending that a change of the setting has yet to be applied.
+  encrypted: boolean;
+  encryptPending: boolean;
+  // History is the SettingBackupHistory in force ("year" when unset).
+  history: "month" | "quarter" | "year" | "two-years";
+}
+
 export interface BackupRecord {
   id: number;
   appId: number;
@@ -378,6 +393,12 @@ export interface BackupRecord {
   sha256?: string;
   manifest?: string;
   verifiedAt?: string;
+  // The incremental store's copy (docs/store-contract.md): the snapshot
+  // holding the same bytes, when it last read back whole and matched, and
+  // why it did not when it failed.
+  storeSnapshot?: string;
+  storeVerifiedAt?: string;
+  storeError?: string;
 }
 
 export interface AppUpdateStatus {
@@ -465,6 +486,10 @@ export interface CatalogEntry {
   options?: CatalogOption[];
   companions?: CatalogCompanion[];
   requires?: CatalogRequires;
+  // Formerly is every name this software's backups were made under before
+  // it was renamed (apps.FormerNames): an artifact declaring one restores
+  // into this entry as readily as one declaring its ID.
+  formerly?: string[];
   // FirstParty names the household's own repository an entry builds from
   // ("fit"); its clone URL comes from this fog's settings (source.go).
   firstParty?: string;
@@ -1082,7 +1107,7 @@ export interface FileSnapshot {
   id: number;
   path: string;
   createdAt: string;
-  mode: "links" | "mirror"; // links | mirror
+  mode: "links" | "mirror" | "store"; // links | mirror | store
   files: number;
   bytes: number;
   newBytes: number;
@@ -1091,6 +1116,9 @@ export interface FileSnapshot {
   // Offsite is filled by the files manager from the copy rows: "" (no
   // target), stored, uploading, pending.
   offsite?: "" | "verified" | "stored" | "uploading" | "pending";
+  // StoreSnapshot is the incremental store's snapshot holding it (mode
+  // "store", and older snapshots once imported).
+  storeSnapshot?: string;
 }
 
 // BackupStatus is the Files row of the fleet backup view.
@@ -1102,7 +1130,7 @@ export interface FilesBackupStatus {
   lastBytes?: number;
   lastNewBytes?: number;
   lastFiles?: number;
-  lastMode?: "links" | "mirror";
+  lastMode?: "links" | "mirror" | "store";
   lastWarnings?: number;
   lastVerifiedAt?: string;
   stale: boolean;
@@ -2694,6 +2722,11 @@ export interface Settings {
   flare_peer_push: string;
   ntfy_topic: string; // letters, digits, - and _ (ntfy's grammar), at most 64
   backup_retention: string;
+  // How far back backups go: "" (a year) | "month" | "quarter" | "year" | "two-years".
+  backup_history: string;
+  // Encrypt the backups on the backup disk: "" | "on" | "off"; empty means
+  // off. Applied at the next nightly backup, which rewrites them.
+  backup_store_encrypt: string;
   backup_hour_utc: string;
   // Snapshot an app before updates and rollbacks: "" | "on" | "off";
   // empty means on.

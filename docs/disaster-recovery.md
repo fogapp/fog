@@ -8,10 +8,25 @@ fresh install.** Contract details live in [backup-contract.md](backup-contract.m
 
 With a nightly backup hour set (Settings → Storage → Backups):
 
+- **One incremental store** — every backup fog takes, each app's and
+  Drive's, is a complete snapshot in `fog-store/` under the backup
+  directory ([store-contract.md](store-contract.md)). Bytes are cut into
+  chunks by content and each chunk is stored once, so a night costs what
+  changed, not a full copy, and a long history takes little room. Nothing
+  chains: every snapshot stands alone, deleting one never affects another,
+  and a restore reads one. Every chunk is checked against its keyed id and
+  every file against its digest whenever anything is read back; a thirtieth
+  of the store is re-read every night, so all of it is re-read monthly, and
+  damage is repaired from the offsite copy when there is one. Encrypting the
+  store is an option (Settings → Storage → Backups); off by default, so a
+  backup disk restores even without the recovery kit.
 - **Per-app artifacts** — apps on `backup.mode: delegated` (most of the
-  catalog's own apps, manor, hub and feed among them) produce a single `artifact.tar` (database dump + file state + manifest)
-  that fog checksum-verifies at download. Legacy apps still get volume
-  tars + pg_dumps.
+  catalog's own apps, fin, hub and feed among them) produce a single
+  `artifact.tar` (database dump + file state + manifest) that fog
+  checksum-verifies at download, writes into the store, reads back and
+  checks against that same digest. `fog-backup/2` producers leave the
+  dump and file tars uncompressed so unchanged rows and files dedupe.
+  Legacy apps get uncompressed volume tars + pg_dumps.
 - **Verification** — each newest artifact is re-hashed and **test-restored
   into a scratch database** on a rolling weekly schedule; only then does it
   carry a `verified` badge. A backup that never restored is not trusted, and
@@ -31,29 +46,33 @@ With a nightly backup hour set (Settings → Storage → Backups):
   bricks every app's encrypted credentials even with perfect app artifacts.
   **Keep the passphrase somewhere that survives the machine** — a strong one
   (at least 16 characters); it is the single key to everything fog encrypts.
-- **Retention** — keep-newest-N per app (default 7), pre-update snapshots on
-  their own clock (the newest 3, none older than 21 days), and the last
-  remaining backup of an app is never
-  deleted. Keep the backup directory on a NAS mount so all of it leaves the
-  box: Settings → Storage → Drive → Apps, Content and Backups moves it there
-  (or adopts backups already there), records and all.
+- **History** — every night for two weeks, one a week for eight weeks,
+  one a month for a year (Settings → Storage → Backups → *Keep history
+  for*: a month, three months, a year or two years); the newest three of an
+  app always stay, and pre-update snapshots keep their own clock (the newest
+  3, none older than 21 days). If the backup disk passes 90% full, the
+  oldest history goes first — never an app's newest three — until it is
+  under 85%, and the Inbox says so. Keep the backup directory on a NAS mount
+  so all of it leaves the box: Settings → Storage → Drive → Apps, Content
+  and Backups moves it there (or adopts backups already there), records and
+  all.
 - **Files** — fog's own file tree (the Drive page) is snapshotted nightly
-  into `files/<stamp>/` beside the app backups, fifteen minutes after the
-  backup hour. Each snapshot is a complete directory: unchanged files are
-  hardlinks to the previous night, so seven nights cost one copy plus what
-  changed. `files/latest` points at the newest; `.fog-snapshot.json` in
-  each lists every file with its digest, and a random sample is re-hashed
-  weekly. Restore anything from Drive's clock menu — or with `cp -a`, since
-  it is just a tree. On a target without hardlinks (SMB), fog keeps a
-  single rolling `files/mirror/` instead and says so in the Inbox. Anything
-  marked *Exclude from backups* in Drive is left out; the same retention
-  count applies. Copies of peers' shares (the `Peers` folder in Drive) are
-  left out too unless *Back up my copy* is on for that subscription on the
-  Connect page — they are caches of what the peer holds, not fog's own
-  state, and the recovery kit never includes them.
+  into the same store, fifteen minutes after the backup hour. A file whose
+  size and modification time match the night before is carried over
+  unread, and a big file that changed a little costs the little. The store
+  needs no hardlinks, so an SMB share keeps full history too. A random
+  sample of the newest snapshot is read back weekly. Restore anything from
+  Drive's clock menu. Anything marked *Exclude from backups* in Drive is
+  left out; the same history applies. Copies of peers' shares (the `Peers`
+  folder in Drive) are left out too unless *Back up my copy* is on for that
+  subscription on the Connect page — they are caches of what the peer
+  holds, not fog's own state, and the recovery kit never includes them.
+  Snapshots taken before the store (hardlink trees, or an SMB mirror) are
+  imported into it and their trees removed.
 - **Offsite** — with a locker set up (Settings → Storage → Offsite), sealed
   copies of the backups, the kit, and the Files snapshots also live in an
-  object-storage bucket. [locker-contract.md](locker-contract.md) is the
+  object-storage bucket — the store's own packs, so a night uploads only
+  what changed. [locker-contract.md](locker-contract.md) is the
   format, readable without a fog.
 
 Feed's media archive is deliberately outside the artifact (multi-TB host
@@ -122,9 +141,9 @@ step 3 below.
    **Recover everything…** on Settings → Storage → Offsite restores every
    app and Drive from it instead.
 5. Files: open Drive, pick the newest snapshot from the clock menu, and
-   **Restore everything** — or copy `files/latest/` from the backup
-   directory into the files root by hand (`cp -a`; the root is in
-   Settings → Storage → Drive). The index rebuilds itself. Copies of
+   **Restore everything**. The index rebuilds itself. Without a running
+   fog, `fog-locker restore-files` writes a Drive snapshot out of a locker,
+   and `fog-locker restore-backup` an app backup. Copies of
    peers' shares are not in a snapshot unless they were opted in: the
    subscriptions themselves are in the kit, so once the Connect page
    shows the peers again each copy refills on its next sync (*Sync now*

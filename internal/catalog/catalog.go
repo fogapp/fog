@@ -73,6 +73,10 @@ type Entry struct {
 	Options     []Option     `json:"options,omitempty"`
 	Companions  []Companion  `json:"companions,omitempty"`
 	Requires    *Requires    `json:"requires,omitempty"`
+	// Formerly is every name this software's backups were made under before
+	// it was renamed (apps.FormerNames): an artifact declaring one restores
+	// into this entry as readily as one declaring its ID.
+	Formerly []string `json:"formerly,omitempty"`
 	// FirstParty names the household's own repository an entry builds from
 	// ("fit"); its clone URL comes from this fog's settings (source.go).
 	FirstParty string `json:"firstParty,omitempty"`
@@ -220,7 +224,7 @@ func lsioEntry(id, title, desc, category, icon, image string, port int, health s
 }
 
 // DefaultEnabled is the store's out-of-the-box visible set.
-var DefaultEnabled = []string{"manor", "hub", "office", "feed", "hook", "stream", "once", "hud", "lucid", "newtab", "signet", "fit", "immich", "paperless", "whisper", "gotenberg"}
+var DefaultEnabled = []string{"fin", "hub", "office", "feed", "hook", "stream", "once", "hud", "lucid", "newtab", "signet", "fit", "immich", "paperless", "whisper", "gotenberg"}
 
 // generatedSecret is a required secret with a safe auto-generated default —
 // installs are fresh instances, so every key can simply be minted.
@@ -229,7 +233,7 @@ func generatedSecret(key, hint, kind string) Option {
 }
 
 // railsSecrets: the full set a credentials-free Rails app needs. Hub and
-// Manor removed config/credentials.yml.enc — SECRET_KEY_BASE comes from the
+// Fin removed config/credentials.yml.enc — SECRET_KEY_BASE comes from the
 // environment, so everything is generatable and installs need no input.
 func railsSecrets() []Option {
 	return []Option{
@@ -271,28 +275,30 @@ func railsSecretKeys(extra ...string) []string {
 	return append(keys, extra...)
 }
 
-// manorEntry: Matthew's finances app — Rails 8 + React, built from git.
-func manorEntry() Entry {
+// finEntry: Matthew's finances app — Rails 8 + React, built from git. It
+// was Manor until 2026-11; a Manor install moves to it by restoring a
+// backup into a fresh Fin, which takes Manor's artifacts as its own.
+func finEntry() Entry {
 	return Entry{
-		ID: "manor", FirstParty: "manor", Title: "Manor", Category: "Personal cloud", Icon: "🏦",
+		ID: "fin", FirstParty: "fin", Title: "Fin", Category: "Personal cloud", Icon: "🏦",
 		Description: "Personal finance hub — portfolios, budgets, net worth, and automations.",
 		Spec: apps.AppSpec{
 			Source: firstPartySource(""),
 			Env: map[string]string{
-				"GIT_SHA":                "{{commit}}",
-				"JOB_CONCURRENCY":        "1",
-				"MANOR_WEBAUTHN_RP_ID":   "{{fqdn}}",
-				"MANOR_WEBAUTHN_ORIGINS": "https://{{fqdn}}",
+				"GIT_SHA":              "{{commit}}",
+				"JOB_CONCURRENCY":      "1",
+				"FIN_WEBAUTHN_RP_ID":   "{{fqdn}}",
+				"FIN_WEBAUTHN_ORIGINS": "https://{{fqdn}}",
 			},
 			Secrets:   railsSecretKeys(),
 			Processes: []apps.Process{{Name: "worker", Command: []string{"bundle", "exec", "ruby", "bin/jobs"}}},
 			Release:   railsRelease,
 			Needs: &apps.Needs{Postgres: &apps.PostgresNeed{
-				Databases:  []string{"manor_production"},
+				Databases:  []string{"fin_production"},
 				Extensions: []string{"citext", "pg_trgm", "pgcrypto"},
 				Inject: map[string]string{
 					"DATABASE_HOST": "host", "DATABASE_PORT": "port", "DATABASE_USER": "user",
-					"MANOR_DATABASE_PASSWORD": "password", "DATABASE_NAME": "dbname",
+					"FIN_DATABASE_PASSWORD": "password", "DATABASE_NAME": "dbname",
 				},
 			}},
 			// First managed volume doubles as fog-backup/1 restore staging.
@@ -301,8 +307,8 @@ func manorEntry() Entry {
 			Health:  &apps.Health{Path: "/up"},
 			Backup:  &apps.BackupSpec{Enabled: true, Mode: "delegated", Timeout: "45m"},
 			Notes: "First visit: register your passkey (or restore a fog-backup/1 artifact from a previous " +
-				"instance), then set MANOR_OPEN_REGISTRATION=false in Config → Environment. " +
-				"Passkeys are pinned to MANOR_WEBAUTHN_RP_ID — pick the hostname once and keep it; a restore " +
+				"instance), then set FIN_OPEN_REGISTRATION=false in Config → Environment. " +
+				"Passkeys are pinned to FIN_WEBAUTHN_RP_ID — pick the hostname once and keep it; a restore " +
 				"under a different RP ID invalidates every passkey (preflight makes that explicit). " +
 				"Add the deploy key and webhook (Overview tab) to the Gitea repo for push-to-deploy.",
 		},
@@ -2077,7 +2083,7 @@ func Entries() []Entry {
 
 	entries := []Entry{
 		// The household's own apps lead the categories they belong to.
-		hubEntry(), manorEntry(), officeEntry(),
+		hubEntry(), finEntry(), officeEntry(),
 		immichEntry(), paperlessEntry(), whisperEntry(), openclawEntry(),
 		feedEntry(), hookEntry(), streamEntry(), onceEntry(), hudEntry(), lucidEntry(), newtabEntry(), signetEntry(), fitEntry(), fitCollectorEntry(), thinkFleetEntry(),
 		sonarr, radarr, lidarr, prowlarr, bazarr, jellyseerr,
@@ -2091,6 +2097,7 @@ func Entries() []Entry {
 		entries[i].PublicRepo = publicRepos[entries[i].FirstParty]
 		entries[i].Listing = listings[entries[i].ID]
 		entries[i].Footprint = footprints[entries[i].ID]
+		entries[i].Formerly = apps.FormerNames[entries[i].ID]
 	}
 	return entries
 }

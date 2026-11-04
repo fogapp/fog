@@ -229,7 +229,7 @@ func (s *Server) kickProvisioning() {
 }
 
 // handleSignEveryoneOut tells an app that every person it has seen through
-// fog is signed out — the Sign-in tab's "Sign everyone out of Manor".
+// fog is signed out — the Sign-in tab's "Sign everyone out of Fin".
 func (s *Server) handleSignEveryoneOut(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.appByPath(w, r)
 	if !ok {

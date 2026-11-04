@@ -517,6 +517,11 @@ var editableSettings = map[string]func(string) bool{
 		n, err := strconv.Atoi(v)
 		return err == nil && n > 0 && n <= 100
 	},
+	// How far back backups go: "" (a year) | "month" | "quarter" | "year" | "two-years".
+	backup.SettingBackupHistory: backup.ValidHistory,
+	// Encrypt the backups on the backup disk: "" | "on" | "off"; empty means
+	// off. Applied at the next nightly backup, which rewrites them.
+	backup.SettingStoreEncrypt: func(v string) bool { return v == "" || v == "on" || v == "off" },
 	backup.SettingBackupHourUTC: func(v string) bool {
 		if v == "" {
 			return true

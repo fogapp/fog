@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gitea.lan/matthew/fog/internal/chunkstore"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -45,6 +46,16 @@ type Manager struct {
 	// the setting); PathAvailable says whether a path's share is usable.
 	BackupRoot    func() string
 	PathAvailable func(path string) bool
+	// BackupFiles is a directory holding a backup's files — its snapshot
+	// directory, or a copy read back from the incremental store; release
+	// removes the copy. nil reads the snapshot directory (tests).
+	BackupFiles func(ctx context.Context, b *store.Backup) (dir string, release func(), err error)
+	// ChunkStore is the incremental store; with it, a backup the store
+	// holds goes up as the store's packs (storecopy.go). StoreKey is an
+	// encrypted store's key, copied sealed so the locker can be read
+	// without this fog.
+	ChunkStore func() (*chunkstore.Store, error)
+	StoreKey   func() []byte
 	// HoldBackupDir holds the backup directory while a sync reads it or a
 	// fetch writes into it, so a move of it waits; optional (tests).
 	HoldBackupDir func() (release func(), err error)

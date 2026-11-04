@@ -52,6 +52,12 @@ commands:
   restore-kit   download the newest recovery kit (--out, default ./fog-recovery-kit-<stamp>.enc)
   fetch         download and open one sealed object (--object, --out)
   restore-files write a Files snapshot to a directory (--stamp, --out)
+  restore-backup write one app backup to a directory (--app, --stamp, --out):
+                the artifact.tar (or volume tars and dumps) fog would
+                restore from, checked end to end
+  analyze       measure what a local backups folder would cost in fog's
+                incremental store (--dir; --json for the raw figures).
+                Reads only; needs no bucket.
 
 connection flags:
   --endpoint   https://s3.us-west-004.backblazeb2.com
@@ -216,6 +222,11 @@ func main() {
 	fs.StringVar(&out, "out", "", "output path")
 	fs.StringVar(&object, "object", "", "object name inside the locker (fetch)")
 	fs.StringVar(&stamp, "stamp", "", "Drive snapshot stamp (restore-files)")
+	var dir, appName string
+	var asJSON bool
+	fs.StringVar(&appName, "app", "", "app name (restore-backup)")
+	fs.StringVar(&dir, "dir", "", "backups folder (analyze)")
+	fs.BoolVar(&asJSON, "json", false, "print JSON (analyze)")
 	fs.Parse(os.Args[2:])
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
@@ -232,6 +243,10 @@ func main() {
 		err = cmdFetch(ctx, &c, object, out)
 	case "restore-files":
 		err = cmdRestoreFiles(ctx, &c, stamp, out)
+	case "restore-backup":
+		err = cmdRestoreBackup(ctx, &c, appName, stamp, out)
+	case "analyze":
+		err = cmdAnalyze(ctx, dir, asJSON)
 	case "help", "-h", "--help":
 		usage()
 	default:

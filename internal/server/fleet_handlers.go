@@ -18,7 +18,11 @@ func (s *Server) handleBackupsStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"apps": rows, "files": s.files.BackupStatus(time.Now().UTC())})
+	out := map[string]any{"apps": rows, "files": s.files.BackupStatus(time.Now().UTC())}
+	if s.backup != nil {
+		out["store"] = s.backup.Summary()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleUpdatesStatus(w http.ResponseWriter, r *http.Request) {

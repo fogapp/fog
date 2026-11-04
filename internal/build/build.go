@@ -351,6 +351,7 @@ var KnownContracts = map[string]bool{
 	"fog-connect/1": true,
 	"fog-files/1":   true,
 	"fog-backup/1":  true,
+	"fog-backup/2":  true,
 	"fog-compute/1": true,
 	WidgetsContract: true,
 	RouterContract:  true,

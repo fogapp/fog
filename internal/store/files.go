@@ -14,7 +14,7 @@ type FileSnapshot struct {
 	ID         int64  `json:"id"`
 	Path       string `json:"path"`
 	CreatedAt  string `json:"createdAt"`
-	Mode       string `json:"mode" ts:"\"links\" | \"mirror\""` // links | mirror
+	Mode       string `json:"mode" ts:"\"links\" | \"mirror\" | \"store\""` // links | mirror | store
 	Files      int64  `json:"files"`
 	Bytes      int64  `json:"bytes"`
 	NewBytes   int64  `json:"newBytes"`
@@ -23,13 +23,16 @@ type FileSnapshot struct {
 	// Offsite is filled by the files manager from the copy rows: "" (no
 	// target), stored, uploading, pending.
 	Offsite string `json:"offsite,omitempty" ts:"\"\" | \"verified\" | \"stored\" | \"uploading\" | \"pending\""`
+	// StoreSnapshot is the incremental store's snapshot holding it (mode
+	// "store", and older snapshots once imported).
+	StoreSnapshot string `json:"storeSnapshot,omitempty"`
 }
 
-const fileSnapshotCols = `id, path, created_at, mode, files, bytes, new_bytes, warnings, verified_at`
+const fileSnapshotCols = `id, path, created_at, mode, files, bytes, new_bytes, warnings, verified_at, store_snapshot`
 
 func scanFileSnapshot(sc scanner) (FileSnapshot, error) {
 	var s FileSnapshot
-	err := sc.Scan(&s.ID, &s.Path, &s.CreatedAt, &s.Mode, &s.Files, &s.Bytes, &s.NewBytes, &s.Warnings, &s.VerifiedAt)
+	err := sc.Scan(&s.ID, &s.Path, &s.CreatedAt, &s.Mode, &s.Files, &s.Bytes, &s.NewBytes, &s.Warnings, &s.VerifiedAt, &s.StoreSnapshot)
 	return s, err
 }
 
@@ -40,6 +43,33 @@ func (s *Store) CreateFileSnapshot(path, mode string, files, bytes, newBytes int
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// CreateStoreFileSnapshot records a Drive snapshot the incremental store
+// holds, taken at createdAt ("" for now).
+func (s *Store) CreateStoreFileSnapshot(path, storeSnapshot, createdAt string, files, bytes, newBytes int64, warnings int) (int64, error) {
+	if createdAt == "" {
+		createdAt = now()
+	}
+	res, err := s.db.Exec(`INSERT INTO file_snapshots (path, created_at, mode, files, bytes, new_bytes, warnings, store_snapshot)
+		VALUES (?, ?, 'store', ?, ?, ?, ?, ?)`, path, createdAt, files, bytes, newBytes, warnings, storeSnapshot)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// SetFileSnapshotStore records that an older snapshot now lives in the
+// store: its mode becomes "store".
+func (s *Store) SetFileSnapshotStore(id int64, storeSnapshot string) error {
+	_, err := s.db.Exec(`UPDATE file_snapshots SET store_snapshot = ?, mode = 'store' WHERE id = ?`, storeSnapshot, id)
+	return err
+}
+
+// RepointFileSnapshotStore moves rows naming store snapshot from to to.
+func (s *Store) RepointFileSnapshotStore(from, to string) error {
+	_, err := s.db.Exec(`UPDATE file_snapshots SET store_snapshot = ? WHERE store_snapshot = ?`, to, from)
+	return err
 }
 
 // ListFileSnapshots returns every snapshot, newest first.

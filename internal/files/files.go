@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gitea.lan/matthew/fog/internal/chunkstore"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -119,6 +120,12 @@ type Manager struct {
 	// reason other than the operator's exclusion (a replica not chosen for
 	// backup). Optional.
 	BackupSkip func(rel string) bool
+	// ChunkStore is the incremental backup store Drive's snapshots are
+	// written to (storesnap.go). Without one (tests), snapshots are the
+	// hardlink trees the store replaced.
+	ChunkStore func() (*chunkstore.Store, error)
+	// entries caches the store snapshot last browsed.
+	entries entryCache
 	// InstallTools lets Loop put host tools the page wants (ffmpeg, for
 	// video thumbnails) on the box with apt-get when they are missing.
 	// Off in tests and on dev machines.

@@ -279,6 +279,19 @@ func (r *Reader) document(ctx context.Context, key string, v any, limit int64) e
 	return nil
 }
 
+// bytes is a small sealed object's plaintext, at most limit bytes.
+func (r *Reader) bytes(ctx context.Context, key string, limit int64) ([]byte, error) {
+	sealed, _, err := r.Client.GetBytes(ctx, key, limit)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := r.Keys.OpenBytes(r.Layout.Name(key), sealed, limit)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", key, err)
+	}
+	return plain, nil
+}
+
 // Open streams a sealed object's plaintext. The caller closes it; the
 // final read reports ErrTruncated or ErrBadKey if the object is not whole.
 func (r *Reader) Open(ctx context.Context, key string) (io.ReadCloser, error) {

@@ -1,17 +1,17 @@
 {
-  "version": "v0.14.24",
-  "issued_at": 1793726418,
+  "version": "v0.14.27",
+  "issued_at": 1793831753,
   "artifacts": {
-    "linux-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fogd-linux-amd64", "sha256": "45e9b0d18f147673b0ff76f96089a382c571f285f78a4bfc020bfb2940de743a" },
-    "linux-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fogd-linux-arm64", "sha256": "c1e10ae63263f93a9f90b44d5a1040f68ad775e81d008361b83f7edd06b08ff0" },
-    "fog-node-darwin-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fog-node-darwin-arm64", "sha256": "e80069684ec89d6117ec513c0df255648dabd67208a6a3b14c60113d1068b836" },
-    "fog-node-darwin-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fog-node-darwin-amd64", "sha256": "8b9b23b85f72e2b106e9aed4e55ac81851891495c3bd1b44154fd10641c9395e" },
-    "fog-node-linux-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fog-node-linux-amd64", "sha256": "7419e046d8619c871913299f9c9ae67cf030ad4073ae09e65de4aac155ad6f12" },
-    "fog-node-linux-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fog-node-linux-arm64", "sha256": "a61ddd489dfa34144bd363581f7a5d4c4f53150b0dc516f2806a30a87a79d891" },
-    "fogd.service": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fogd.service", "sha256": "bf62138027faf95ead3f948690b0da0f2a710fb658efbfb2d44fc27b03db3ed3" },
-    "fogd.socket": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fogd.socket", "sha256": "305ffab9b710944ac680176a614be1a05c31b23db99869cc49beb9e962dfd982" },
-    "fogd-rollback": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/fogd-rollback", "sha256": "0c741671ed90160303f397298de95df79a8bac7b1998c6f73b1a1f118a4719ed" },
-    "install.sh": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/install.sh", "sha256": "5f5d02cc0e19c1d0d089d534dabee3b1135ec96dafe9c3bafa6c023b31b4b57c" },
-    "flash.sh": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.24/flash.sh", "sha256": "bf30c9bc4081a03926d09ee9489b6af8248b01bca3c20baee909ba72baaa1344" }
+    "linux-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fogd-linux-amd64", "sha256": "4d958936c4dabae84464c4f7181c8f8c5fca73ea3e46a444af2e2400f9d7334a" },
+    "linux-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fogd-linux-arm64", "sha256": "23730dee14c1ea7b70b9d56315d0ba882f174d1e92cd1ca6b0d47b0e850b3721" },
+    "fog-node-darwin-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fog-node-darwin-arm64", "sha256": "9069e96a7a53ca551e5af4198a7eb3d7ef8879a20ea211b34226b69827b610f4" },
+    "fog-node-darwin-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fog-node-darwin-amd64", "sha256": "dded77c055095d459ba338ae250466d3311c45be3ce5c3ed17315570268a13dc" },
+    "fog-node-linux-amd64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fog-node-linux-amd64", "sha256": "ee714f1e82fe5646ad7c1e06267570c50b67f758bc11f1412120ce577a8c61d6" },
+    "fog-node-linux-arm64": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fog-node-linux-arm64", "sha256": "54d4b7e8fd60336bae991445ebfffe6d83e83e5c19886bdf77454fd86b721681" },
+    "fogd.service": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fogd.service", "sha256": "bf62138027faf95ead3f948690b0da0f2a710fb658efbfb2d44fc27b03db3ed3" },
+    "fogd.socket": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fogd.socket", "sha256": "305ffab9b710944ac680176a614be1a05c31b23db99869cc49beb9e962dfd982" },
+    "fogd-rollback": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/fogd-rollback", "sha256": "0c741671ed90160303f397298de95df79a8bac7b1998c6f73b1a1f118a4719ed" },
+    "install.sh": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/install.sh", "sha256": "5f5d02cc0e19c1d0d089d534dabee3b1135ec96dafe9c3bafa6c023b31b4b57c" },
+    "flash.sh": { "url": "http://gitea.lan/matthew/fog/releases/download/v0.14.27/flash.sh", "sha256": "bf30c9bc4081a03926d09ee9489b6af8248b01bca3c20baee909ba72baaa1344" }
   }
 }

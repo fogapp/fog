@@ -194,7 +194,7 @@ function textToOverrides(text: string): string {
   return Object.keys(out).length ? JSON.stringify(out) : "";
 }
 
-// Where the household's own apps (Manor, Hub, Newtab…) are cloned from.
+// Where the household's own apps (Fin, Hub, Newtab…) are cloned from.
 // A published one carries its own address; the rest need a base here, and
 // until one is set they stay out of the store.
 function AppSources({ unsourced }: { unsourced: number }) {
@@ -220,7 +220,7 @@ function AppSources({ unsourced }: { unsourced: number }) {
       <Field label="Repository base" value={value("catalog_source_base")}
         onChange={(e) => setValue("catalog_source_base", e.target.value)}
         placeholder="ssh://git@git.example.com/you/"
-        hint="An SSH clone URL ending in /. Each app clones from this plus its name, e.g. …/you/manor.git. Apps already installed keep the address they were installed from." />
+        hint="An SSH clone URL ending in /. Each app clones from this plus its name, e.g. …/you/fin.git. Apps already installed keep the address they were installed from." />
       <TextArea label="Per-app overrides" rows={3} value={text}
         onChange={(e) => {
           setOverrides(e.target.value);

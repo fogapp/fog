@@ -286,6 +286,9 @@ func (m *Manager) verifyAppCopy(ctx context.Context, r *Reader, c *store.Offsite
 	if err := json.Unmarshal([]byte(c.Doc), &row); err != nil {
 		return fmt.Errorf("unreadable row: %w", err)
 	}
+	if row.StoreSnapshot != "" {
+		return m.verifyStoreCopy(ctx, r, &row)
+	}
 	if row.Mode != "delegated" || m.TestRestore == nil {
 		// Nothing to test-restore: reading the object through, every frame
 		// authenticating, and matching its row is the whole check.
@@ -324,12 +327,37 @@ func (m *Manager) verifyAppCopy(ctx context.Context, r *Reader, c *store.Offsite
 	return m.TestRestore(ctx, row.App, filepath.Join(scratch, "artifact.tar"), row.Manifest)
 }
 
+// verifyStoreCopy fetches a store-backed copy's packs and rebuilds the
+// backup from them — every chunk and file checked on the way — and
+// test-restores a delegated artifact's dump.
+func (m *Manager) verifyStoreCopy(ctx context.Context, r *Reader, row *AppRow) error {
+	if err := os.MkdirAll(m.spool(), 0o700); err != nil {
+		return err
+	}
+	scratch, err := os.MkdirTemp(m.spool(), "verify-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	dest := filepath.Join(scratch, "backup")
+	if err := FetchStoreSnapshot(ctx, r, row, scratch, dest, nil); err != nil {
+		return err
+	}
+	if row.Mode != "delegated" || m.TestRestore == nil {
+		return nil
+	}
+	return m.TestRestore(ctx, row.App, filepath.Join(dest, "artifact.tar"), row.Manifest)
+}
+
 // verifyFilesCopy re-hashes a random sample of the newest snapshot's
 // blobs against the manifest.
 func (m *Manager) verifyFilesCopy(ctx context.Context, r *Reader, c *store.OffsiteCopy) error {
 	var snap FilesSnapshot
 	if err := json.Unmarshal([]byte(c.Doc), &snap); err != nil {
 		return fmt.Errorf("unreadable manifest: %w", err)
+	}
+	if snap.StoreSnapshot != "" {
+		return verifyPacks(ctx, r, snap.Store, snap.Packs, 3) // a few packs: each is tens of MB
 	}
 	if len(snap.Files) == 0 {
 		return nil

@@ -158,7 +158,10 @@ func (s *Server) handleImportManifest(w http.ResponseWriter, r *http.Request) {
 	}
 	artifact := ""
 	if req.RestoreFrom != nil {
-		if artifact, err = s.resolveRestoreArtifact(req.RestoreFrom); err != nil {
+		var release func()
+		artifact, release, err = s.resolveRestoreArtifact(req.RestoreFrom)
+		defer release()
+		if err != nil {
 			badRequest(w, err.Error())
 			return
 		}

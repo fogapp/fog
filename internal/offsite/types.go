@@ -35,6 +35,14 @@ type AppRow struct {
 	// SourceBackupID is the row id on the fog that wrote it — a hint for
 	// that same fog, meaningless elsewhere.
 	SourceBackupID int64 `json:"source_backup_id,omitempty"`
+	// A backup held in the incremental store (§6) has no .snapshot object:
+	// Store names the store, StoreSnapshot the snapshot, StoreDoc is its
+	// document as the store wrote it, and Packs the packs that hold every
+	// chunk it uses.
+	Store         string   `json:"store,omitempty"`
+	StoreSnapshot string   `json:"store_snapshot,omitempty"`
+	StoreDoc      []byte   `json:"store_doc,omitempty"`
+	Packs         []string `json:"packs,omitempty"`
 }
 
 // FilesSnapshot is one Files-tree snapshot: the local .fog-snapshot.json
@@ -50,6 +58,12 @@ type FilesSnapshot struct {
 	Count     int64       `json:"count"`
 	// SourceSnapshotID is the file_snapshots row id on the writing fog.
 	SourceSnapshotID int64 `json:"source_snapshot_id,omitempty"`
+	// A Drive snapshot held in the incremental store (§6) lists no files
+	// and no blobs: it is read back from the store's packs, as an app's is.
+	Store         string   `json:"store,omitempty"`
+	StoreSnapshot string   `json:"store_snapshot,omitempty"`
+	StoreDoc      []byte   `json:"store_doc,omitempty"`
+	Packs         []string `json:"packs,omitempty"`
 }
 
 // FileEntry is one file in a Files snapshot.
