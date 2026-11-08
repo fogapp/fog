@@ -153,3 +153,17 @@ Copyright (C) 2026 Matthew Werner
 Fog is free software: you can redistribute it and/or modify it under the
 terms of the GNU Affero General Public License as published by the Free
 Software Foundation, version 3. See [LICENSE](LICENSE) for the full text.
+
+The client libraries under `clients/` (`fog-client`, `flare`, `fogfed`,
+`chat-sdk`) are under the MIT License instead, each with its own `LICENSE`,
+so an app of any license can build them in to integrate with Fog. The
+bundled Plus Jakarta Sans font is under the SIL Open Font License
+(`frontend/public/fonts/PlusJakartaSans-OFL.txt`).
+
+The names and logos (Fog, fogapp, Fin, Stream and Glass) are trademarks,
+which the licenses don't cover. You may use them to refer to the software,
+and run or redistribute it unmodified under them; a modified version you
+distribute or offer to others needs its own name. See [TRADEMARKS.md](TRADEMARKS.md).
+
+Issues are welcome; pull requests aren't accepted for now. See
+[CONTRIBUTING.md](CONTRIBUTING.md).

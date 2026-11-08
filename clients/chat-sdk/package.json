@@ -1,6 +1,7 @@
 {
   "name": "@fog/chat-sdk",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@noble/curves": "^2.0.1",

@@ -11,9 +11,9 @@ Gem::Specification.new do |s|
                   "introductions. Inert without the env vars — apps must run identically " \
                   "outside Fog (docs/federation-contract.md)."
   s.authors     = ["Matthew Werner"]
-  s.homepage    = "https://gitea.lan/matthew/fog"
-  s.license     = "Nonstandard"
-  s.files       = Dir["lib/**/*.rb", "rbi/*.rbi", "README.md"]
+  s.homepage    = "https://github.com/fogapp/fog"
+  s.license     = "MIT"
+  s.files       = Dir["lib/**/*.rb", "rbi/*.rbi", "README.md", "LICENSE"]
   s.required_ruby_version = ">= 3.2"
   # No runtime dependencies, ever — this gem rides inside every app and must
   # not be able to conflict with anything they use. Development-only deps are

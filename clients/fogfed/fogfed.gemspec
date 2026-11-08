@@ -12,9 +12,9 @@ Gem::Specification.new do |s|
                   "Go internal/fed; clients/fogfed/conformance holds the vectors that " \
                   "prove the two agree byte for byte."
   s.authors     = ["Matthew Werner"]
-  s.homepage    = "https://gitea.lan/matthew/fog"
-  s.license     = "Nonstandard"
-  s.files       = Dir["lib/**/*.rb", "conformance/*.json", "README.md"]
+  s.homepage    = "https://github.com/fogapp/fog"
+  s.license     = "MIT"
+  s.files       = Dir["lib/**/*.rb", "conformance/*.json", "README.md", "LICENSE"]
   s.required_ruby_version = ">= 3.2"
   # No runtime dependencies, ever — this gem rides vendored inside every app
   # and must not be able to conflict with anything they use.
