@@ -15,7 +15,7 @@ import (
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/livetest"
 	"gitea.lan/matthew/fog/internal/randx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attacks, against real Docker and a real fog-wire:
@@ -67,7 +67,7 @@ func TestLiveWires(t *testing.T) {
 	sfx := strings.ToLower(randx.Hex(3))
 	gated, consumer, attacker, foo := "gated"+sfx, "consumer"+sfx, "attacker"+sfx, "foo"+sfx
 	fooBar := foo + "-bar"
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

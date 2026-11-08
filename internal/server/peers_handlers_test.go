@@ -15,6 +15,7 @@ import (
 	"gitea.lan/matthew/fog/internal/config"
 	"gitea.lan/matthew/fog/internal/flare"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -29,7 +30,7 @@ func withBearer(token string) func(*http.Request) {
 func newFlareServer(t *testing.T) (*Server, http.Handler, *flare.Forwarder) {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,6 +81,8 @@ func pairFlareInstances(t *testing.T, upstreamHandler http.Handler, upCookie *ht
 // private request data and forwards it — redacted — over the signed
 // channel. Both roles run the real handler stack over real HTTP.
 func TestFogToFogForwarding(t *testing.T) {
+	t.Parallel()
+
 	upstream, upstreamHandler, _ := newFlareServer(t)
 	upCookie := setup(t, upstreamHandler)
 	upstreamHTTP := httptest.NewServer(upstreamHandler)
@@ -173,6 +176,8 @@ func postSignedEnvelope(t *testing.T, targetURL string, target, sender *Server, 
 // the fleet inbox, reachable and actionable through the global endpoints,
 // and gone — with token access — the moment the peer is unpaired.
 func TestFedPeerErrorLifecycle(t *testing.T) {
+	t.Parallel()
+
 	upstream, upstreamHandler, _ := newFlareServer(t)
 	upCookie := setup(t, upstreamHandler)
 	upstreamHTTP := httptest.NewServer(upstreamHandler)
@@ -261,6 +266,8 @@ func TestFedPeerErrorLifecycle(t *testing.T) {
 // The signed flare endpoint refuses peers without a grant — capability
 // enforcement lives on the resource owner, whatever the sender claims.
 func TestFedFlareRequiresGrant(t *testing.T) {
+	t.Parallel()
+
 	upstream, upstreamHandler, _ := newFlareServer(t)
 	upCookie := setup(t, upstreamHandler)
 	upstreamHTTP := httptest.NewServer(upstreamHandler)

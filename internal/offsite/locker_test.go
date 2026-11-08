@@ -22,6 +22,8 @@ import (
 )
 
 func TestLockerOpensWithEitherWrap(t *testing.T) {
+	t.Parallel()
+
 	vault := fakeVault{3}
 	l, kr, err := CreateLocker("house", "correct horse battery staple", vault)
 	if err != nil {
@@ -73,6 +75,8 @@ func TestLockerOpensWithEitherWrap(t *testing.T) {
 }
 
 func TestRewrapChangesPassphraseNotData(t *testing.T) {
+	t.Parallel()
+
 	l, kr, err := CreateLocker("house", "old passphrase 12", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -104,6 +108,8 @@ func TestRewrapChangesPassphraseNotData(t *testing.T) {
 }
 
 func TestRotateKeepsHistoryAndBlobIDs(t *testing.T) {
+	t.Parallel()
+
 	l, kr, err := CreateLocker("house", "passphrase 12345", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -147,6 +153,8 @@ func TestRotateKeepsHistoryAndBlobIDs(t *testing.T) {
 // an OOM or an unbounded hang, not a wrong answer. Opening must refuse it at
 // once rather than attempt it.
 func TestLockerRefusesAbsurdKDFParameters(t *testing.T) {
+	t.Parallel()
+
 	l, _, err := CreateLocker("house", "correct horse battery staple", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -178,6 +186,8 @@ func TestLockerRefusesAbsurdKDFParameters(t *testing.T) {
 // wrap from another locker (opened by the same vault or passphrase) into this
 // one under a matching key id and have it accepted.
 func TestKeyWrapsBoundToLocker(t *testing.T) {
+	t.Parallel()
+
 	vault := fakeVault{7}
 	const pass = "correct horse battery staple"
 	la, _, err := CreateLocker("a", pass, vault)
@@ -220,6 +230,8 @@ func TestKeyWrapsBoundToLocker(t *testing.T) {
 }
 
 func TestParseLockerRefusesOtherFormats(t *testing.T) {
+	t.Parallel()
+
 	if _, err := ParseLocker([]byte(`{"format":"fog-locker/2","id":"x","keys":[{}]}`)); err == nil {
 		t.Fatal("future format accepted")
 	}
@@ -229,6 +241,8 @@ func TestParseLockerRefusesOtherFormats(t *testing.T) {
 }
 
 func TestLayoutNames(t *testing.T) {
+	t.Parallel()
+
 	l := Layout{Prefix: "/backups/", ID: "0123456789abcdef0123456789abcdef"}
 	if l.Root() != "backups/fog-locker/1/0123456789abcdef0123456789abcdef/" {
 		t.Fatal(l.Root())
@@ -265,6 +279,8 @@ func TestLayoutNames(t *testing.T) {
 // The offsite name used to drop the suffix (falling back to the creation
 // time), so both mapped to one key and the second overwrote the first.
 func TestSameSecondSnapshotsKeepDistinctOffsiteKeys(t *testing.T) {
+	t.Parallel()
+
 	created := "2026-08-27T01:03:14Z"
 	a := stampOf("/backups/files/20260827-010314", created, 1)
 	b := stampOf("/backups/files/20260827-010314-2", created, 2)
@@ -312,6 +328,8 @@ func legacyLocker(t *testing.T, l *Locker, kr *Keyring, pass string, master vaul
 // afterwards a spliced old-format wrap is refused even with the marker
 // stripped from the file.
 func TestLegacyLockerUpgradedOnSyncThenSpliceRefused(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	ctx := context.Background()
@@ -396,6 +414,8 @@ func TestLegacyLockerUpgradedOnSyncThenSpliceRefused(t *testing.T) {
 // on the vault door — and fresh-machine recovery then failed. Every verify
 // now opens with the stored passphrase too, and alerts on any failure.
 func TestVerifyCatchesStrippedPassphraseWraps(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name   string
 		tamper func(l *Locker)
@@ -459,6 +479,8 @@ func TestVerifyCatchesStrippedPassphraseWraps(t *testing.T) {
 // opens the newest real kit. And verify notices a newest kit fog never
 // uploaded.
 func TestDecoyKitSkippedAndFlagged(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	ctx := context.Background()

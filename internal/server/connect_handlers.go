@@ -23,7 +23,7 @@ import (
 	"gitea.lan/matthew/fog/internal/appcall"
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/fed"
-	"gitea.lan/matthew/fog/internal/lucid"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/randx"
 	"gitea.lan/matthew/fog/internal/store"
 )
@@ -218,10 +218,10 @@ type connectAttrs struct {
 }
 
 // connectOutcome records one side of one connect wherever an operator might
-// look for it: the audit log, the request's Lucid trace, and a log line that
-// ships to Lucid on the same trace. reason is empty for a success; a refusal
+// look for it: the audit log, the request's Glass trace, and a log line that
+// ships to Glass on the same trace. reason is empty for a success; a refusal
 // is logged at warn and marks the trace errored, so a failed connect shows
-// up in Lucid's errors rather than only in this fogd's audit log.
+// up in Glass's errors rather than only in this fogd's audit log.
 func (s *Server) connectOutcome(ctx context.Context, actor, action, peer string, a connectAttrs, reason string) {
 	detail := map[string]any{"app": a.app, "from": a.from, "ok": reason == ""}
 	args := []any{"peer", peer, "app", a.app, "from", a.from}
@@ -235,7 +235,7 @@ func (s *Server) connectOutcome(ctx context.Context, actor, action, peer string,
 	}
 	s.auditAs(actor, action, peer, detail)
 
-	txn := lucid.FromContext(ctx)
+	txn := glass.FromContext(ctx)
 	txn.Attr("connect.action", action)
 	txn.Attr("connect.peer", peer)
 	txn.Attr("connect.app", a.app)

@@ -1,0 +1,208 @@
+id: sabnzbd
+title: SABnzbd
+description: Usenet downloader.
+category: Downloads
+icon: '📦'
+spec:
+  source:
+    type: image
+    image: lscr.io/linuxserver/sabnzbd:latest
+  env:
+    FOG_FQDN: '{{fqdn}}'
+    PGID: "1000"
+    PUID: "1000"
+    TZ: Etc/UTC
+  secrets:
+    - SABNZBD_API_KEY
+  volumes:
+    - name: config
+      mount: /config
+      owner: 1000:1000
+    - name: media
+      mount: /data
+      files: Content/Downloads
+  files:
+    - name: host-whitelist-init
+      mount: /custom-cont-init.d/10-fog-host-whitelist
+      content: |
+        #!/usr/bin/with-contenv bash
+        # Fog: SABnzbd refuses any request whose Host header it does not recognise —
+        # its DNS-rebind guard. Two names reach it: this app's own hostname behind
+        # Fog's proxy, and its name on the fog network ("sabnzbd"), which is how the
+        # apps that use it call its API. SABnzbd has no way to learn either, so fold
+        # both into host_whitelist before it starts; entries already there (the
+        # container's hostname, anything the operator added) are kept.
+        ini=/config/sabnzbd.ini
+        hosts=$(printf '%s,%s' "${FOG_FQDN:-}" "${FOG_NETWORK_NAME:-sabnzbd}" | tr '[:upper:]' '[:lower:]')
+
+        if [[ ! -f $ini ]]; then
+            # First start: SABnzbd fills in every other default around this one.
+            printf '[misc]\nhost_whitelist = %s\n' "$(printf '%s' "$hosts" | sed 's/^,//; s/,/, /g')" > "$ini"
+            lsiown abc:abc "$ini"
+            exit 0
+        fi
+
+        tmp=$(mktemp)
+        awk -v hosts="$hosts" '
+        {
+            line[NR] = $0
+            if ($0 ~ /^host_whitelist[ \t]*=/) wl = NR
+            else if ($0 ~ /^\[misc\][ \t]*$/) misc = NR
+        }
+        END {
+            if (wl) { cur = line[wl]; sub(/^host_whitelist[ \t]*=[ \t]*/, "", cur) }
+            n = split(cur "," hosts, part, ",")
+            for (i = 1; i <= n; i++) {
+                gsub(/^[ \t]+|[ \t]+$/, "", part[i])
+                if (part[i] != "" && !seen[part[i]]++) list = list (list == "" ? "" : ", ") part[i]
+            }
+            entry = "host_whitelist = " list
+            last = NR
+            if (wl) line[wl] = entry
+            else if (misc) line[misc] = line[misc] "\n" entry
+            else { last = NR + 1; line[last] = "[misc]\n" entry }
+            for (i = 1; i <= last; i++) print line[i]
+        }' "$ini" > "$tmp"
+
+        # Rewrite only on a real change, and in place, so the file keeps the
+        # ownership SABnzbd needs to save its own config over it later.
+        if [[ -s $tmp ]] && ! cmp -s "$tmp" "$ini"; then
+            cat "$tmp" > "$ini"
+        fi
+        rm -f "$tmp"
+      exec: true
+    - name: api-key-init
+      mount: /custom-cont-init.d/11-fog-api-key
+      content: |
+        #!/usr/bin/with-contenv bash
+        # Fog: SABnzbd's API key is SABNZBD_API_KEY from Fog's vault, the one Fog
+        # hands to apps it connects to SABnzbd. Unset, SABnzbd keeps its own.
+        ini=/config/sabnzbd.ini
+        key=${SABNZBD_API_KEY:-}
+        [[ -n $key ]] || exit 0
+
+        if [[ ! -f $ini ]]; then
+            printf '[misc]\napi_key = %s\n' "$key" > "$ini"
+            lsiown abc:abc "$ini"
+            exit 0
+        fi
+
+        tmp=$(mktemp)
+        awk -v key="$key" '
+        {
+            line[NR] = $0
+            if ($0 ~ /^api_key[ \t]*=/ && !ak) ak = NR
+            else if ($0 ~ /^\[misc\][ \t]*$/) misc = NR
+        }
+        END {
+            entry = "api_key = " key
+            last = NR
+            if (ak) line[ak] = entry
+            else if (misc) line[misc] = line[misc] "\n" entry
+            else { last = NR + 1; line[last] = "[misc]\n" entry }
+            for (i = 1; i <= last; i++) print line[i]
+        }' "$ini" > "$tmp"
+
+        if [[ -s $tmp ]] && ! cmp -s "$tmp" "$ini"; then
+            cat "$tmp" > "$ini"
+        fi
+        rm -f "$tmp"
+      exec: true
+    - name: folders-init
+      mount: /custom-cont-init.d/12-fog-folders
+      content: |
+        #!/usr/bin/with-contenv bash
+        # Fog: downloads must land in /data, the folder Fog shares with the apps
+        # that use SABnzbd (Hook reads finished files there). Point download_dir
+        # and complete_dir into it unless they already are.
+        ini=/config/sabnzbd.ini
+        shared=/data
+        if [[ ! -f $ini ]]; then
+            printf '[misc]\n' > "$ini"
+            lsiown abc:abc "$ini"
+        fi
+
+        tmp=$(mktemp)
+        awk -v shared="$shared" '
+        function inside(v) { return v == shared || index(v, shared "/") == 1 }
+        function value(l) { sub(/^[^=]*=[ \t]*/, "", l); return l }
+        {
+            line[NR] = $0
+            if ($0 ~ /^download_dir[ \t]*=/) dd = NR
+            else if ($0 ~ /^complete_dir[ \t]*=/) cd = NR
+            else if ($0 ~ /^\[misc\][ \t]*$/ && !misc) misc = NR
+        }
+        END {
+            last = NR
+            if (!misc) { last = NR + 1; line[last] = "[misc]"; misc = last }
+            add = ""
+            if (!dd) add = add "\ndownload_dir = " shared "/incomplete"
+            else if (!inside(value(line[dd]))) line[dd] = "download_dir = " shared "/incomplete"
+            if (!cd) add = add "\ncomplete_dir = " shared "/complete"
+            else if (!inside(value(line[cd]))) line[cd] = "complete_dir = " shared "/complete"
+            line[misc] = line[misc] add
+            for (i = 1; i <= last; i++) print line[i]
+        }' "$ini" > "$tmp"
+
+        if [[ -s $tmp ]] && ! cmp -s "$tmp" "$ini"; then
+            cat "$tmp" > "$ini"
+        fi
+        rm -f "$tmp"
+
+        for key in download_dir complete_dir; do
+            dir=$(sed -n "s/^$key[[:space:]]*=[[:space:]]*//p" "$ini" | head -n1)
+            if [[ $dir == "$shared" || $dir == "$shared"/* ]]; then
+                mkdir -p "$dir" && lsiown abc:abc "$dir"
+            fi
+        done
+        exit 0
+      exec: true
+  routes:
+    - port: 8080
+  backup:
+    enabled: true
+  connection:
+    port: 8080
+    secret: SABNZBD_API_KEY
+    shares:
+      - media
+options:
+  - key: tz
+    label: Timezone
+    target: env:TZ
+    required: false
+    default: Etc/UTC
+  - key: media
+    label: Media folder
+    hint: Drive's Downloads folder, mounted at /data — the apps that use SABnzbd see it too.
+    target: volume:media
+    required: false
+  - key: SABNZBD_API_KEY
+    label: SABNZBD_API_KEY
+    hint: SABnzbd's API key, held in its config at every start. Apps connected to SABnzbd are handed it.
+    target: secret:SABNZBD_API_KEY
+    required: true
+    generate: hex32
+projectUrl: https://github.com/sabnzbd/sabnzbd
+about: |-
+  SABnzbd is a usenet downloader. Sonarr, Radarr, Lidarr, and Hook send it NZBs; it fetches, verifies, repairs, and unpacks the result into the shared folder, then tells them it is done.
+
+  It has run quietly for two decades, which is exactly what you want from a download client.
+highlights:
+  - Automatic verification, repair, and unpacking
+  - Categories with per-category folders and scripts
+  - Bandwidth scheduling and pause on demand
+  - A responsive interface with a night mode
+  - Fog whitelists its own hostname on install
+logo: logo.svg
+developer: The SABnzbd team
+license: GPL-2.0-or-later
+website: https://sabnzbd.org
+docs: https://sabnzbd.org/wiki/
+footprint:
+  memory: 157286400
+  memoryPeak: 838860800
+  cpu: heavy
+  cpuWhen: unpacking and repairing downloads
+  disk: 314572800
+  diskGrows: with what it downloads

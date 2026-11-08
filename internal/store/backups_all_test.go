@@ -3,6 +3,8 @@ package store
 import "testing"
 
 func TestListAllBackupRefsGroupsByAppNewestFirst(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreateApp("a")
 	b, _ := s.CreateApp("b")
@@ -42,6 +44,8 @@ func TestListAllBackupRefsGroupsByAppNewestFirst(t *testing.T) {
 }
 
 func TestLatestBackupsIsEachAppsNewest(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreateApp("a")
 	b, _ := s.CreateApp("b")
@@ -76,6 +80,8 @@ func TestLatestBackupsIsEachAppsNewest(t *testing.T) {
 }
 
 func TestLatestBackupsOfFormatLooksWithinEachAppsNewest(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreateApp("a")
 	b, _ := s.CreateApp("b")

@@ -20,9 +20,10 @@ type diagRule struct {
 
 var diagRules = []diagRule{
 	// Must precede the generic auth rule: http(s) URLs fail differently.
-	{regexp.MustCompile(`(?i)authentication failed for 'http|could not read Username for 'http`), Diagnosis{
-		Title: "This is an HTTP clone URL, which needs a password",
-		Fix:   "Deploy keys work over SSH only. Use the SSH form of the URL (for this Gitea: ssh://gitea@gitea.lan/<owner>/<repo>.git), not the http:// one from the clone box.",
+	{regexp.MustCompile(`(?i)authentication failed for 'http|could not read Username for 'http|terminal prompts disabled`), Diagnosis{
+		Title: "The repository asked for a password",
+		Fix: "Fog clones over https:// only from public repositories. This one is private (or the URL is wrong): use its SSH clone URL " +
+			"(e.g. ssh://gitea@gitea.lan/<owner>/<repo>.git) and add the deploy key shown in Config → Source to the repository.",
 	}},
 	{regexp.MustCompile(`(?i)permission denied \(publickey|access denied|authentication failed`), Diagnosis{
 		Title: "The git server rejected the connection",
@@ -39,7 +40,8 @@ var diagRules = []diagRule{
 	}},
 	{regexp.MustCompile(`(?i)repository not found|does not appear to be a git repository|fatal: .*not found`), Diagnosis{
 		Title: "No repository at that URL",
-		Fix:   "Check the repository URL path (owner/name), and that the deploy key has access to it.",
+		Fix: "Check the repository URL path (owner/name). Over SSH, check that the deploy key has access to it; " +
+			"over https://, the repository must be public — hosts answer \"not found\" for a private one.",
 	}},
 	{regexp.MustCompile(`(?i)branch .* not found on the remote`), Diagnosis{
 		Title: "The branch doesn't exist",

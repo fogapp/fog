@@ -13,6 +13,8 @@ import (
 // past the upload sweep; a slow one still receiving chunks is kept even
 // though it started long ago.
 func TestBeginContributionPrunesAbandonedSessions(t *testing.T) {
+	t.Parallel()
+
 	s, peer, _ := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	sh.Mode = ModeContribute
@@ -57,6 +59,8 @@ func TestBeginContributionPrunesAbandonedSessions(t *testing.T) {
 // over to a new share that reuses a deleted one's id; and the contribute
 // quota holds at landing, however long a session was kept alive.
 func TestContributionSessionFollowsTheShare(t *testing.T) {
+	t.Parallel()
+
 	s, peer, _ := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	sh.Mode = ModeContribute

@@ -15,6 +15,8 @@ import (
 // data over. Confirming its review without saying so is refused, naming
 // what it would take; with the operator's yes it goes ahead.
 func TestImportReviewConfirmNeedsConsentForLeftovers(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	s.engine = &apps.Engine{Store: s.store, Vault: s.vault, Mat: &apps.Materializer{DataDir: s.cfg.DataDir}}
 	admin := setup(t, h)

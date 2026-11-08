@@ -10,6 +10,8 @@ import (
 // aim fog's POST at something else there (ntfy acts on ?email= and ?call=),
 // so both are refused when saved, not only when sent.
 func TestNtfyTopicsMustBeOneSegment(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 	for _, topic := range []string{"me?email=victim@example.com", "a%2Fb", "..", "me#x", "dots.are.not.ntfy"} {

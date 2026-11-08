@@ -72,6 +72,13 @@ func (s *Store) IntegrationsWithProvider(provider string) ([]Integration, error)
 		`SELECT `+integrationCols+` FROM app_integrations WHERE provider = ? ORDER BY id`, provider))
 }
 
+// ConnectedIntegrations answers every app's finished connections, oldest
+// first: what the issues sweep holds a sealed app's wiring against.
+func (s *Store) ConnectedIntegrations() ([]Integration, error) {
+	return orEmpty(queryAll(s.db, scanIntegration,
+		`SELECT `+integrationCols+` FROM app_integrations WHERE state = ? ORDER BY id`, IntegrationConnected))
+}
+
 // DeleteIntegration forgets a connection.
 func (s *Store) DeleteIntegration(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM app_integrations WHERE id = ?`, id)

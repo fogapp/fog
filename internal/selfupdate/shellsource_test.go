@@ -87,6 +87,8 @@ func installCandidates(t *testing.T, source, branch string) (string, error) {
 
 // The two resolvers' tables, line for line, over every shape.
 func TestInstallShAndResolverAgreeOnEveryShape(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	for _, tc := range sourceShapes {
 		t.Run(tc.name, func(t *testing.T) {
@@ -129,6 +131,8 @@ func TestInstallShAndResolverAgreeOnEveryShape(t *testing.T) {
 // ReleaseKeys (raw), and install.sh and flash.sh (as SPKI, which openssl
 // reads). Every copy must name the same keys.
 func TestShellScriptsPinTheReleaseKeys(t *testing.T) {
+	t.Parallel()
+
 	var want []string
 	keys, err := pinnedKeys()
 	if err != nil {
@@ -307,6 +311,8 @@ func TestInstallShAndUpdaterResolveTheSameRelease(t *testing.T) {
 // by install.sh just as by the updater, and FOG_MANIFEST_URL doesn't get
 // around it.
 func TestInstallShRefusesAForgedManifest(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	needOpenSSL(t, s)
 	h := newHostServer(t)
@@ -322,6 +328,8 @@ func TestInstallShRefusesAForgedManifest(t *testing.T) {
 }
 
 func TestInstallShExplicitOverrides(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	needOpenSSL(t, s)
 	h := newHostServer(t)
@@ -347,6 +355,8 @@ func TestInstallShExplicitOverrides(t *testing.T) {
 // be reached (no network here: the proxy refuses everything), the failure
 // says which default it tried and what to set to install from elsewhere.
 func TestInstallShDefaultSourceFailureSaysWhatToSet(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	needOpenSSL(t, s)
 	h := newHostServer(t) // refuses everything, like a network without GitHub
@@ -465,6 +475,8 @@ func (f *installFixture) read(t *testing.T, rel string) string {
 }
 
 func TestInstallShInstallsAVerifiedRelease(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n# fogd v1.0.0\n")
 	out, err := f.run(t, "FOG_SOURCE=http://files.test/fog/", "FOG_BRANCH=main")
@@ -491,6 +503,8 @@ func TestInstallShInstallsAVerifiedRelease(t *testing.T) {
 // A % in the source is a systemd specifier; it reaches the unit doubled, so
 // systemd hands fogd the URL as given.
 func TestInstallShEscapesTheSourceForSystemd(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n")
 	// The proxy sees the decoded path.
@@ -510,6 +524,8 @@ func TestInstallShEscapesTheSourceForSystemd(t *testing.T) {
 // Any file not matching the signed manifest stops the install before a
 // single file on the system changes.
 func TestInstallShRefusesATamperedFileAndChangesNothing(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	for _, file := range []string{"fogd-bin", "fogd.service", "fogd-rollback"} {
 		t.Run(file, func(t *testing.T) {
@@ -533,6 +549,8 @@ func TestInstallShRefusesATamperedFileAndChangesNothing(t *testing.T) {
 
 // A new fogd that can't start is replaced by the previous one, loudly.
 func TestInstallShPutsThePreviousFogdBackWhenTheNewOneWontStart(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n# good v1.0.0\n")
 	if out, err := f.run(t); err != nil {
@@ -553,6 +571,8 @@ func TestInstallShPutsThePreviousFogdBackWhenTheNewOneWontStart(t *testing.T) {
 // (its stamp), never asked over HTTP: anyone on the machine can answer on a
 // port, here claiming the installed fogd is ancient.
 func TestInstallShRefusesADowngrade(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	liar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"version":"v0.0.1"}`)
@@ -581,6 +601,8 @@ func TestInstallShRefusesADowngrade(t *testing.T) {
 // The keys the tests sign with are never the pinned ones — a test passing
 // because it accidentally used the real key would prove nothing.
 func TestTestSignerIsNotTheReleaseKey(t *testing.T) {
+	t.Parallel()
+
 	keys, _ := pinnedKeys()
 	s := newSigner(t)
 	for _, k := range keys {
@@ -594,6 +616,8 @@ func TestTestSignerIsNotTheReleaseKey(t *testing.T) {
 // host: install.sh, like the updater's downloadArtifact, takes each file from
 // beside the manifest instead — and the sha256 still decides.
 func TestInstallShFallsBackToFilesBesideAMirroredManifest(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n# mirrored\n")
 	body, _ := f.h.get("files.test/fog/latest.json")
@@ -619,6 +643,8 @@ func TestInstallShFallsBackToFilesBesideAMirroredManifest(t *testing.T) {
 // lives at that name): install.sh passes over it to the next location, as
 // the updater does, instead of stopping at the first 200.
 func TestInstallShSkipsALocationWithTheWrongBytes(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n# the real one\n")
 	body, _ := f.h.get("files.test/fog/latest.json")
@@ -650,6 +676,8 @@ func TestInstallShSkipsALocationWithTheWrongBytes(t *testing.T) {
 // version.go does: every pair from semver's own precedence chain (plus
 // rc.9 < rc.10), and the same refusals.
 func TestShellSemverMatchesGo(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	chain := []string{
 		"v0.9.9", "v1.0.0-0", "v1.0.0-1", "v1.0.0-2", "v1.0.0-10", "v1.0.0-alpha", "v1.0.0-alpha.1",
@@ -705,6 +733,8 @@ eval "$(sed -n '/^semver_cmp() {/,/^}/p' ../../install.sh)"
 // FOG_LISTEN drop-in) must keep that port: the socket, which now holds
 // fog's port, gets the same one in a drop-in — unless it already has one.
 func TestInstallShKeepsACustomPort(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n")
 	dropin := filepath.Join(f.root, "etc/systemd/system/fogd.socket.d/10-listen.conf")
@@ -743,6 +773,8 @@ func TestInstallShKeepsACustomPort(t *testing.T) {
 // whose version can't be read (no stamp, or not a release) can't be told
 // from a downgrade.
 func TestInstallShDowngradeUsesSemver(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	for _, tc := range []struct{ installed, offered string }{
 		{"fogd-version=v1.0.0", "v1.0.0-rc.9"}, // a pre-release of the installed version is older
@@ -767,6 +799,8 @@ func TestInstallShDowngradeUsesSemver(t *testing.T) {
 // A port set through EnvironmentFile= (which overrides Environment=, as
 // systemd reads them) is carried to the socket too.
 func TestInstallShKeepsAPortFromAnEnvironmentFile(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n")
 	env := filepath.Join(t.TempDir(), "fog.env")

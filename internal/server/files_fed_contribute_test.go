@@ -21,6 +21,8 @@ import (
 // withdraws on delete, is renamed on a name collision, and can be turned
 // away by the origin's operator.
 func TestFilesFederationContribute(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	rootA, rootB := p.a.files.Root(), p.b.files.Root()
 	os.MkdirAll(filepath.Join(rootA, "Album"), 0o755)
@@ -200,6 +202,8 @@ func threeFogs(t *testing.T) *fogTrio {
 // When the author unpairs from the origin, the entry becomes a stub for
 // everyone.
 func TestFilesFederationStubs(t *testing.T) {
+	t.Parallel()
+
 	tr := threeFogs(t)
 	rootA := tr.a.files.Root()
 	os.MkdirAll(filepath.Join(rootA, "Album"), 0o755)
@@ -309,6 +313,8 @@ func TestFilesFederationStubs(t *testing.T) {
 // that would push a contribute share past its byte quota, so a peer granted
 // contribute cannot fill the origin's disk.
 func TestFilesFederationContributeQuota(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	os.MkdirAll(filepath.Join(p.a.files.Root(), "Album"), 0o755)
 	w := do(t, p.aH, "POST", "/api/files/peer-shares",
@@ -335,6 +341,8 @@ func TestFilesFederationContributeQuota(t *testing.T) {
 // committed bytes — yet a resume of the same file supersedes its own
 // reservation instead of double-charging it (code-review fixes).
 func TestFilesFederationContributeQuotaInFlight(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	os.MkdirAll(filepath.Join(p.a.files.Root(), "Album"), 0o755)
 	w := do(t, p.aH, "POST", "/api/files/peer-shares",

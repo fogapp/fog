@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/apps"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack: an assistant with a manage token rolls an app back to the
@@ -17,7 +17,7 @@ import (
 // assistant may roll back only to a revision that binds, publishes and
 // reaches what the latest does; the rest is the operator's, from History.
 func TestAssistantCannotRollBackToMoreAccess(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

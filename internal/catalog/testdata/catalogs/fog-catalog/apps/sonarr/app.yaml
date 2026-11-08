@@ -1,0 +1,58 @@
+id: sonarr
+title: Sonarr
+description: TV series management — finds, grabs, and organizes episodes.
+category: Media automation
+icon: '📺'
+spec:
+  source:
+    type: image
+    image: lscr.io/linuxserver/sonarr:latest
+  env:
+    PGID: "1000"
+    PUID: "1000"
+    TZ: Etc/UTC
+  volumes:
+    - name: config
+      mount: /config
+      owner: 1000:1000
+    - name: media
+      mount: /data
+      files: Content
+  routes:
+    - port: 8989
+  health:
+    path: /ping
+  backup:
+    enabled: true
+options:
+  - key: tz
+    label: Timezone
+    target: env:TZ
+    required: false
+    default: Etc/UTC
+  - key: media
+    label: Media folder
+    hint: Mounted at /data — use one shared folder across the stack so hardlinks work.
+    target: volume:media
+    required: false
+projectUrl: https://github.com/Sonarr/Sonarr
+about: |-
+  Sonarr keeps a TV library current. Tell it the series you follow, and it watches your indexers for new episodes, sends the best match to your download client, and renames and files the result where Jellyfin expects it.
+
+  It is the heart of a media stack: Prowlarr feeds it indexers, qBittorrent or SABnzbd does the downloading, and Bazarr adds subtitles afterwards.
+highlights:
+  - Monitors series for new and missing episodes
+  - Quality profiles that upgrade a copy when a better one appears
+  - Automatic renaming and organisation on import
+  - A calendar of what airs when
+  - Usenet and torrent clients alike
+logo: logo.svg
+developer: Sonarr team
+license: GPL-3.0
+website: https://sonarr.tv
+docs: https://wiki.servarr.com/sonarr
+footprint:
+  memory: 262144000
+  memoryPeak: 629145600
+  cpu: light
+  disk: 367001600

@@ -1,0 +1,88 @@
+id: immich
+title: Immich
+description: Photo & video library — phone backup, faces, and smart search.
+category: Personal cloud
+icon: '📸'
+spec:
+  source:
+    type: image
+    image: ghcr.io/immich-app/immich-server:release
+  env:
+    DB_DATABASE_NAME: immich
+    DB_HOSTNAME: database
+    DB_USERNAME: postgres
+    IMMICH_MACHINE_LEARNING_URL: http://machine-learning:3003
+    REDIS_HOSTNAME: redis
+    TZ: Etc/UTC
+  secrets:
+    - DB_PASSWORD
+  volumes:
+    - name: upload
+      mount: /data
+  routes:
+    - port: 2283
+      noBuffer: true
+  health:
+    path: /api/server/ping
+  aux:
+    - name: database
+      image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+      env:
+        POSTGRES_DB: immich
+        POSTGRES_INITDB_ARGS: --data-checksums
+        POSTGRES_PASSWORD: ${DB_PASSWORD}
+        POSTGRES_USER: postgres
+      volumes:
+        - name: pgdata
+          mount: /var/lib/postgresql/data
+      shmSize: 128mb
+    - name: redis
+      image: docker.io/valkey/valkey:9
+    - name: machine-learning
+      image: ghcr.io/immich-app/immich-machine-learning:release
+      volumes:
+        - name: model-cache
+          mount: /cache
+  deployStrategy: restart
+  backup:
+    enabled: true
+  notes: 'Your first visit creates the admin account. Phone apps connect to this app''s URL. The library lives in Drive under Apps → Immich, and snapshots include all of it — if it outgrows nightly backups, move the upload volume out of the app''s own folder (its Drive tab → Move) and back that up separately. To let apps that use Immich (Once, Hub) in: create an API key in Immich (Account Settings → API Keys) and add it as the IMMICH_API_KEY secret in Config → Secrets; an app that declares uses: [immich] picks it up from fog. An app without that (or off fog) takes http://<this app''s name>:2283 and the key in its own settings.'
+  connection:
+    port: 2283
+    secret: IMMICH_API_KEY
+options:
+  - key: tz
+    label: Timezone
+    target: env:TZ
+    required: false
+    default: Etc/UTC
+  - key: DB_PASSWORD
+    label: DB_PASSWORD
+    hint: Immich's private Postgres password.
+    target: secret:DB_PASSWORD
+    required: true
+    generate: alnum32
+projectUrl: https://github.com/immich-app/immich
+about: |-
+  Immich is a photo and video library for a household — the self-hosted answer to Google Photos and iCloud. Phones back up to it automatically, and everything is searchable by person, place, date, or a plain description of what is in the picture.
+
+  It runs with its own database, cache, and a machine-learning service that recognises faces and objects on this machine, so nothing leaves the house to be indexed.
+highlights:
+  - Automatic backup from the iOS and Android apps
+  - Face recognition, smart search, and a map of where photos were taken
+  - Shared albums, partner sharing, and public links
+  - Timeline, memories, and duplicate detection
+  - RAW, HEIC, live photos, and 360° images handled natively
+  - Multi-user with per-user libraries and storage quotas
+logo: logo.svg
+developer: Immich (FUTO)
+license: AGPL-3.0
+website: https://immich.app
+docs: https://immich.app/docs
+footprint:
+  memory: 1572864000
+  memoryPeak: 4194304000
+  cpu: heavy
+  cpuWhen: indexing faces and search
+  disk: 3670016000
+  diskGrows: with your photo and video library

@@ -44,6 +44,8 @@ func indexPaths(t *testing.T, ix *Index) []string {
 // whose name merely shares the prefix, not a differently-cased twin, and
 // LIKE's wildcards in a name are just characters.
 func TestSubtreeMatchesOnlyItsOwnPaths(t *testing.T) {
+	t.Parallel()
+
 	ix := openTestIndex(t,
 		"Photos/a.jpg", "Photos/2024/b.jpg",
 		"photos/keep.jpg", "photos/sub/keep.jpg", "Photos2/keep.jpg", "Photos-old/keep.jpg",
@@ -66,6 +68,8 @@ func TestSubtreeMatchesOnlyItsOwnPaths(t *testing.T) {
 }
 
 func TestMoveSubtreeLeavesLookalikesAlone(t *testing.T) {
+	t.Parallel()
+
 	ix := openTestIndex(t, "a/x", "a/b/y", "ab/z", "A/w", "A/q/w")
 	if err := ix.moveSubtree("a", "c"); err != nil {
 		t.Fatal(err)
@@ -79,6 +83,8 @@ func TestMoveSubtreeLeavesLookalikesAlone(t *testing.T) {
 // The range form is the point: it lets SQLite search the parent index
 // instead of scanning every row.
 func TestSubtreeUsesTheParentIndex(t *testing.T) {
+	t.Parallel()
+
 	ix := openTestIndex(t)
 	w, args := subtree("parent", "a/b")
 	rows, err := ix.db.Query(`EXPLAIN QUERY PLAN SELECT id FROM nodes WHERE `+w, args...)
@@ -102,6 +108,8 @@ func TestSubtreeUsesTheParentIndex(t *testing.T) {
 // A listing hands its folder to each annotator together with the entries:
 // one call, so the queries an annotator makes run once per listing.
 func TestListAnnotatesEntriesAndFolderInOnePass(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/a.txt", "a")
 	write(t, m, "docs/b.txt", "b")

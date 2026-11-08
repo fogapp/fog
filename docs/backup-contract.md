@@ -6,7 +6,7 @@ in its spec) implements this contract; fog drives it. The contract is a fixed
 convention — same paths, same auth, same envelope for every app — so fog
 carries no per-app knowledge beyond the spec flag.
 
-Reference implementation: feed. Adopters: fit, hook, hub, lucid, manor, office,
+Reference implementation: feed. Adopters: fit, hook, hub, glass, manor, office,
 once, stream, newtab (files only, in Go).
 
 > Fog's own **Drive** tree is not an app and does not use this contract:

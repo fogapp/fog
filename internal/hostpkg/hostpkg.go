@@ -120,8 +120,8 @@ func Cmd(ctx context.Context, env map[string]string, name string, args ...string
 				full = append(full, "--setenv="+k+"="+v)
 			}
 			// systemd expands ${VAR} in a unit's command line, as in
-			// ExecStart=: a Drive folder "Apps${X}/Lucid" reached the pin
-			// helper as "Apps/Lucid", another app's data. "$$" is a literal
+			// ExecStart=: a Drive folder "Apps${X}/Glass" reached the pin
+			// helper as "Apps/Glass", another app's data. "$$" is a literal
 			// "$" on every systemd (--expand-environment=no needs 254, and
 			// Debian 12 has 252), so every argument goes over escaped.
 			full = append(full, "--", noExpand(name))

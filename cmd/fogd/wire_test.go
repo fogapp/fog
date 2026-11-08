@@ -7,7 +7,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/config"
 	"gitea.lan/matthew/fog/internal/server"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -16,7 +16,7 @@ import (
 // never hears its mounted folder changed — so each one is checked.
 func TestWireInstallsTheServerHooks(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,13 +11,14 @@ import (
 
 	"gitea.lan/matthew/fog/internal/fed"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // Flush removes an undeliverable row from the outbox outright — with the
 // batch empty no delivery (and so no defer) runs, so the row's absence from
 // the due set proves deletion, not rescheduling.
 func TestFlushDropsOversizedOutboxRow(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := storetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestFlushDropsOversizedOutboxRow(t *testing.T) {
 // Turning forwarding off stops it at once: the very next event is not
 // queued, and a batch read before the switch is not sent after it.
 func TestForwardingStopsTheMomentItIsTurnedOff(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := storetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,8 @@ import (
 // written into fog keeps that base as its setting, read back off the apps'
 // latest revisions; one that installed none is left without it.
 func TestCatalogSourceBaseMigration(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		repos map[string][]string // app -> repo of each revision, oldest first

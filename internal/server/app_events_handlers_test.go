@@ -21,9 +21,11 @@ func withSpec(t *testing.T, s *Server, appID int64, spec apps.AppSpec) {
 }
 
 func TestAppEventsPublishAndRead(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
-	lucidID, lucid := appWithToken(t, s, "lucid")
-	withSpec(t, s, lucidID, apps.AppSpec{})
+	glassID, glass := appWithToken(t, s, "glass")
+	withSpec(t, s, glassID, apps.AppSpec{})
 	hudID, hud := appWithToken(t, s, "hud")
 	withSpec(t, s, hudID, apps.AppSpec{Uses: []string{"events"}})
 
@@ -33,13 +35,13 @@ func TestAppEventsPublishAndRead(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &start)
 
 	w = do(t, h, "POST", "/app/v1/events",
-		`[{"id":"inc-1","source":"forged","type":"lucid.incident.opened","subject":"api p95","data":{"title":"API slow"}},
-		  {"type":"lucid.incident.closed"}]`, withBearer(lucid))
+		`[{"id":"inc-1","source":"forged","type":"glass.incident.opened","subject":"api p95","data":{"title":"API slow"}},
+		  {"type":"glass.incident.closed"}]`, withBearer(glass))
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("publish: %d %s", w.Code, w.Body)
 	}
 	// A single structured event is accepted as well as a batch.
-	if w := do(t, h, "POST", "/app/v1/events", `{"id":"inc-1","type":"lucid.incident.opened"}`, withBearer(lucid)); w.Code != http.StatusAccepted || !strings.Contains(w.Body.String(), `"new":0`) {
+	if w := do(t, h, "POST", "/app/v1/events", `{"id":"inc-1","type":"glass.incident.opened"}`, withBearer(glass)); w.Code != http.StatusAccepted || !strings.Contains(w.Body.String(), `"new":0`) {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}
 
@@ -54,15 +56,15 @@ func TestAppEventsPublishAndRead(t *testing.T) {
 		}
 	}
 	json.Unmarshal(w.Body.Bytes(), &page)
-	if len(page.Events) != 2 || page.Events[0].Source != "lucid" || page.Events[0].Data["title"] != "API slow" {
+	if len(page.Events) != 2 || page.Events[0].Source != "glass" || page.Events[0].Data["title"] != "API slow" {
 		t.Fatalf("page = %s", w.Body)
 	}
 
 	// Without the grant, an app can publish but not read.
-	if w := do(t, h, "GET", "/app/v1/events?after=0", "", withBearer(lucid)); w.Code != http.StatusForbidden {
+	if w := do(t, h, "GET", "/app/v1/events?after=0", "", withBearer(glass)); w.Code != http.StatusForbidden {
 		t.Fatalf("ungranted read: %d", w.Code)
 	}
-	if w := do(t, h, "POST", "/app/v1/events", `{"type":"Bad Type"}`, withBearer(lucid)); w.Code != http.StatusBadRequest {
+	if w := do(t, h, "POST", "/app/v1/events", `{"type":"Bad Type"}`, withBearer(glass)); w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid publish: %d", w.Code)
 	}
 	if w := do(t, h, "GET", "/app/v1/events", ""); w.Code != http.StatusUnauthorized {
@@ -71,6 +73,8 @@ func TestAppEventsPublishAndRead(t *testing.T) {
 }
 
 func TestAppConnections(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	sabID, _ := appWithToken(t, s, "sabnzbd")
 	withSpec(t, s, sabID, apps.AppSpec{Connection: &apps.Connection{Port: 8080, Secret: "SABNZBD_API_KEY"}})
@@ -119,6 +123,8 @@ func TestAppConnections(t *testing.T) {
 // of the folders they share, and names the shared folders the consumer
 // cannot see — the rows a person used to type into Hook.
 func TestAppConnectionPaths(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	sabID, _ := appWithToken(t, s, "sabnzbd")
 	withSpec(t, s, sabID, apps.AppSpec{

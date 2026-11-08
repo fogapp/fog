@@ -6,7 +6,7 @@
 // Basic mode keeps the one thing a household navigates by: the app list.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FolderClosed, House, Inbox, MessageSquare, Search, Settings, type LucideIcon } from "lucide-react";
+import { FolderClosed, House, Inbox, LayoutGrid, MessageSquare, Network, Search, Settings, type LucideIcon } from "lucide-react";
 import { Link, NavLink, useLocation, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useApps } from "../lib/useApps";
@@ -23,16 +23,17 @@ import { AppUpdatesBadge, StaleBackupsBadge } from "./SettingsBadges";
 import { StateDot } from "./StateBadge";
 import { federationQuery, systemQuery } from "../queries";
 
-// A nav row: 14px at the control height, an icon (or an app's state dot)
-// before the name. The active row is the beacon: its tint behind, its
+// A nav row: 14px at the control height, an icon before the name. The active row is the beacon: its tint behind, its
 // colour on the words.
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors ${
     isActive ? "bg-accent/10 font-medium text-accent" : "text-ink-muted hover:bg-hover hover:text-ink"
   }`;
 
-// A row under a row — Drive's pins, the Settings areas — lines its words up
-// with the parent's, past where the parent's icon sits.
+// A row under a row — Drive's pins, every app, every peer, the Settings
+// areas — lines its words up with the parent's, past where the parent's icon
+// sits. A row's state (an app's or a peer's dot, its badges) goes at the far
+// end, so the names stay in one column.
 const subClass = ({ isActive }: { isActive: boolean }) =>
   `block rounded-md py-1.5 pl-[34px] pr-2.5 text-cell transition-colors ${
     isActive ? "bg-accent/10 font-medium text-accent" : "text-ink-muted hover:bg-hover hover:text-ink"
@@ -42,40 +43,32 @@ function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
   return <Icon className="size-4 shrink-0 opacity-80" aria-hidden />;
 }
 
-// A group's heading is a link like any other row — the same rounded hover,
-// the same tint when it is where you are — set small and quiet so it reads
-// as a heading over the rows. Quiet words alone read as a label, not a door,
-// so every heading carries a glyph that says what a click does: › opens the
-// page it names, + adds one. The glyph brightens with the row on hover. Its tools
-// (a filter) sit beside it as their own square buttons, each lit on its own
-// hover, so what a click will do is never ambiguous.
-function GroupHeading({ to, label, title, active, glyph = "›", children }: {
+// A group's heading is a row like Settings: an icon and a name at the
+// control height, the same hover, the same tint when it is where you are,
+// with the group's rows indented under it. A heading that adds rather than
+// opens — Apps goes to Add app — says so with a + at its end, brightening
+// with the row on hover. Its tools (a filter) sit beside it as their own
+// square buttons, each lit on its own hover, so what a click will do is
+// never ambiguous.
+function GroupHeading({ to, label, icon, title, active, adds, children }: {
   to: string;
   label: string;
+  icon: LucideIcon;
   title?: string;
   active: boolean;
-  glyph?: "›" | "+";
+  adds?: boolean;
   children?: React.ReactNode;
 }) {
   return (
     <div className="mb-0.5 flex items-center gap-0.5">
-      <Link
-        to={to}
-        title={title}
-        aria-current={active ? "page" : undefined}
-        className={`group flex h-7 flex-1 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
-          active ? "bg-accent/10 text-accent" : "text-ink-faint hover:bg-hover hover:text-ink"
-        }`}
-      >
+      <Link to={to} title={title} aria-current={active ? "page" : undefined} className={`group flex-1 ${navClass({ isActive: active })}`}>
+        <NavIcon icon={icon} />
         <span className="flex-1">{label}</span>
-        <span
-          aria-hidden
-          className={`text-[13px] leading-none transition-colors ${
-            active ? "text-accent" : "text-ink-faint group-hover:text-ink"
-          }`}
-        >
-          {glyph}
-        </span>
+        {adds && (
+          <span aria-hidden className={`text-[15px] leading-none transition-colors ${active ? "text-accent" : "text-ink-faint group-hover:text-ink"}`}>
+            +
+          </span>
+        )}
       </Link>
       {children}
     </div>
@@ -83,7 +76,7 @@ function GroupHeading({ to, label, title, active, glyph = "›", children }: {
 }
 
 const headingTool = (on: boolean) =>
-  `flex h-7 w-7 shrink-0 items-center justify-center rounded-md leading-none transition-colors hover:bg-hover hover:text-ink ${
+  `flex h-8 w-8 shrink-0 items-center justify-center rounded-md leading-none transition-colors hover:bg-hover hover:text-ink ${
     on ? "text-ink" : "text-ink-muted"
   }`;
 
@@ -226,7 +219,7 @@ function AppList() {
   return (
     <div>
       {/* The heading is the way in to Add app — no separate + beside it. */}
-      <GroupHeading to={paths.newApp} label="Apps" title="Add app" glyph="+" active={location.pathname === paths.newApp}>
+      <GroupHeading to={paths.newApp} label="Apps" icon={LayoutGrid} title="Add app" adds active={location.pathname === paths.newApp}>
         {(apps.data?.length ?? 0) >= FILTER_FROM && (
           <button
             type="button"
@@ -251,24 +244,21 @@ function AppList() {
           onBlur={() => q.trim() === "" && setFiltering(false)}
           placeholder="Filter apps…"
           aria-label="Filter apps"
-          className="mb-1.5 h-7 w-full rounded-md border border-edge bg-veil px-2.5 text-xs text-ink placeholder-ink-faint outline-none focus:border-accent"
+          className="mb-1.5 ml-[26px] h-7 w-[calc(100%-26px)] rounded-md border border-edge bg-veil px-2 text-xs text-ink placeholder-ink-faint outline-none focus:border-accent"
         />
       )}
       {apps.isLoading ? (
-        <p className="px-2.5 py-1.5 text-sm text-ink-muted">Loading apps…</p>
+        <p className="py-1.5 pl-[34px] pr-2.5 text-cell text-ink-muted">Loading apps…</p>
       ) : apps.isError ? (
-        <p className="px-2.5 py-1.5 text-sm text-warn">Couldn't load apps.</p>
+        <p className="py-1.5 pl-[34px] pr-2.5 text-cell text-warn">Couldn't load apps.</p>
       ) : (apps.data ?? []).length === 0 ? (
-        <p className="px-2.5 py-1.5 text-sm text-ink-muted">No apps yet.</p>
+        <p className="py-1.5 pl-[34px] pr-2.5 text-cell text-ink-muted">No apps yet.</p>
       ) : list.length === 0 ? (
-        <p className="px-2.5 py-1.5 text-sm text-ink-muted">Nothing matches “{q.trim()}”.</p>
+        <p className="py-1.5 pl-[34px] pr-2.5 text-cell text-ink-muted">Nothing matches “{q.trim()}”.</p>
       ) : (
         <div className="space-y-0.5">
           {list.map((a) => (
-            <NavLink key={a.name} to={paths.app(a.name)} className={navClass}>
-              <span className="flex size-4 shrink-0 items-center justify-center">
-                <StateDot app={a} />
-              </span>
+            <NavLink key={a.name} to={paths.app(a.name)} className={(st) => `${subClass(st)} flex items-center gap-2`}>
               <span className="min-w-0 flex-1 truncate">{a.name}</span>
               {a.updateAvailable && (
                 <span aria-label="update available" title="Update available" className="text-[10px] text-accent">
@@ -276,6 +266,7 @@ function AppList() {
                 </span>
               )}
               <Badge count={a.openErrors ?? 0} hot label="open errors" />
+              <StateDot app={a} />
             </NavLink>
           ))}
         </div>
@@ -301,12 +292,12 @@ function PeerList() {
   const onPage = location.pathname === paths.federation;
   return (
     <div>
-      <GroupHeading to={paths.federation} label="Connect" active={onPage && !params.get("peer")} />
+      <GroupHeading to={paths.federation} label="Connect" icon={Network} active={onPage && !params.get("peer")} />
       <div className="space-y-0.5">
         {peers.map((p) => {
           const on = onPage && params.get("peer") === String(p.id);
           return (
-            <Link key={p.id} to={paths.federationView("peers", { peer: String(p.id) })} className={navClass({ isActive: on })} title={stateWord(p)}>
+            <Link key={p.id} to={paths.federationView("peers", { peer: String(p.id) })} className={`${subClass({ isActive: on })} flex items-center gap-2`} title={stateWord(p)}>
               <span className="min-w-0 flex-1 truncate">{peerLabel(p)}</span>
               <Dot tone={peerTone(p)} />
             </Link>

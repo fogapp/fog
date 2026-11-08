@@ -13,11 +13,12 @@ import (
 
 	"gitea.lan/matthew/fog/internal/fsx"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func testRegistry(t *testing.T) (*Registry, *store.Store) {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

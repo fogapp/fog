@@ -21,7 +21,7 @@ func TestOfferedNamesAreChecked(t *testing.T) {
 			t.Errorf("rename onto %s accepted", n)
 		}
 	}
-	if err := validateOffers([]Offer{{ID: "o", Title: "O", Env: map[string]string{"LUCID_URL": "{{url}}"}, Secrets: []string{"LUCID_API_KEY"}}}); err != nil {
+	if err := validateOffers([]Offer{{ID: "o", Title: "O", Env: map[string]string{"GLASS_URL": "{{url}}"}, Secrets: []string{"GLASS_API_KEY"}}}); err != nil {
 		t.Errorf("an ordinary offer refused: %v", err)
 	}
 	e, _ := routeEngine(t, "")

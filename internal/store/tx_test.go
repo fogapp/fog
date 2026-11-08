@@ -7,6 +7,8 @@ import (
 )
 
 func TestWithTxCommitsOrRollsBack(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if err := s.withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`INSERT INTO settings (key, value, updated_at) VALUES ('kept', '1', '')`)
@@ -32,6 +34,8 @@ func TestWithTxCommitsOrRollsBack(t *testing.T) {
 }
 
 func TestPruneBatchedCrossesBatches(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	n := pruneBatch + 7
 	if err := s.withTx(func(tx *sql.Tx) error {
@@ -62,6 +66,8 @@ func TestPruneBatchedCrossesBatches(t *testing.T) {
 // pruneExpired runs each rule against the current time and counts every
 // table's rows; an OR in a rule stays inside that rule.
 func TestPruneExpiredCountsEveryTable(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, q := range []string{
 		`INSERT INTO audit_log (at, actor, action, subject, detail) VALUES ('2020-01-01T00:00:00Z', 'a', 'x', 's', '')`,

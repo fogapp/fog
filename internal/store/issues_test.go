@@ -7,6 +7,8 @@ func finding(kind string, appID int64, subject, severity, title string) IssueFin
 }
 
 func TestSyncIssuesLifecycle(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app, err := s.CreateApp("feed")
 	if err != nil {
@@ -85,6 +87,8 @@ func TestSyncIssuesLifecycle(t *testing.T) {
 }
 
 func TestSyncIssuesSkippedScopeSurvives(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreateApp("feed")
 	b, _ := s.CreateApp("manor")
@@ -110,6 +114,8 @@ func TestSyncIssuesSkippedScopeSurvives(t *testing.T) {
 }
 
 func TestSyncIssuesHostScope(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	f := IssueFinding{Kind: "host-env", Subject: "datadir", Severity: "critical", Title: "data dir not writable"}
 	res, err := s.SyncIssues("host-env", []int64{0}, []IssueFinding{f})
@@ -135,6 +141,8 @@ func TestSyncIssuesHostScope(t *testing.T) {
 }
 
 func TestCountAndAckGuards(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	f1 := IssueFinding{Kind: "host-env", Subject: "a", Severity: "critical", Title: "t"}
 	f2 := IssueFinding{Kind: "host-env", Subject: "b", Severity: "warning", Title: "t"}

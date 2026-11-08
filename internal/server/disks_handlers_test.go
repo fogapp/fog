@@ -17,6 +17,8 @@ import (
 // filesystem fog has no record of but a volume points at. Each carries
 // what depends on it.
 func TestAssembleDisks(t *testing.T) {
+	t.Parallel()
+
 	shares := []nas.ShareStatus{
 		{NasShare: store.NasShare{Name: "media", MountPoint: "/mnt/nas/media"}, Mounted: true, TotalBytes: 1000, FreeBytes: 400},
 		{NasShare: store.NasShare{Name: "vault", MountPoint: "/mnt/nas/vault"}, Mounted: false},
@@ -89,6 +91,8 @@ func TestAssembleDisks(t *testing.T) {
 // fog sized on it, in bar order, with the unsized rest as "other" — and a
 // disk with no reading gets no breakdown at all.
 func TestAssembleDisksUsage(t *testing.T) {
+	t.Parallel()
+
 	shares := []nas.ShareStatus{
 		{NasShare: store.NasShare{Name: "media", MountPoint: "/mnt/nas/media"}, Mounted: true, TotalBytes: 1000, FreeBytes: 400},
 		{NasShare: store.NasShare{Name: "vault", MountPoint: "/mnt/nas/vault"}, Mounted: false},
@@ -139,6 +143,8 @@ func TestAssembleDisksUsage(t *testing.T) {
 // volume inside something already listed is not counted twice, and
 // Docker's data-root is left to Docker.
 func TestOwnedPaths(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	for _, name := range []string{"data", "postgres", "files", "chat", "docker-root"} {
 		if err := os.Mkdir(filepath.Join(dir, name), 0o755); err != nil {
@@ -171,6 +177,8 @@ func TestOwnedPaths(t *testing.T) {
 // nothing on the first call, then the figures, then no re-walk until the
 // pass is stale or a new path appears.
 func TestDiskSizer(t *testing.T) {
+	t.Parallel()
+
 	walks := 0
 	d := diskSizer{walk: func(_ context.Context, path string) int64 { walks++; return int64(len(path)) }}
 	var spawned []func()
@@ -201,6 +209,8 @@ func TestDiskSizer(t *testing.T) {
 // With nothing configured the answer is one disk carrying everything —
 // and its app list is an empty array, never null.
 func TestAssembleDisksBare(t *testing.T) {
+	t.Parallel()
+
 	got := assembleDisks(diskPaths{dataDir: "/var/lib/fog", filesRoot: "/var/lib/fog/files", backupDir: "/var/lib/fog/backups"}, nil, nil, nil, nil, time.Time{})
 	if len(got) != 1 {
 		t.Fatalf("got %d disks, want 1", len(got))
@@ -212,6 +222,8 @@ func TestAssembleDisksBare(t *testing.T) {
 }
 
 func TestSystemDisks(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	if w := do(t, h, "GET", "/api/system/disks", ""); w.Code != http.StatusUnauthorized {
@@ -256,6 +268,8 @@ func TestSystemDisks(t *testing.T) {
 // context — so Shutdown reaches the walk, and a pass cut short leaves the
 // last whole one standing rather than figures that undercount.
 func TestDiskSizerStopsWithItsContext(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	var walkCtx context.Context
 	d := diskSizer{walk: func(c context.Context, path string) int64 { walkCtx = c; cancel(); return 1 }}
@@ -276,6 +290,8 @@ func TestDiskSizerStopsWithItsContext(t *testing.T) {
 // A pass asks Docker once, and Docker's data-root is never walked — its
 // bytes are Docker's own count — even when the poll listed it.
 func TestDiskSizerDocker(t *testing.T) {
+	t.Parallel()
+
 	walked := []string{}
 	d := diskSizer{
 		walk: func(_ context.Context, path string) int64 { walked = append(walked, path); return 1 },

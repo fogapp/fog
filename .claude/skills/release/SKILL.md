@@ -42,24 +42,27 @@ history, and that can't be taken back.
   (`git config fog.publicAuthorName '<name>'`, `git config
   fog.publicAuthorEmail '<email>'`). Don't pick values yourself. The
   script refuses without them.
-- `gh` is logged in to github.com **as `fogapp`**. Check:
+- `gh` is logged in to github.com **as `fogapp-io`**, the user that
+  publishes for the `fogapp` organization (which owns `fogapp/fog` and
+  can't be signed in to). Check what gh really authenticates as —
+  `gh auth status` can show a stale account label, so ask GitHub:
 
   ```
-  gh auth status --hostname github.com
+  gh api user --jq .login
   ```
 
-  If it isn't logged in, or shows another active account, **stop** and give
-  the user these steps to run themselves (don't attempt the login — it
-  needs a browser signed in as fogapp):
+  If it isn't `fogapp-io`, **stop** and give the user these steps to run
+  themselves (don't attempt the login — it needs a browser signed in as
+  fogapp-io):
 
   ```
   gh auth login --hostname github.com --git-protocol ssh --web
   ```
 
-  sign in as **fogapp** in the browser it opens, and skip the offer to
-  upload an SSH key (fogapp's key, `~/.ssh/fog_ed25519`, is already on
-  GitHub). If gh already knows fogapp as a second account:
-  `gh auth switch --hostname github.com --user fogapp`. The script makes
+  sign in as **fogapp-io** in the browser it opens, and skip the offer to
+  upload an SSH key (its key, `~/.ssh/fog_ed25519`, is already on
+  GitHub). If gh already knows fogapp-io as a second account:
+  `gh auth switch --hostname github.com --user fogapp-io`. The script makes
   the same check and prints the same instructions.
 
 ## 1. Dry run

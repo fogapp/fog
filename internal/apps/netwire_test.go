@@ -15,13 +15,13 @@ import (
 
 func TestReachesFromUsesAndEnvURLs(t *testing.T) {
 	installed := func(n string) bool {
-		return slices.Contains([]string{"lucid", "ntfy", "gotenberg", "immich", "victim", "chat"}, n)
+		return slices.Contains([]string{"glass", "ntfy", "gotenberg", "immich", "victim", "chat"}, n)
 	}
 	s := &AppSpec{
 		Uses:  []string{"immich", "events", "chat", "notinstalled"},
-		Reach: []string{"lucid", "ntfy", "gotenberg"},
+		Reach: []string{"glass", "ntfy", "gotenberg"},
 		Env: map[string]string{
-			"LUCID_URL":     "http://lucid",
+			"GLASS_URL":     "http://glass",
 			"NTFY_URL":      "http://ntfy/topic",
 			"GOTENBERG_URL": "http://gotenberg:3000",
 			"DB":            "postgres://u:p@fog-postgres:5432/db",
@@ -31,7 +31,7 @@ func TestReachesFromUsesAndEnvURLs(t *testing.T) {
 		},
 	}
 	got := s.Reaches("me", installed)
-	want := []string{"gotenberg", "immich", "lucid", "ntfy"}
+	want := []string{"glass", "gotenberg", "immich", "ntfy"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Reaches = %v, want %v", got, want)
 	}
@@ -41,10 +41,10 @@ func TestPlanNetworksWiresOnlyWhatSpecsSay(t *testing.T) {
 	specs := map[string]*AppSpec{
 		"gated":    {Routes: []Route{{Port: 8080, Auth: true}}},
 		"attacker": {},
-		"consumer": {Reach: []string{"gated"}, Env: map[string]string{"U": "http://gated:8080", "DB": "postgres://u@lucid:5432/x", "S": "https://lucid"}},
-		"lucid":    {Connection: &Connection{Port: 3000}},
-		"hook":     {Uses: []string{"lucid"}},
-		"sealed":   {Network: NetworkSealed, Reach: []string{"lucid", "peer"}, Env: map[string]string{"A": "http://lucid", "B": "http://peer"}},
+		"consumer": {Reach: []string{"gated"}, Env: map[string]string{"U": "http://gated:8080", "DB": "postgres://u@glass:5432/x", "S": "https://glass"}},
+		"glass":    {Connection: &Connection{Port: 3000}},
+		"hook":     {Uses: []string{"glass"}},
+		"sealed":   {Network: NetworkSealed, Reach: []string{"glass", "peer"}, Env: map[string]string{"A": "http://glass", "B": "http://peer"}},
 		"peer":     {SealedPeer: true},
 		"db":       {Needs: &Needs{Postgres: &PostgresNeed{Databases: []string{"d"}}}},
 	}
@@ -56,7 +56,7 @@ func TestPlanNetworksWiresOnlyWhatSpecsSay(t *testing.T) {
 	// app aren't. uses reaches the connection port.
 	want := []Wire{
 		{Provider: "gated", Consumer: "consumer", Ports: []int{8080}},
-		{Provider: "lucid", Consumer: "hook", Ports: []int{3000}},
+		{Provider: "glass", Consumer: "hook", Ports: []int{3000}},
 		{Provider: "peer", Consumer: "sealed", Ports: []int{80}},
 	}
 	if fmt.Sprint(p.wires) != fmt.Sprint(want) {
@@ -64,7 +64,7 @@ func TestPlanNetworksWiresOnlyWhatSpecsSay(t *testing.T) {
 	}
 	// A sealed app asking for an ordinary app is refused, not wired: the
 	// wire would be its way to something with a route out.
-	if !slices.Equal(p.refused, []string{"sealed → lucid"}) {
+	if !slices.Equal(p.refused, []string{"sealed → glass"}) {
 		t.Fatalf("refused = %v", p.refused)
 	}
 	if !p.pg["db"] || p.pg["gated"] {

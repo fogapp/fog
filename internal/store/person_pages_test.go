@@ -6,6 +6,8 @@ import (
 )
 
 func TestAllPersonPagesMatchesPersonPages(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	hub, err := s.CreateApp("hub")
 	if err != nil {

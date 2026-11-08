@@ -21,7 +21,7 @@ package apps
 //
 // An app is wired to another (it "reaches" it) when its spec says so: the
 // other app is in its uses list, or one of its env values is an http URL
-// naming the other app ("http://lucid", "http://gotenberg:3000" — which is
+// naming the other app ("http://glass", "http://gotenberg:3000" — which is
 // also how a connected integration's {{url}} lands); an app the operator
 // granted "home" reaches the apps that serve widgets, for their pictures. A
 // sealed app is wired only to sealed apps and sealed peers, as before.

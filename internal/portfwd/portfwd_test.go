@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The forwarder must proxy bytes to whatever the resolver currently points
@@ -35,7 +35,7 @@ func TestForwarderProxies(t *testing.T) {
 		}
 	}()
 
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

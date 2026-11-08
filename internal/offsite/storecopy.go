@@ -293,7 +293,8 @@ func (m *Manager) sweepPacks(ctx context.Context, t *store.OffsiteTarget, r *Rea
 // beside dest, each checked against its name, and the snapshot is rebuilt
 // from them — every chunk and file verified, and a delegated artifact
 // against the digest fog verified. scratch is a directory on a disk with
-// room for the packs.
+// room for the packs. An empty dest reads the backup through without
+// writing it anywhere: a check, needing room only for the packs.
 func FetchStoreSnapshot(ctx context.Context, r *Reader, row *AppRow, scratch, dest string, progress func(done, total int)) error {
 	if row.Store == "" || row.StoreSnapshot == "" {
 		return errors.New("this row is not a store snapshot")
@@ -359,11 +360,18 @@ func fetchFromStore(ctx context.Context, r *Reader, ref storeRef, scratch, dest,
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dest, 0o700); err != nil {
-		return err
-	}
-	if err := cs.Materialize(ctx, snap, dest, nil); err != nil {
-		return err
+	if dest == "" {
+		// Verify only: read every file back, write none of it.
+		if err := cs.VerifySnapshot(ctx, snap); err != nil {
+			return err
+		}
+	} else {
+		if err := os.MkdirAll(dest, 0o700); err != nil {
+			return err
+		}
+		if err := cs.Materialize(ctx, snap, dest, nil); err != nil {
+			return err
+		}
 	}
 	if artifactSHA != "" {
 		e, err := cs.Find(snap, "artifact.tar")

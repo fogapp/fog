@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/notify"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // Signatures don't expire, so an old signed manifest stays valid forever:
@@ -30,6 +30,8 @@ func datedManifest(version string, issued time.Time) string {
 }
 
 func TestUpdaterRefusesAnOldSignedRelease(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	old := time.Now().Add(-MaxManifestAge - 24*time.Hour)
 	for _, tc := range []struct {
@@ -66,6 +68,8 @@ func TestUpdaterRefusesAnOldSignedRelease(t *testing.T) {
 // the Inbox says so at once (and the phone hears it once), and the notice
 // comes down when a current release is back.
 func TestUpdaterRaisesAFreezeNotice(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	var body string
 	mux := http.NewServeMux()
@@ -75,7 +79,7 @@ func TestUpdaterRaisesAFreezeNotice(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +126,8 @@ func TestUpdaterRaisesAFreezeNotice(t *testing.T) {
 // install.sh on a fresh machine — nothing running to compare versions
 // with — refuses an old release, however validly signed.
 func TestInstallShRefusesAnOldReleaseOnAFreshMachine(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n")
 	f.issued = time.Now().Add(-200 * 24 * time.Hour).Unix()
@@ -139,6 +145,8 @@ func TestInstallShRefusesAnOldReleaseOnAFreshMachine(t *testing.T) {
 }
 
 func TestFlashRefusesAnOldRelease(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	needOpenSSL(t, s)
 	h := newHostServer(t)
@@ -168,7 +176,7 @@ func TestSignedManifestRefusesAnOldRelease(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -217,6 +217,8 @@ func TestNewFogdConfirmsItselfAndTheGuardStandsDown(t *testing.T) {
 // An unhealthy new fogd never confirms, however long it runs: the marker
 // stays for the guard.
 func TestUnhealthyFogdDoesNotConfirm(t *testing.T) {
+	t.Parallel()
+
 	u, exe := guardFixture(t, goodFogd, time.Minute)
 	sick := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no", 500) }))
 	defer sick.Close()
@@ -259,6 +261,8 @@ func TestRollbackGuardLeavesUnknownBinariesAlone(t *testing.T) {
 // A marker about a version that isn't running is stale; the new start
 // clears it so it can't block later updates or trigger a rollback.
 func TestConfirmClearsAMarkerForAnotherVersion(t *testing.T) {
+	t.Parallel()
+
 	u, exe := guardFixture(t, goodFogd, time.Minute)
 	u.version = "v9.0.0" // the guard (or a person) already put the old one back
 	u.confirmUpdate(context.Background())
@@ -268,6 +272,8 @@ func TestConfirmClearsAMarkerForAnotherVersion(t *testing.T) {
 }
 
 func TestApplyRefusesWhileAnUpdateIsOnTrial(t *testing.T) {
+	t.Parallel()
+
 	u, exe := guardFixture(t, goodFogd, time.Minute)
 	u.version = "v9.0.0"
 	err := u.Apply(context.Background(), func(int) { t.Error("exit requested") })
@@ -282,6 +288,8 @@ func TestApplyRefusesWhileAnUpdateIsOnTrial(t *testing.T) {
 // When the guard can't be armed, nothing changes: no update without a way
 // back.
 func TestApplyWithoutAGuardChangesNothing(t *testing.T) {
+	t.Parallel()
+
 	u, exe := applyFixture(t, "old binary", "new binary", nil)
 	u.arm = func(string, time.Duration) error { return errors.New("systemd-run: no such file") }
 	err := u.Apply(context.Background(), func(int) { t.Error("exit requested") })
@@ -302,6 +310,8 @@ func TestApplyWithoutAGuardChangesNothing(t *testing.T) {
 // Updates only move forward: a manifest naming the running version or an
 // older one is never installed, however validly signed.
 func TestApplyRefusesADowngrade(t *testing.T) {
+	t.Parallel()
+
 	for _, running := range []string{"v9.9.9", "v10.0.0"} {
 		u, exe := applyFixture(t, "old binary", "new binary", nil)
 		u.version = running
@@ -319,6 +329,8 @@ func TestApplyRefusesADowngrade(t *testing.T) {
 }
 
 func TestSelfURL(t *testing.T) {
+	t.Parallel()
+
 	for in, want := range map[string]string{
 		":8080":          "http://127.0.0.1:8080/api/setup/status",
 		"0.0.0.0:9000":   "http://127.0.0.1:9000/api/setup/status",
@@ -336,6 +348,8 @@ func TestSelfURL(t *testing.T) {
 // not the release's fault: the notice says so, and the release isn't
 // marked ignored.
 func TestRollbackAfterAPortTheftDoesNotIgnoreTheRelease(t *testing.T) {
+	t.Parallel()
+
 	u, exe := applyFixture(t, oldFogd, goodFogd, nil)
 	os.WriteFile(exe+rolledBackSuffix, []byte("failed_version=v9.9.9\nrestored_version=v9.0.0\nat=1\nby=boot\n--- journal\n"+
 		"fogd[7]: level=ERROR msg=\"http server\" err=\"listen tcp :8080: bind: address already in use\"\n"), 0o644)

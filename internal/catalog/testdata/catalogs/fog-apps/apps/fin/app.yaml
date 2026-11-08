@@ -1,0 +1,109 @@
+id: fin
+title: Fin
+description: Personal finance hub — portfolios, budgets, net worth, and automations.
+category: Personal cloud
+icon: '🏦'
+spec:
+  source:
+    type: git
+    branch: main
+    buildArgs:
+      GIT_REV: '{{commit}}'
+  env:
+    FIN_WEBAUTHN_ORIGINS: https://{{fqdn}}
+    FIN_WEBAUTHN_RP_ID: '{{fqdn}}'
+    GIT_SHA: '{{commit}}'
+    JOB_CONCURRENCY: "1"
+  secrets:
+    - SECRET_KEY_BASE
+    - AR_ENCRYPTION_PRIMARY_KEY
+    - AR_ENCRYPTION_DETERMINISTIC_KEY
+    - AR_ENCRYPTION_KEY_DERIVATION_SALT
+  volumes:
+    - name: storage
+      mount: /rails/storage
+      owner: 1000:1000
+  routes:
+    - port: 80
+  health:
+    path: /up
+  processes:
+    - name: worker
+      command:
+        - bundle
+        - exec
+        - ruby
+        - bin/jobs
+  release:
+    - ./bin/rails
+    - fog:release
+  needs:
+    postgres:
+      databases:
+        - fin_production
+      extensions:
+        - citext
+        - pg_trgm
+        - pgcrypto
+      inject:
+        DATABASE_HOST: host
+        DATABASE_NAME: dbname
+        DATABASE_PORT: port
+        DATABASE_USER: user
+        FIN_DATABASE_PASSWORD: password
+  backup:
+    enabled: true
+    mode: delegated
+    timeout: 45m
+  notes: 'First visit: register your passkey (or restore a fog-backup/1 artifact from a previous instance), then set FIN_OPEN_REGISTRATION=false in Config → Environment. Passkeys are pinned to FIN_WEBAUTHN_RP_ID — pick the hostname once and keep it; a restore under a different RP ID invalidates every passkey (preflight makes that explicit). Add the deploy key and webhook (Overview tab) to the Gitea repo for push-to-deploy.'
+options:
+  - key: repo
+    label: Git repository
+    target: repo
+    required: true
+  - key: SECRET_KEY_BASE
+    label: SECRET_KEY_BASE
+    hint: Signs cookies and ActiveStorage URLs; unique per instance.
+    target: secret:SECRET_KEY_BASE
+    required: true
+    generate: hex128
+  - key: AR_ENCRYPTION_PRIMARY_KEY
+    label: AR_ENCRYPTION_PRIMARY_KEY
+    hint: Encrypts sensitive database columns from day one.
+    target: secret:AR_ENCRYPTION_PRIMARY_KEY
+    required: true
+    generate: alnum32
+  - key: AR_ENCRYPTION_DETERMINISTIC_KEY
+    label: AR_ENCRYPTION_DETERMINISTIC_KEY
+    target: secret:AR_ENCRYPTION_DETERMINISTIC_KEY
+    required: true
+    generate: alnum32
+  - key: AR_ENCRYPTION_KEY_DERIVATION_SALT
+    label: AR_ENCRYPTION_KEY_DERIVATION_SALT
+    target: secret:AR_ENCRYPTION_KEY_DERIVATION_SALT
+    required: true
+    generate: alnum32
+formerly:
+  - manor
+firstParty: fin
+about: |-
+  Fin is a household's financial life in one place. It pulls bank, card, brokerage, crypto, property, and equity-compensation data into a single normalised ledger, keeps it current on its own, and gives you the views a good personal finance app would — cashflow, budget, subscriptions, net worth, portfolio performance, taxes.
+
+  Every number traces back to the transactions that produced it, and everything stays on your hardware. It is built for one household — a few people, one or more admins — so it favours clarity and correctness over multi-tenant scale.
+highlights:
+  - Plaid, CSV imports, Coinbase and on-chain wallets land in one ledger
+  - Cashflow, budgets, subscriptions, and net worth over time
+  - Portfolio performance with cost basis and daily prices
+  - 'Workflows: event-driven rules that categorise, tag, notify, and sync'
+  - Recurring charges and transfers detected from cadence, not tagging
+  - Passkey sign-in, MCP access for agents, webhooks
+logo: tile.svg
+developer: Built from your own repository
+license: Private
+footprint:
+  memory: 734003200
+  memoryPeak: 1572864000
+  cpu: moderate
+  cpuWhen: syncing accounts and prices
+  disk: 1258291200
+  diskGrows: with statements and documents

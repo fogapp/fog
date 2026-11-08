@@ -8,6 +8,8 @@ import (
 // FileFedReplicasFor returns just the asked-for rows of one subscription,
 // across the chunk boundary, and nothing from another subscription.
 func TestFileFedReplicasFor(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	peer, err := s.CreatePairedPeer("inst-1", "peer", "", "pk")
 	if err != nil {
@@ -50,6 +52,8 @@ func TestFileFedReplicasFor(t *testing.T) {
 
 // UpsertFileFedReplicas inserts and updates in one go, like the single form.
 func TestUpsertFileFedReplicas(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	peer, err := s.CreatePairedPeer("inst-1", "peer", "", "pk")
 	if err != nil {

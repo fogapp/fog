@@ -70,6 +70,7 @@ func crossRoom(t *testing.T, p *chatPair, op, eve *testDevice, label string) ([]
 // the hub, which alone decides them; and a household whose people have all
 // left a room reads nothing of it from then on.
 func TestChatAcrossHouseholdsHoldsTheRules(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
@@ -181,6 +182,7 @@ func TestChatAcrossHouseholdsHoldsTheRules(t *testing.T) {
 // their home fog; the hub of a room they are in hears of it and takes them
 // out, with the warning line.
 func TestChatIdentityResetReachesTheHub(t *testing.T) {
+
 	p := twoChatFogs(t)
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
 	op := registerDevice(t, p.aH, p.aCookie, "admin")
@@ -222,6 +224,7 @@ func doRaw(t *testing.T, h http.Handler, method, path, body string, c *http.Cook
 // replica holds its set (so its people's clients check it too), and after
 // the hub moves, the new hub refuses anyone outside it.
 func TestChatDMStaysFixedAcrossHouseholds(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
@@ -302,6 +305,7 @@ func TestChatDMStaysFixedAcrossHouseholds(t *testing.T) {
 // the address their household advertises, never their ULID alias, so a
 // banned remote person can't be added back as "someone else".
 func TestChatBanHoldsAgainstAliases(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
@@ -342,6 +346,7 @@ func TestChatBanHoldsAgainstAliases(t *testing.T) {
 // A large attachment from a follower crosses to the hub in pieces and
 // lands whole; one the hub refuses leaves no copy behind on the follower.
 func TestChatLargeAttachmentRelaysWithoutOrphans(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")

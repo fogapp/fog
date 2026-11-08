@@ -1,5 +1,6 @@
-// The standing column: the facts about the app that are always true,
-// beside whatever the Overview tab is showing. Where the code lives, version and the update
+// The standing column: what needs you, when anything does, then the facts
+// about the app that are always true, beside whatever the Overview tab is
+// showing. Where the code lives, version and the update
 // waiting on it, the address it answers on, the container as Docker describes it, the volumes as
 // Drive holds them, who else holds a copy, and what the app depends on. Stop and Uninstall live under the
 // subheader's More…. Rendered on Overview only; every other tab takes the
@@ -7,7 +8,7 @@
 
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import type { AppContainer, AppDetail as AppDetailT, AppStatus, FilesStatus } from "../../api";
+import type { AppContainer, AppDetail as AppDetailT, AppStatus, DeployStatusResponse, FilesStatus } from "../../api";
 import Button from "../../components/Button";
 import { formatBytes, peerLabel } from "../../lib/format";
 import { paths } from "../../lib/paths";
@@ -16,6 +17,7 @@ import { federationQuery } from "../../queries";
 import { placementLabel } from "../../lib/volumePlacement";
 import type { AppActions, AppModal } from "./Actions";
 import { AddressGroup } from "./Address";
+import { NeedsGroup, useNeeds } from "./Overview";
 import { SourceGroup, useSourceLink } from "./Source";
 import { Bar, Dot, Group, Key, Pill, SlotLink, whenShort } from "./cockpit";
 
@@ -23,25 +25,34 @@ import { Bar, Dot, Group, Key, Pill, SlotLink, whenShort } from "./cockpit";
 // lines, and at the left column's 36px they read as one list.
 const GAP = "mt-14";
 
-export function StandingColumn({ name, detail, status, statusKnown, container, containerError, volumes, filesStatus, actions, onOpen, onGoDrive, onGoFed, onSaved }: {
+export function StandingColumn({ name, detail, status, statusKnown, container, containerError, deployStatus, volumes, filesStatus, actions, onOpen, onGoDrive, onGoFed, onGoLogs, onCancelRestore, onSaved }: {
   name: string;
   detail: AppDetailT;
   status?: AppStatus;
   statusKnown: boolean;
   container?: AppContainer;
   containerError: boolean;
+  deployStatus?: DeployStatusResponse;
   volumes: AppVolume[];
   filesStatus?: FilesStatus;
   actions: AppActions;
   onOpen: (m: AppModal) => void;
   onGoDrive: () => void;
   onGoFed: () => void;
+  onGoLogs: () => void;
+  onCancelRestore: () => void;
   onSaved: () => Promise<unknown>;
 }) {
+  const needs = useNeeds({
+    name, detail, status, container, deployStatus, volumes, filesStatus,
+    restorePending: status?.restorePending, onGoLogs, onGoDrive, onCancelRestore,
+  });
   return (
     <aside className="border-t border-hair px-4 py-[26px] pb-10 sm:px-6 lg:border-l lg:border-t-0 lg:px-[26px]">
-      <SourceGroup name={name} detail={detail} gap={GAP} />
-      <Version name={name} detail={detail} status={status} statusKnown={statusKnown} container={container} actions={actions} onOpen={onOpen} />
+      <NeedsGroup needs={needs} gap={GAP} />
+      <SourceGroup name={name} detail={detail} gap={GAP} first={needs.length === 0} />
+      <Version name={name} detail={detail} status={status} statusKnown={statusKnown} container={container} actions={actions} onOpen={onOpen}
+        first={needs.length === 0} />
       <AddressGroup name={name} detail={detail} status={status} gap={GAP} onSaved={onSaved} />
       <ContainerGroup detail={detail} status={status} container={container} containerError={containerError} />
       <DriveGroup volumes={volumes} filesStatus={filesStatus} onGoDrive={onGoDrive} />
@@ -51,9 +62,11 @@ export function StandingColumn({ name, detail, status, statusKnown, container, c
   );
 }
 
-function Version({ name, detail, status, statusKnown, container, actions, onOpen }: {
+// first: whether Version may open the column — only when nothing above it
+// (Needs you, Source) is showing.
+function Version({ name, detail, status, statusKnown, container, actions, onOpen, first }: {
   name: string; detail: AppDetailT; status?: AppStatus; statusKnown: boolean; container?: AppContainer;
-  actions: AppActions; onOpen: (m: AppModal) => void;
+  actions: AppActions; onOpen: (m: AppModal) => void; first: boolean;
 }) {
   const isGit = detail.spec.source.type === "git";
   const ref = isGit
@@ -63,7 +76,7 @@ function Version({ name, detail, status, statusKnown, container, actions, onOpen
   const available = statusKnown && !!status?.updateAvailable;
   const { shown: sourceShown } = useSourceLink(name, detail);
   return (
-    <Group title="Version" first={!sourceShown} gap={GAP} right={available ? <Pill tone="ok">Update</Pill> : undefined}>
+    <Group title="Version" first={first && !sourceShown} gap={GAP} right={available ? <Pill tone="ok">Update</Pill> : undefined}>
       <div className="font-mono text-cell text-ink">{ref}</div>
       <div className={`mt-1 text-hint ${available ? "text-accent" : "text-ink-muted"}`}>
         {!statusKnown

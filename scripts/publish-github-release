@@ -14,7 +14,9 @@
 # (--clobber), never a second release.
 #
 #   FOG_PUBLIC_REPO     fogapp/fog
-#   FOG_PUBLIC_GH_USER  fogapp      the GitHub account gh must be logged in as
+#   FOG_PUBLIC_GH_USER  fogapp-io   the GitHub account gh must be logged in as:
+#                                   a user with push to fogapp/fog (fogapp
+#                                   itself is the organization that owns it)
 #
 # It never logs in by itself. The files are exactly the ones release.sh
 # signed: the manifest's signature is checked against the pinned key, its
@@ -25,7 +27,7 @@ VERSION="${1:?usage: publish-github-release vX.Y.Z --check|--publish [target sha
 MODE="${2:---check}"
 TARGET="${3:-}"
 REPO="${FOG_PUBLIC_REPO:-fogapp/fog}"
-GH_USER="${FOG_PUBLIC_GH_USER:-fogapp}"
+GH_USER="${FOG_PUBLIC_GH_USER:-fogapp-io}"
 REL=bin/release
 # GitHub refuses release assets of 2 GiB or more.
 MAX_ASSET=2147483647

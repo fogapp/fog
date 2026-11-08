@@ -145,6 +145,8 @@ func TestCopyLockerToAnotherTarget(t *testing.T) {
 // sealed row — and the copy carries both: the destination lists the rows
 // by itself, and an app snapshot lost locally fetches back from it.
 func TestCopyLockerCarriesAppRows(t *testing.T) {
+	t.Parallel()
+
 	src := fakes3.New("fog-test")
 	h := newHarness(t, src)
 	root, ids := plantBackups(t, h)
@@ -198,6 +200,8 @@ func TestCopyLockerCarriesAppRows(t *testing.T) {
 // A source object that no longer authenticates is not copied — and is
 // named — rather than carried to the new home as garbage.
 func TestCopyRefusesTamperedObjects(t *testing.T) {
+	t.Parallel()
+
 	src := fakes3.New("fog-test")
 	h := newHarness(t, src)
 	plantBackups(t, h)

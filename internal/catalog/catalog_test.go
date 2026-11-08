@@ -11,150 +11,15 @@ import (
 	"gitea.lan/matthew/fog/internal/hostcpu"
 )
 
-// Every catalog entry must produce a spec that validates and a name that's
-// legal — a broken store entry is a broken one-click install.
-func TestEntriesValid(t *testing.T) {
-	seen := map[string]bool{}
-	for _, e := range Resolve(Entries(), exampleSources) {
-		if seen[e.ID] {
-			t.Errorf("duplicate catalog id %q", e.ID)
-		}
-		seen[e.ID] = true
-		if err := apps.ValidateName(e.ID); err != nil {
-			t.Errorf("%s: bad id: %v", e.ID, err)
-		}
-		if e.Title == "" || e.Description == "" || e.Category == "" || e.Icon == "" {
-			t.Errorf("%s: missing display fields", e.ID)
-		}
-		if err := e.Spec.Validate(); err != nil {
-			t.Errorf("%s: invalid spec: %v", e.ID, err)
-		}
-		if len(e.Spec.Routes) == 0 {
-			t.Errorf("%s: no route", e.ID)
-		}
-		// A folder a template names is a content library: Content itself
-		// (one shared root for a whole stack) or one capitalised level
-		// inside it. An app's own data names no folder at all — it is
-		// given Apps/<App>/<volume> when the app is created — so a
-		// template that hardcodes one under Apps is a mistake.
-		for _, v := range e.Spec.AllVolumes() {
-			if v.Files == "" || v.Files == apps.FilesContentDir {
-				continue
-			}
-			parts := strings.Split(v.Files, "/")
-			if len(parts) != 2 || parts[0] != apps.FilesContentDir || parts[1] == "" || strings.ToUpper(parts[1][:1]) != parts[1][:1] {
-				t.Errorf("%s: volume %s lives at %q, want %s or %s/<Library>", e.ID, v.Name, v.Files, apps.FilesContentDir, apps.FilesContentDir)
-			}
-		}
-		for _, o := range e.Options {
-			switch {
-			case len(o.Target) > 4 && o.Target[:4] == "env:":
-			case len(o.Target) > 7 && o.Target[:7] == "volume:":
-				// A volume option names a volume the spec actually has.
-				found := false
-				for _, v := range e.Spec.AllVolumes() {
-					if v.Name == o.Target[7:] {
-						found = true
-					}
-				}
-				if !found {
-					t.Errorf("%s: volume option %s names no volume %q", e.ID, o.Key, o.Target[7:])
-				}
-			case len(o.Target) > 7 && o.Target[:7] == "secret:":
-				// Secret options must correspond to a declared spec secret.
-				found := false
-				for _, k := range e.Spec.Secrets {
-					if k == o.Target[7:] {
-						found = true
-					}
-				}
-				if !found {
-					t.Errorf("%s: secret option %s not in spec.secrets", e.ID, o.Key)
-				}
-			case o.Target == "repo":
-				if e.Spec.Source.Type != "git" {
-					t.Errorf("%s: repo option on non-git entry", e.ID)
-				}
-			default:
-				t.Errorf("%s: option %s has bad target %q", e.ID, o.Key, o.Target)
-			}
-		}
-	}
-	for _, id := range DefaultEnabled {
-		if !seen[id] {
-			t.Errorf("default-enabled id %q not in catalog", id)
-		}
-	}
-}
-
-// Companions install with one click alongside their parent, so they must
-// resolve to real entries whose every option is fillable without input
-// (a default, a generator, or the browser-prefilled timezone).
-func TestCompanionsInstallable(t *testing.T) {
-	// As a fog with a source for its own apps sees them: a first-party
-	// companion (fit-collector) shares its parent's repository, so it has
-	// a source whenever the parent does.
-	entries := Resolve(Entries(), exampleSources)
-	byID := map[string]Entry{}
-	for _, e := range entries {
-		byID[e.ID] = e
-	}
-	for _, e := range entries {
-		for _, c := range e.Companions {
-			target, ok := byID[c.ID]
-			if !ok {
-				t.Errorf("%s: companion %q not in catalog", e.ID, c.ID)
-				continue
-			}
-			if c.ID == e.ID {
-				t.Errorf("%s: entry lists itself as a companion", e.ID)
-			}
-			if c.Blurb == "" {
-				t.Errorf("%s: companion %q has no blurb", e.ID, c.ID)
-			}
-			for _, o := range target.Options {
-				if strings.HasPrefix(o.Target, "volume:") {
-					// The spec's placement is the default; a companion's
-					// folder must have one so nothing is asked.
-					placed := false
-					for _, v := range target.Spec.AllVolumes() {
-						if v.Name == o.Target[7:] && !v.Managed() {
-							placed = true
-						}
-					}
-					if !placed {
-						t.Errorf("%s: companion %q volume option %q has no placement in its spec", e.ID, c.ID, o.Key)
-					}
-					continue
-				}
-				if o.Default == "" && o.Generate == "" && o.Key != "tz" {
-					t.Errorf("%s: companion %q option %q needs a default or generator for one-click install", e.ID, c.ID, o.Key)
-				}
-			}
-		}
-	}
-}
-
-// A requirement tag nobody can parse would silently never block — every
-// declared one must name a level.
-func TestRequiresKnown(t *testing.T) {
-	for _, e := range Entries() {
-		if e.Requires != nil && e.Requires.CPU != "" && cpuLevel(e.Requires.CPU) == 0 {
-			t.Errorf("%s: unknown CPU requirement %q", e.ID, e.Requires.CPU)
-		}
-		if e.Blocker != "" {
-			t.Errorf("%s: catalog carries a blocker; that's per host, filled by the API", e.ID)
-		}
-	}
+// fog's own catalogs load without a problem: every entry validates
+// (format.go's validateEntry), every companion installs with a click, and
+// what catalog.yaml features is there.
+func TestOwnCatalogsLoadClean(t *testing.T) {
+	ownEntries(t)
 }
 
 func TestPreflight(t *testing.T) {
-	var bookorbit Entry
-	for _, e := range Entries() {
-		if e.ID == "bookorbit" {
-			bookorbit = e
-		}
-	}
+	bookorbit := byID(t, "bookorbit")
 	if bookorbit.Requires == nil || bookorbit.Requires.CPU != "x86-64-v2" {
 		t.Fatalf("bookorbit should require x86-64-v2, has %+v", bookorbit.Requires)
 	}
@@ -186,7 +51,7 @@ func TestPreflight(t *testing.T) {
 		}
 	}
 	// An entry with no requirements never blocks, whatever the host.
-	for _, e := range Entries() {
+	for _, e := range fixtureEntries(t) {
 		if e.Requires == nil && e.Preflight(kvm64) != "" {
 			t.Errorf("%s: blocked with no requirements", e.ID)
 		}
@@ -199,18 +64,18 @@ func TestPreflightSpec(t *testing.T) {
 	kvm64 := hostcpu.Info{Arch: "amd64", Known: true, Level: 1, Virtual: true, Model: "Common KVM processor"}
 	for _, img := range []string{"ghcr.io/bookorbit/bookorbit:latest", "ghcr.io/bookorbit/bookorbit:v1.2.3", "ghcr.io/bookorbit/bookorbit@sha256:abc"} {
 		spec := apps.AppSpec{Source: apps.Source{Type: "image", Image: img}}
-		if PreflightSpec(spec, kvm64) == "" {
+		if PreflightSpec(fixtureEntries(t), spec, kvm64) == "" {
 			t.Errorf("%s: should be blocked on kvm64", img)
 		}
 	}
 	for _, img := range []string{"ghcr.io/bookorbit/other:latest", "lscr.io/linuxserver/sonarr:latest", ""} {
 		spec := apps.AppSpec{Source: apps.Source{Type: "image", Image: img}}
-		if got := PreflightSpec(spec, kvm64); got != "" {
+		if got := PreflightSpec(fixtureEntries(t), spec, kvm64); got != "" {
 			t.Errorf("%q: unexpectedly blocked: %s", img, got)
 		}
 	}
 	git := apps.AppSpec{Source: apps.Source{Type: "git", Repo: "https://example.com/x.git"}}
-	if PreflightSpec(git, kvm64) != "" {
+	if PreflightSpec(fixtureEntries(t), git, kvm64) != "" {
 		t.Error("git source blocked")
 	}
 }
@@ -220,12 +85,7 @@ func TestPreflightSpec(t *testing.T) {
 // hook that whitelists it, a fresh install answers "Access denied - Hostname
 // verification failed" at the address Fog just handed the operator.
 func TestSabnzbdWhitelistsItsOwnHostname(t *testing.T) {
-	var sab apps.AppSpec
-	for _, e := range Entries() {
-		if e.ID == "sabnzbd" {
-			sab = e.Spec
-		}
-	}
+	sab := ownByID(t, "sabnzbd").Spec
 	if len(sab.Files) == 0 {
 		t.Fatal("no sabnzbd entry, or it renders no files")
 	}
@@ -253,19 +113,12 @@ func TestSabnzbdWhitelistsItsOwnHostname(t *testing.T) {
 // Docker Hub image name says where the code lives, so a new entry without a
 // projectUrl would silently show no Source on its app page.
 func TestImageEntriesHaveProjectURL(t *testing.T) {
-	ids := map[string]bool{}
-	for _, e := range Entries() {
-		ids[e.ID] = true
+	for _, e := range ownEntries(t) {
 		if e.Spec.Source.Type != "image" {
 			continue
 		}
 		if !strings.HasPrefix(e.ProjectURL, "https://") {
 			t.Errorf("%s: image entry has no https projectUrl (got %q)", e.ID, e.ProjectURL)
-		}
-	}
-	for id := range projectURLs {
-		if !ids[id] {
-			t.Errorf("projectURLs names %q, which is not a catalog entry", id)
 		}
 	}
 }
@@ -279,7 +132,7 @@ func TestSabnzbdAPIKeyHook(t *testing.T) {
 	dir := t.TempDir()
 	ini := filepath.Join(dir, "sabnzbd.ini")
 	script := strings.NewReplacer("#!/usr/bin/with-contenv bash", "#!/bin/bash",
-		"/config/sabnzbd.ini", ini, "lsiown", "true").Replace(sabAPIKeyInit)
+		"/config/sabnzbd.ini", ini, "lsiown", "true").Replace(sabHook(t, "api-key-init"))
 	run := func(key string) string {
 		t.Helper()
 		cmd := exec.Command("bash", "-c", script)
@@ -309,6 +162,18 @@ func TestSabnzbdAPIKeyHook(t *testing.T) {
 	}
 }
 
+// sabHook is one of the init hooks fog's SABnzbd entry mounts.
+func sabHook(t *testing.T, name string) string {
+	t.Helper()
+	for _, f := range ownByID(t, "sabnzbd").Spec.Files {
+		if f.Name == name {
+			return f.Content
+		}
+	}
+	t.Fatalf("sabnzbd has no file %s", name)
+	return ""
+}
+
 // runSabHook runs one of SABnzbd's init hooks against a scratch ini (and a
 // scratch /data), answering the ini afterwards.
 func runSabHook(t *testing.T, hook, ini, data string, env ...string) string {
@@ -333,16 +198,16 @@ func TestSabnzbdHostWhitelistHook(t *testing.T) {
 	}
 	dir := t.TempDir()
 	ini := filepath.Join(dir, "sabnzbd.ini")
-	if got := runSabHook(t, sabHostWhitelistInit, ini, dir, "FOG_FQDN=Sab.Example.com"); got != "[misc]\nhost_whitelist = sab.example.com, sabnzbd\n" {
+	if got := runSabHook(t, sabHook(t, "host-whitelist-init"), ini, dir, "FOG_FQDN=Sab.Example.com"); got != "[misc]\nhost_whitelist = sab.example.com, sabnzbd\n" {
 		t.Fatalf("first start:\n%q", got)
 	}
 	os.WriteFile(ini, []byte("[misc]\nhost_whitelist = mine, sab.example.com\napi_key = k\n"), 0o644)
-	got := runSabHook(t, sabHostWhitelistInit, ini, dir, "FOG_FQDN=sab.example.com")
+	got := runSabHook(t, sabHook(t, "host-whitelist-init"), ini, dir, "FOG_FQDN=sab.example.com")
 	if !strings.Contains(got, "host_whitelist = mine, sab.example.com, sabnzbd\n") || !strings.Contains(got, "api_key = k") {
 		t.Fatalf("merge:\n%s", got)
 	}
 	os.Remove(ini)
-	if got := runSabHook(t, sabHostWhitelistInit, ini, dir, "FOG_FQDN="); got != "[misc]\nhost_whitelist = sabnzbd\n" {
+	if got := runSabHook(t, sabHook(t, "host-whitelist-init"), ini, dir, "FOG_FQDN="); got != "[misc]\nhost_whitelist = sabnzbd\n" {
 		t.Fatalf("no domain yet:\n%q", got)
 	}
 }
@@ -357,7 +222,7 @@ func TestSabnzbdFoldersHook(t *testing.T) {
 	data := filepath.Join(dir, "data")
 	ini := filepath.Join(dir, "sabnzbd.ini")
 
-	got := runSabHook(t, sabFoldersInit, ini, data)
+	got := runSabHook(t, sabHook(t, "folders-init"), ini, data)
 	if got != "[misc]\ndownload_dir = "+data+"/incomplete\ncomplete_dir = "+data+"/complete\n" {
 		t.Fatalf("first start:\n%q", got)
 	}
@@ -366,7 +231,7 @@ func TestSabnzbdFoldersHook(t *testing.T) {
 	}
 
 	os.WriteFile(ini, []byte("[misc]\napi_key = k\ndownload_dir = Downloads/incomplete\ncomplete_dir = /downloads\n[categories]\n"), 0o644)
-	got = runSabHook(t, sabFoldersInit, ini, data)
+	got = runSabHook(t, sabHook(t, "folders-init"), ini, data)
 	want := "[misc]\napi_key = k\ndownload_dir = " + data + "/incomplete\ncomplete_dir = " + data + "/complete\n[categories]\n"
 	if got != want {
 		t.Fatalf("outside /data:\n%q\nwant\n%q", got, want)
@@ -375,7 +240,7 @@ func TestSabnzbdFoldersHook(t *testing.T) {
 	// The operator's own layout inside /data is kept (fog.lan's).
 	keep := "[misc]\ndownload_dir = " + data + "/Incomplete\ncomplete_dir = " + data + "/Downloads/complete\n"
 	os.WriteFile(ini, []byte(keep), 0o644)
-	if got := runSabHook(t, sabFoldersInit, ini, data); got != keep {
+	if got := runSabHook(t, sabHook(t, "folders-init"), ini, data); got != keep {
 		t.Fatalf("inside /data:\n%q", got)
 	}
 }
@@ -384,7 +249,7 @@ func TestSabnzbdFoldersHook(t *testing.T) {
 // from /app/v1/connections; the key is one Immich mints, so it is pasted
 // into the vault after setup and must not be a required secret.
 func TestImmichOffersAConnection(t *testing.T) {
-	immich := byID("immich")
+	immich := ownByID(t, "immich")
 	c := immich.Spec.Connection
 	if c == nil || c.Port != 2283 || c.Secret != "IMMICH_API_KEY" {
 		t.Fatalf("immich connection = %+v, want port 2283 with secret IMMICH_API_KEY", c)
@@ -400,7 +265,7 @@ func TestImmichOffersAConnection(t *testing.T) {
 // collector is how vendor data reaches it. An entry that lost any of these
 // would install and run while quietly breaking what Fit promises.
 func TestFitKeepsItsBoundary(t *testing.T) {
-	fit := byID("fit")
+	fit := ownByID(t, "fit")
 	if !fit.Spec.Sealed() {
 		t.Error("fit is not sealed")
 	}
@@ -412,12 +277,15 @@ func TestFitKeepsItsBoundary(t *testing.T) {
 	if fit.Spec.Connection != nil {
 		t.Error("fit offers a connection: no other app may hold a Fit credential")
 	}
-	collector := byID("fit-collector")
+	collector := ownByID(t, "fit-collector")
 	if !collector.Spec.SealedPeer {
 		t.Error("fit-collector is not a sealed peer: fit could not reach it")
 	}
 	if collector.Spec.Needs != nil {
 		t.Error("fit-collector has a database")
+	}
+	if !ownByID(t, "glass").Spec.SealedPeer {
+		t.Error("glass is not a sealed peer: fit could not report to it")
 	}
 }
 
@@ -426,7 +294,7 @@ func TestFitKeepsItsBoundary(t *testing.T) {
 // its model files stay out of backups, where tens of GiB each would crowd
 // out everything else.
 func TestThinkFleetStaysInTheHouse(t *testing.T) {
-	fleet := byID("think-fleet")
+	fleet := ownByID(t, "think-fleet")
 	gated := false
 	for _, r := range fleet.Spec.Routes {
 		if !r.LanOnly {

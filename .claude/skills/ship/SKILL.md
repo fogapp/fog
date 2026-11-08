@@ -34,9 +34,13 @@ git diff --stat
 make check
 ```
 
-`release.sh` runs `make check` again, but run it first: a commit that fails
-checks is a broken `main`, and CI at gitea.lan is slow (~5 min/job) to tell
-you. Fix anything red before committing.
+Run it first: a commit that fails checks is a broken `main`, and CI at
+gitea.lan is slow (~5 min/job) to tell you. Fix anything red before
+committing. Run it once the working tree holds exactly what you are about to
+commit (step 1's untracked files resolved): a pass records the id of that
+tree in `bin/.check-passed`, and `release.sh` skips its own run when the
+commit's tree matches — so this is the only run a release pays for. Edit
+anything after it passes and `release.sh` runs the checks again itself.
 
 Then:
 
@@ -97,7 +101,8 @@ background if the harness's foreground limit is shorter). It:
    in the code, and the git host is https or exactly the http host this
    clone allows (`git config fog.insecureCredentialHost`, set to `gitea.lan`
    here — so gitea.lan works with no flag),
-2. runs `make check`,
+2. runs `make check` — unless step 2's run passed on this exact tree, in
+   which case it says so and moves on (`FOG_RECHECK=1` forces a run),
 3. builds everything into `bin/release/` (binaries, `fogd.service`,
    `fogd-rollback`, `install.sh`, `flash.sh`, a signed relative `latest.json`
    and its `.sig`, `SHA256SUMS`) and writes the signed, dated

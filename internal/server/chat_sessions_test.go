@@ -16,6 +16,7 @@ import (
 // session stops working at once. The operator can sign a person out of
 // everything without touching their devices.
 func TestChatSessionsListAndRevoke(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -87,6 +88,7 @@ func TestChatSessionsListAndRevoke(t *testing.T) {
 // Each person has one budget across the chat API; hitting it answers 429
 // with Retry-After and does not touch anyone else's budget.
 func TestChatPerPersonRateLimit(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -112,6 +114,7 @@ func TestChatPerPersonRateLimit(t *testing.T) {
 // Cursors: limit is clamped, `before` pages backwards oldest-first, `after`
 // pages forward, and nothing under a since-join floor ever leaves the hub.
 func TestChatEventsPagination(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

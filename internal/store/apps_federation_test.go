@@ -6,7 +6,9 @@ import (
 )
 
 func TestAppFederationFactsRoundTrip(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

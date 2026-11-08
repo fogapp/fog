@@ -1,0 +1,38 @@
+id: gotenberg
+title: Gotenberg
+description: 'Document conversion API: HTML and Office files to PDF via Chromium and LibreOffice.'
+category: Utilities
+icon: '🖨️'
+spec:
+  source:
+    type: image
+    image: gotenberg/gotenberg:8
+  env:
+    TZ: Etc/UTC
+  routes:
+    - port: 3000
+  health:
+    path: /health
+  backup:
+    enabled: false
+projectUrl: https://github.com/gotenberg/gotenberg
+about: |-
+  Gotenberg is a document conversion service: an HTTP API in front of Chromium and LibreOffice that turns HTML, Markdown, Office files, and URLs into PDF, and converts between document formats.
+
+  It has no interface of its own. Office uses it for exact PDF export and for opening .doc, .odt, and .rtf; anything else on this machine can use it too.
+highlights:
+  - HTML, Markdown, and URLs to PDF through Chromium
+  - Word, Excel, PowerPoint, and OpenDocument to PDF through LibreOffice
+  - Merge, split, and PDF/A conversion
+  - 'Stateless: nothing to store, nothing to back up'
+logo: logo.webp
+developer: Gotenberg
+license: MIT
+website: https://gotenberg.dev
+docs: https://gotenberg.dev/docs/getting-started/introduction
+footprint:
+  memory: 314572800
+  memoryPeak: 1572864000
+  cpu: heavy
+  cpuWhen: converting documents
+  disk: 1258291200

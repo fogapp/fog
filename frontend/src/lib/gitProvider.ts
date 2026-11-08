@@ -1,7 +1,7 @@
 // Where an app's source lives, as a person would open it: the git host
 // behind a clone URL, and the page on that host showing the branch Fog
-// deploys. Clone URLs are SSH (deploy keys work over nothing else), so the
-// web address is inferred — the host's public name, or its SSH user for a
+// deploys. Clone URLs are SSH (a private repository's deploy key) or https
+// (a public one), so the web address is inferred — the host's public name, or its SSH user for a
 // self-hosted forge, says which forge it is, and each forge has its own
 // shape for "this branch's tree".
 
@@ -21,10 +21,12 @@ export interface RepoLink {
   url?: string;
 }
 
-// The pieces of an SSH clone URL: user, host, path. Local paths have no host.
+// The pieces of a clone URL: user, host, path. Local paths have no host.
 function parseClone(repo: string): { user: string; host: string; path: string } | null {
   const r = repo.trim();
-  let m = r.match(/^ssh:\/\/(?:([^@/]+)@)?([^/:]+)(?::\d+)?(\/.*)$/);
+  let m = r.match(/^https:\/\/([^/:]+)(?::\d+)?(\/.*)$/);
+  if (m) return { user: "", host: m[1], path: m[2] };
+  m = r.match(/^ssh:\/\/(?:([^@/]+)@)?([^/:]+)(?::\d+)?(\/.*)$/);
   if (m) return { user: m[1] ?? "", host: m[2], path: m[3] };
   m = r.match(/^(?:([^@]+)@)?([^:/]+):(.+)$/);
   if (m && !r.startsWith("/")) return { user: m[1] ?? "", host: m[2], path: m[3] };
@@ -78,7 +80,9 @@ export function repoLink(repo: string, branch = ""): RepoLink | null {
   const path = c.path.replace(/^\/+/, "").replace(/\/+$/, "").replace(/\.git$/, "");
   if (!path) return null;
   const provider = providerOf(c.user, c.host);
-  return { provider, host: c.host, path, url: treeURL(provider, webBase(c.host), path, branch) };
+  // An https clone URL already says where the host's web pages are.
+  const base = r.startsWith("https://") ? `https://${c.host}` : webBase(c.host);
+  return { provider, host: c.host, path, url: treeURL(provider, base, path, branch) };
 }
 
 // An image app's upstream project as a place to open. The catalog's

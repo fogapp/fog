@@ -56,6 +56,8 @@ func runRelease(t *testing.T, repo string, env ...string) (string, error) {
 }
 
 func TestReleaseRefusesCredentialsOverHTTP(t *testing.T) {
+	t.Parallel()
+
 	repo, key := preflightRepo(t)
 	out, err := runRelease(t, repo, "FOG_GIT_HOST=http://gitea.lan", "FOG_SIGNING_KEY="+key)
 	if err == nil || !strings.Contains(out, "plain http") || !strings.Contains(out, "git config fog.insecureCredentialHost gitea.lan") {
@@ -91,6 +93,8 @@ func TestReleaseRefusesCredentialsOverHTTP(t *testing.T) {
 // The attack: a stray untracked .go file would compile into a signed
 // release.
 func TestReleaseRefusesUntrackedFiles(t *testing.T) {
+	t.Parallel()
+
 	repo, key := preflightRepo(t)
 	os.MkdirAll(filepath.Join(repo, "internal/x"), 0o755)
 	os.WriteFile(filepath.Join(repo, "internal/x/backdoor.go"), []byte("package x\n"), 0o644)
@@ -108,6 +112,8 @@ func TestReleaseRefusesUntrackedFiles(t *testing.T) {
 }
 
 func TestReleaseRefusesAnExposedSigningKey(t *testing.T) {
+	t.Parallel()
+
 	repo, key := preflightRepo(t)
 	os.Chmod(key, 0o644)
 	out, err := runRelease(t, repo, "FOG_GIT_HOST=https://git.example.com", "FOG_SIGNING_KEY="+key)
@@ -127,6 +133,8 @@ func TestReleaseRefusesAnExposedSigningKey(t *testing.T) {
 // -trimpath and -buildvcs=false, and a binary built that way passes
 // check-release-binaries.
 func TestReleaseBuildsTrimPaths(t *testing.T) {
+	t.Parallel()
+
 	for _, f := range []string{"../../scripts/release.sh", "../../Makefile"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -196,6 +204,8 @@ func runCheck(t *testing.T, dir, rel string) (string, error) {
 // (vcs.revision, vcs.time) or the build machine, and passes one built as
 // release.sh builds.
 func TestCheckReleaseBinaries(t *testing.T) {
+	t.Parallel()
+
 	dir, build := goModule(t)
 	rel := filepath.Join(dir, "rel")
 	os.MkdirAll(rel, 0o755)
@@ -227,6 +237,8 @@ func TestCheckReleaseBinaries(t *testing.T) {
 // is one every fogd can order, and the strings the reviewer found
 // (v1.0.0-., v1.0.0-rc..1) are refused before anything runs.
 func TestReleaseVersionRuleIsTheGoParsers(t *testing.T) {
+	t.Parallel()
+
 	b, err := os.ReadFile("../../scripts/release.sh")
 	if err != nil {
 		t.Fatal(err)

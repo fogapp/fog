@@ -8,6 +8,8 @@ import (
 // The bot's plaintext of a message is pruned with the message: by room
 // retention, and when a disappearing message expires.
 func TestChatPruneTakesBotPlaintext(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if err := s.CreateChatRoom(&ChatRoom{ID: "r1", GroupID: []byte("g1"), Kind: "group", Label: "r", Policy: "{}", ReplicaStatus: "live"}); err != nil {
 		t.Fatal(err)

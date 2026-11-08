@@ -3,6 +3,8 @@ package files
 import "testing"
 
 func TestIsUnder(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		rel, dir string
 		want     bool

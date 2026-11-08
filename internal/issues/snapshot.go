@@ -6,6 +6,7 @@ package issues
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gitea.lan/matthew/fog/internal/apps"
@@ -55,7 +56,12 @@ type snapshot struct {
 	// offsiteTargets: every target, active or retired, for the offsite
 	// checks.
 	offsiteTargets []store.OffsiteTarget
-	now            time.Time
+	// connected is each app's connected providers, by app id; connectedOK
+	// is false when they could not be read, and the wiring checks that read
+	// it skip the sweep rather than resolve on missing evidence.
+	connected   map[int64]map[string]bool
+	connectedOK bool
+	now         time.Time
 }
 
 func (sc *Scanner) buildSnapshot(ctx context.Context) (*snapshot, error) {
@@ -153,6 +159,18 @@ func (sc *Scanner) buildSnapshot(ctx context.Context) (*snapshot, error) {
 		}
 	}
 	sn.offsiteTargets, _ = sc.Store.ListOffsiteTargets()
+	sn.connected = map[int64]map[string]bool{}
+	if conns, err := sc.Store.ConnectedIntegrations(); err == nil {
+		sn.connectedOK = true
+		for _, in := range conns {
+			if sn.connected[in.AppID] == nil {
+				sn.connected[in.AppID] = map[string]bool{}
+			}
+			sn.connected[in.AppID][strings.ToLower(in.Provider)] = true
+		}
+	} else {
+		sc.Log.Warn("issues snapshot: integrations", "err", err)
+	}
 	sn.now = time.Now()
 	return sn, nil
 }

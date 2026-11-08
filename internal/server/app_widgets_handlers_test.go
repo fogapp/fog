@@ -57,6 +57,8 @@ func newWidgetsFixture(t *testing.T, app http.HandlerFunc) *widgetsFixture {
 }
 
 func TestWidgetsRelay(t *testing.T) {
+	t.Parallel()
+
 	f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", `"v1"`)
 		w.Header().Set("Set-Cookie", "app=private")
@@ -92,6 +94,8 @@ func TestWidgetsRelay(t *testing.T) {
 }
 
 func TestWidgetsRelayPassesTheETagBothWays(t *testing.T) {
+	t.Parallel()
+
 	f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", `"v1"`)
 		if r.Header.Get("If-None-Match") == `"v1"` {
@@ -110,6 +114,8 @@ func TestWidgetsRelayPassesTheETagBothWays(t *testing.T) {
 }
 
 func TestWidgetsRelayGrant(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	asked := false
 	s.appGrantEndpointFn = func(context.Context, *store.App) (string, string, error) {
@@ -139,6 +145,8 @@ func TestWidgetsRelayGrant(t *testing.T) {
 
 // newtab reads a 404 as the app not serving widgets, and stops expecting any.
 func TestWidgetsRelayNotFound(t *testing.T) {
+	t.Parallel()
+
 	f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	for name, path := range map[string]string{
 		"no such app":        "/app/v1/widgets/nobody",
@@ -155,6 +163,8 @@ func TestWidgetsRelayNotFound(t *testing.T) {
 // Every other failure of the app is a 502, a 403 from it above all: newtab
 // reads a 403 as its own grant being withdrawn.
 func TestWidgetsRelayAppFailures(t *testing.T) {
+	t.Parallel()
+
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusFound} {
 		f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Location", "https://elsewhere.example/")
@@ -175,6 +185,8 @@ func TestWidgetsRelayAppFailures(t *testing.T) {
 }
 
 func TestWidgetsRelayRefusesAnOversizedAnswer(t *testing.T) {
+	t.Parallel()
+
 	f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, strings.Repeat("x", maxRelayed+1))
 	})
@@ -184,6 +196,8 @@ func TestWidgetsRelayRefusesAnOversizedAnswer(t *testing.T) {
 }
 
 func TestSearchRelay(t *testing.T) {
+	t.Parallel()
+
 	f := newWidgetsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"results":[{"title":"A book","href":"/books/1"}]}`)
 	})

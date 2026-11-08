@@ -172,9 +172,13 @@ func (b *Builder) fetch(ctx context.Context, app, repo, branch, commit, deployKe
 	return out, nil
 }
 
-// sshEnv prepares the deploy-key environment shared by Fetch and LsRemote.
+// sshEnv prepares the git environment shared by Fetch and LsRemote: the
+// deploy key for SSH, and no password prompts for https.
 func (b *Builder) sshEnv(app, deployKeyPEM string) ([]string, error) {
-	env := os.Environ()
+	// An https:// repository that turns out to be private asks for a
+	// password; with no terminal to ask on, git must fail at once rather
+	// than wait for one.
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if deployKeyPEM == "" {
 		return env, nil
 	}

@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"gitea.lan/matthew/fog/internal/apps"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack: an app publishing a host port one of fog's own containers
@@ -19,7 +19,7 @@ import (
 // is refused: a port added to them by hand, not through fogports, fails
 // here.
 func TestEveryPortFogPublishesIsRefusedToApps(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

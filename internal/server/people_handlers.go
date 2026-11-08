@@ -879,8 +879,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if refuseLimited(w, "too many attempts; try again later", limits...) {
 		return
 	}
-	if p != nil && s.successesSpent(w, r, account, limits...) {
-		return
+	keepSuccess := func() {}
+	if p != nil {
+		// A right password is reserved now, beside the attempt, and given
+		// back on every way out but a session.
+		release, ok := s.reserveSuccess(w, r, account, limits...)
+		if !ok {
+			return
+		}
+		defer func() {
+			if release != nil {
+				release()
+			}
+		}()
+		keepSuccess = func() { release = nil }
 	}
 	// The attempt is charged now (refuseLimited); only a right password gives
 	// it back. One account holds at most one place in the hashing line.
@@ -924,7 +936,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refund(limits...)
-	s.chargeSuccess(r, account)
+	keepSuccess()
 	s.clearAccount(account)
 	if err := s.startWebSession(w, r, p.ID, "pwd"); err != nil {
 		writeError(w, err)

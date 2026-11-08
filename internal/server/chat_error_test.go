@@ -15,6 +15,8 @@ import (
 // A hub's refusal this side has no mapping for keeps its status and code;
 // it is the hub's answer, not our failure.
 func TestChatErrorPassesRemoteRefusalsThrough(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{log: slog.New(slog.DiscardHandler)}
 	rec := httptest.NewRecorder()
 	s.chatError(rec, fmt.Errorf("relay: %w", &chat.RemoteError{Status: http.StatusNotFound, Code: "not_found", Msg: "no such room"}))
@@ -38,6 +40,8 @@ func TestChatErrorPassesRemoteRefusalsThrough(t *testing.T) {
 // can't be read again (deleted under the submit) answers from the copy in
 // hand instead of dereferencing a nil room.
 func TestEpochStaleSurvivesAFailedRoomLookup(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	rec := httptest.NewRecorder()
 	srv.writeEpochStale(rec, &store.ChatRoom{ID: "gone", Epoch: 4, Seq: 9}, chat.ErrEpochStale)

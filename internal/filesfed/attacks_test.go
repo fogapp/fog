@@ -25,6 +25,8 @@ import (
 // third party's stub, or under a narrowed listing, must not overwrite or
 // dehydrate it.
 func TestOriginCannotOverwriteTheSubscribersOwnFiles(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name   string
 		detail string
@@ -83,6 +85,8 @@ func TestOriginCannotOverwriteTheSubscribersOwnFiles(t *testing.T) {
 // A download stops at the size its entry declared — the size the quota
 // was checked against — however much the peer streams.
 func TestDownloadStopsAtTheDeclaredSize(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	f.sub.QuotaBytes = 10
 	big := bytes.Repeat([]byte("x"), 4<<20)
@@ -102,6 +106,8 @@ func TestDownloadStopsAtTheDeclaredSize(t *testing.T) {
 // A symlink anywhere along a path — not only at its end — does not lead
 // a peer out of a share: nothing reads or writes through it.
 func TestSymlinkInsideAShareLeadsNowhere(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	os.MkdirAll(filepath.Join(root, "Drop"), 0o755)
@@ -136,6 +142,8 @@ func TestSymlinkInsideAShareLeadsNowhere(t *testing.T) {
 // file. It must not open it past the checks made by name: keep on this
 // box, and a contribution's author.
 func TestAnotherSpellingIsNotAnotherFile(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	os.MkdirAll(filepath.Join(root, "Drop"), 0o755)
@@ -172,6 +180,8 @@ func TestAnotherSpellingIsNotAnotherFile(t *testing.T) {
 // that: once the file there is no longer theirs — withdrawn, or since
 // overwritten by the operator — the session ends instead of landing.
 func TestReplaceDoesNotOutliveTheFileItReplaces(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	sh.Mode = ModeContribute
@@ -239,6 +249,8 @@ func TestReplaceDoesNotOutliveTheFileItReplaces(t *testing.T) {
 // only in case is the same file on a case-insensitive disk, and another
 // file — never to be overwritten — on a case-sensitive one.
 func TestFollowedRenameDoesNotOverwrite(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	f.sub.Mode = ModeContribute
 	if err := f.st.UpdateFileFedSubscription(f.sub); err != nil {
@@ -273,6 +285,8 @@ func TestFollowedRenameDoesNotOverwrite(t *testing.T) {
 // A peer's catalog is the peer's to write: a thousand entries do not make
 // a thousand Inbox notices.
 func TestCatalogDoesNotFloodTheInbox(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	if err := f.st.SetFedCapability(f.peer.ID, CapFilesShare, store.DirUse, ""); err != nil {
 		t.Fatal(err)
@@ -299,6 +313,8 @@ func TestCatalogDoesNotFloodTheInbox(t *testing.T) {
 // A peer's thumbnail is a small JPEG: a few bytes declaring a vast image
 // for the viewer's browser to decode are not cached or served.
 func TestPeerThumbnailBombIsRefused(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailPreviews)
 	if err := f.st.UpsertFileFedReplica(store.FileFedReplica{SubscriptionID: f.sub.ID, Rel: "x.jpg", Kind: "file", Size: 10, SHA256: sha([]byte("x"))}); err != nil {
 		t.Fatal(err)
@@ -333,6 +349,8 @@ func TestPeerThumbnailBombIsRefused(t *testing.T) {
 // stay, under any spelling of the folder's name, and so does the folder.
 // What the origin's files leave goes to the trash, not away for good.
 func TestPruneLeavesTheSubscribersFiles(t *testing.T) {
+	t.Parallel()
+
 	for _, spelling := range []string{"Notes", "notes"} {
 		t.Run(spelling, func(t *testing.T) {
 			f := newOriginFixture(t, DetailFull)
@@ -407,6 +425,8 @@ func TestPruneLeavesTheSubscribersFiles(t *testing.T) {
 // pull would bring counts, so an entry claimed as the subscriber's own
 // takes nothing off the total.
 func TestQuotaCannotBeTalkedDown(t *testing.T) {
+	t.Parallel()
+
 	big := bytes.Repeat([]byte("x"), 4<<20)
 	bigEntry := ManifestEntry{Path: "big.bin", Kind: "file", Size: int64(len(big)), SHA256: sha(big), Mtime: "2026-11-02T10:00:00Z"}
 	for name, extra := range map[string][]ManifestEntry{
@@ -438,6 +458,8 @@ func TestQuotaCannotBeTalkedDown(t *testing.T) {
 // origin's own — and a record made under another spelling before this
 // still finds its file by identity.
 func TestProvenanceSurvivesAnotherSpelling(t *testing.T) {
+	t.Parallel()
+
 	s, a, root := manifestFixture(t)
 	os.MkdirAll(filepath.Join(root, "Photos", "Sub"), 0o755)
 	os.WriteFile(filepath.Join(root, "Photos", "Sub", "probe"), []byte("p"), 0o644)
@@ -491,6 +513,8 @@ func TestProvenanceSurvivesAnotherSpelling(t *testing.T) {
 // the operator has since edited stays, as the operator's, and an untouched
 // one goes to the trash, not away for good.
 func TestWithdrawalKeepsTheOperatorsEdit(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	sh := share(t, s, peer, "Drop")
 	sh.Mode = ModeContribute
@@ -531,6 +555,8 @@ func TestWithdrawalKeepsTheOperatorsEdit(t *testing.T) {
 // listing doesn't remove it, an open doesn't overwrite it, and a write
 // under any spelling of a replica's name meets the replica's guard.
 func TestListedEntryNeverTouchesAnotherSpelling(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailPreviews)
 	dir := filepath.Join(f.root, "Peers", "north", "Photos")
 	os.MkdirAll(dir, 0o755)
@@ -573,6 +599,8 @@ func TestListedEntryNeverTouchesAnotherSpelling(t *testing.T) {
 // arriving is kept: the download is not written over it, and the
 // subscriber is told.
 func TestDownloadNeverOverwritesAConcurrentSave(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	dir := filepath.Join(f.root, "Peers", "north", "Photos")
 	blob := []byte("theirs")
@@ -607,6 +635,8 @@ func TestDownloadNeverOverwritesAConcurrentSave(t *testing.T) {
 // alone, where the disk can't tell the two apart), or a field that doesn't
 // read — an mtime, a digest — refuses it before anything is placed.
 func TestManifestWithDuplicatesOrUnreadableFieldsIsRefused(t *testing.T) {
+	t.Parallel()
+
 	blob := []byte("theirs")
 	ok := ManifestEntry{Path: "a.txt", Kind: "file", Size: int64(len(blob)), SHA256: sha(blob), Mtime: "2026-11-02T10:00:00Z"}
 	cases := map[string][]ManifestEntry{
@@ -648,6 +678,8 @@ func TestManifestWithDuplicatesOrUnreadableFieldsIsRefused(t *testing.T) {
 // unsubscribing — so it can't slip out of the quota, outlive the copy, or
 // be pushed on as the subscriber's contribution.
 func TestPlacedFileStaysTheSyncs(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	blob := []byte("theirs")
 	f.serveManifest([]ManifestEntry{{Path: "a.txt", Kind: "file", Size: int64(len(blob)), SHA256: sha(blob), Mtime: "2026-11-02T10:00:00Z"}}, blob)
@@ -677,6 +709,8 @@ func TestPlacedFileStaysTheSyncs(t *testing.T) {
 // Files the subscriber kept make one notice per peer, however many, and it
 // says whose file was kept and that the peer's version was not written.
 func TestKeptFileNoticesAreOnePerPeer(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	dir := filepath.Join(f.root, "Peers", "north", "Photos")
 	blob := []byte("theirs")
@@ -770,6 +804,8 @@ func TestContributionCountsAreCapped(t *testing.T) {
 // too, and the save is another inode. The origin withdrawing the file
 // then leaves the subscriber's save alone.
 func TestSaveAtTheSameSizeAndTimeIsTheSubscribers(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	f.sub.Mode = ModeContribute
 	blob := []byte("theirs")
@@ -931,6 +967,8 @@ func TestReplaceSessionsCountOnTheOpenCap(t *testing.T) {
 // asked whether the name already leads to a file this subscription holds
 // or just placed, and the manifest is refused.
 func TestUnicodeFormsAreOneName(t *testing.T) {
+	t.Parallel()
+
 	nfc, nfd := "café.txt", "café.txt"
 	f := newOriginFixture(t, DetailFull)
 	dir := filepath.Join(f.root, "Peers", "north", "Photos")

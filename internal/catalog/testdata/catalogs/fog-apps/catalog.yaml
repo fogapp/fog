@@ -1,0 +1,11 @@
+format: fog-catalog/1
+name: fog-apps
+title: Fog apps
+description: 'Test stand-ins for apps built for fog: Fin, and made-up first-party apps that build from their own repositories.'
+featured:
+  - planner
+  - journal
+order:
+  - planner
+  - journal
+  - journal-collector

@@ -15,6 +15,7 @@ import (
 	"gitea.lan/matthew/fog/internal/auth"
 	"gitea.lan/matthew/fog/internal/backup"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // makeKit builds a real sealed kit: master.key + an actual fog.db carrying
@@ -22,7 +23,7 @@ import (
 func makeKit(t *testing.T, passphrase string) []byte {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "fog.db")
-	st, err := store.Open(dbPath)
+	st, err := storetest.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

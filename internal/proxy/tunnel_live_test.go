@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/randx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // liveCurlImage stands in for cloudflared: a client of the tunnel socket.
@@ -242,7 +242,7 @@ func TestTunnelListenerShape(t *testing.T) {
 	if got := p.TunnelService(); got != "unix:/var/lib/fog/caddy/tunnel/caddy.sock" {
 		t.Fatalf("service %q", got)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,6 +20,8 @@ func pinPaths(t *testing.T, s *Store, person int64) []string {
 }
 
 func TestFilePins(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreatePerson("a", "A", PersonRoleOperator)
 	b, _ := s.CreatePerson("b", "B", PersonRoleOperator)
@@ -71,6 +73,8 @@ func TestFilePins(t *testing.T) {
 }
 
 func TestFilePinLimit(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreatePerson("a", "A", PersonRoleOperator)
 	for i := 0; i < MaxFilePins; i++ {

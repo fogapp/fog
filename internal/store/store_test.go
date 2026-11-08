@@ -11,7 +11,7 @@ import (
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := openTest(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -20,6 +20,8 @@ func testStore(t *testing.T) *Store {
 }
 
 func TestMigrationsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "test.db")
 	s, err := Open(path)
 	if err != nil {
@@ -34,6 +36,8 @@ func TestMigrationsIdempotent(t *testing.T) {
 }
 
 func TestSettings(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if v, err := s.GetSetting("missing"); err != nil || v != "" {
 		t.Fatalf("missing setting: v=%q err=%v", v, err)
@@ -51,6 +55,8 @@ func TestSettings(t *testing.T) {
 }
 
 func TestPeopleAndSessions(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if n, _ := s.CountOperators(); n != 0 {
 		t.Fatalf("expected 0 operators, got %d", n)
@@ -93,6 +99,8 @@ func TestPeopleAndSessions(t *testing.T) {
 // A device's last_seen_at moves on a request only once it is a minute old,
 // so a burst of requests from one device writes nothing.
 func TestSessionPersonTouchesDeviceWhenStale(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	pid, err := s.CreatePerson("ann", "Ann", PersonRoleMember)
 	if err != nil {
@@ -131,6 +139,8 @@ func TestSessionPersonTouchesDeviceWhenStale(t *testing.T) {
 }
 
 func TestSystemSecretRotation(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if err := s.SetSecret(0, "dns_api_token", "ct-v1"); err != nil {
 		t.Fatal(err)
@@ -156,6 +166,8 @@ func TestSystemSecretRotation(t *testing.T) {
 }
 
 func TestAudit(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if err := s.Audit("matthew", "settings.update", "base_domain", ""); err != nil {
 		t.Fatal(err)
@@ -169,6 +181,8 @@ func TestAudit(t *testing.T) {
 // The activity log reads back past its first page from the oldest entry it
 // holds: strictly older, newest first.
 func TestAuditBefore(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, a := range []string{"one", "two", "three"} {
 		if err := s.Audit("matthew", a, "", ""); err != nil {
@@ -188,6 +202,8 @@ func TestAuditBefore(t *testing.T) {
 // The app page's activity feed is one app's own entries: subject match or
 // the app acting through fog, never a substring hit on another subject.
 func TestAppAudit(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, e := range [][3]string{
 		{"admin", "app.restart", "hub"},
@@ -220,6 +236,8 @@ func TestAppAudit(t *testing.T) {
 // Notices persist until dismissed, and repeats of the same (kind, app)
 // replace the active notice instead of stacking.
 func TestNotices(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if err := s.CreateNotice("deploy-key-cleanup", "manor", "old title", "old body"); err != nil {
 		t.Fatal(err)
@@ -273,6 +291,8 @@ func TestNotices(t *testing.T) {
 // row: the partial unique index makes CreateNotice's upsert atomic where the
 // old check-then-insert let racers stack duplicates.
 func TestCreateNoticeConcurrent(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	var wg sync.WaitGroup
 	errs := make(chan error, 20)
@@ -320,6 +340,8 @@ func TestCreateNoticeConcurrent(t *testing.T) {
 // CreateNotice upgrades cleanly: 0024 keeps the newest of each (kind, app)
 // group, leaves dismissed history alone, and the unique index holds after.
 func TestNoticesDedupeMigration(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "fog.db")
 	db := openAtMigration(t, path, "0024")
 	rows := []struct{ created, kind, app, title, dismissed string }{
@@ -370,6 +392,8 @@ func TestNoticesDedupeMigration(t *testing.T) {
 // '#' as a fragment marker. journal_mode proves the pragmas landed — an
 // unescaped path silently opens a different file in rollback-journal mode.
 func TestOpenPathWithURIMetacharacters(t *testing.T) {
+	t.Parallel()
+
 	dir := filepath.Join(t.TempDir(), "we#ird?dir")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -392,6 +416,8 @@ func TestOpenPathWithURIMetacharacters(t *testing.T) {
 }
 
 func TestUpdateNasShare(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if _, err := s.CreateNasShare(NasShare{
 		Name: "media", Proto: "nfs", Server: "192.168.1.111",
@@ -418,6 +444,8 @@ func TestUpdateNasShare(t *testing.T) {
 }
 
 func TestPruneAudit(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, action := range []string{"app.create", "app.deploy", "app.stop"} {
 		if err := s.Audit("matthew", action, "manor", ""); err != nil {

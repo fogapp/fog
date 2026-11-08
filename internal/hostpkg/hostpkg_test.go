@@ -123,9 +123,9 @@ func TestCmdFallbackKillsProcessGroup(t *testing.T) {
 	}
 }
 
-// The attack: a Drive folder named "Apps${X}/Lucid" handed to a host
+// The attack: a Drive folder named "Apps${X}/Glass" handed to a host
 // command. systemd expands ${VAR} in a unit's command line, so it reached
-// the pin helper as "Apps/Lucid" — another app's data. Every argument goes
+// the pin helper as "Apps/Glass" — another app's data. Every argument goes
 // to systemd-run with "$" doubled, which systemd reads back as written.
 func TestCmdEscapesDollarForSystemd(t *testing.T) {
 	bin := t.TempDir()
@@ -134,9 +134,9 @@ func TestCmdEscapesDollarForSystemd(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("INVOCATION_ID", "test")
-	cmd := Cmd(context.Background(), nil, "/usr/local/bin/fogd", "pin-bind", "--rel", "Apps${X}/Lucid", "$HOME")
+	cmd := Cmd(context.Background(), nil, "/usr/local/bin/fogd", "pin-bind", "--rel", "Apps${X}/Glass", "$HOME")
 	args := strings.Join(cmd.Args, " ")
-	if !strings.Contains(args, "-- /usr/local/bin/fogd pin-bind --rel Apps$${X}/Lucid $$HOME") {
+	if !strings.Contains(args, "-- /usr/local/bin/fogd pin-bind --rel Apps$${X}/Glass $$HOME") {
 		t.Fatalf("systemd-run args: %s", args)
 	}
 }

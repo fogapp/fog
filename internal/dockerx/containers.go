@@ -434,17 +434,32 @@ type networkDetail struct {
 	Internal bool `json:"Internal"`
 	IPAM     struct {
 		Config []struct {
+			Subnet  string `json:"Subnet"`
 			Gateway string `json:"Gateway"`
 		} `json:"Config"`
 	} `json:"IPAM"`
 }
 
-// gateway is the network's IPv4 gateway, or "".
+// gateway is the network's IPv4 gateway, or "". Docker 27 doesn't always
+// report one it chose itself: a network created with a subnet and no
+// gateway (as fog creates its isolated networks) inspects with the subnet
+// alone. Docker's default IPAM then gives the bridge the subnet's first
+// host address, so that is the gateway when none is reported.
 func (n *networkDetail) gateway() string {
 	for _, c := range n.IPAM.Config {
 		if ip, err := netip.ParseAddr(c.Gateway); err == nil && ip.Is4() {
 			return c.Gateway
 		}
+	}
+	for _, c := range n.IPAM.Config {
+		if c.Gateway != "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(c.Subnet)
+		if err != nil || !p.Addr().Is4() || p.Bits() > 30 {
+			continue
+		}
+		return p.Masked().Addr().Next().String()
 	}
 	return ""
 }

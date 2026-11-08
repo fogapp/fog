@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/sdnotify"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/packaging"
 )
 
@@ -88,7 +88,7 @@ func stubMain() {
 	// Then what fogd does at every start (Loop): settle — post a rollback,
 	// confirm a trial, bring the unit files to the ones it shipped with.
 	if os.Getenv("FOGSTUB_SETTLE") == "1" {
-		st, err := store.Open(filepath.Join(os.Getenv("FOG_DATA_DIR"), "fog.db"))
+		st, err := storetest.Open(filepath.Join(os.Getenv("FOG_DATA_DIR"), "fog.db"))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "fogd stub: store:", err)
 			os.Exit(1)
@@ -269,6 +269,8 @@ func getPort(port string) (string, error) {
 // own port, the hardened unit, the ExecStartPre guard — with every drop-in
 // it had exactly as it was.
 func TestUnderSystemdSelfUpdateMigratesAnOldInstall(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.install(f.exe, f.good)
 	dropins := f.oldStyle("Environment=FOGSTUB_SETTLE=1\nEnvironment=FOGSTUB_DELAY=40s\n")
@@ -312,6 +314,8 @@ func TestUnderSystemdSelfUpdateMigratesAnOldInstall(t *testing.T) {
 // New unit files that don't work are put back — unit, socket, port drop-in —
 // and refused from then on, so fog doesn't retry them every start.
 func TestUnderSystemdFailedUnitChangeRollsBack(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.install(f.exe, f.good)
 	dropins := f.oldStyle("Environment=FOGSTUB_SETTLE=1\nEnvironment=FOGSTUB_DELAY=10s\nEnvironment=FOGSTUB_BADUNITS=1\n")
@@ -336,7 +340,7 @@ func TestUnderSystemdFailedUnitChangeRollsBack(t *testing.T) {
 		t.Error("the socket port drop-in the change added is still there")
 	}
 	f.waitFor(30*time.Second, "posted the rollback and refused those units", func() bool {
-		st, err := store.Open(f.data + "/fog.db")
+		st, err := storetest.Open(f.data + "/fog.db")
 		if err != nil {
 			return false
 		}
@@ -360,6 +364,8 @@ func TestUnderSystemdFailedUnitChangeRollsBack(t *testing.T) {
 // and the unit files are never touched — they only change once a binary has
 // proven itself on the old ones.
 func TestUnderSystemdFailedBinaryOnAnOldInstallLeavesTheUnits(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	dropins := f.oldStyle("")
 	f.trial(time.Now().Add(3 * time.Second))
@@ -461,6 +467,8 @@ func (f *sdFixture) record(by string) {
 }
 
 func TestUnderSystemdHardenedUnitRunsFogd(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.install(f.exe, f.good)
 	if err := f.systemctl("start", sdUnit); err != nil {
@@ -500,6 +508,8 @@ func get(t *testing.T) (string, error) {
 // restart, binding the port fails every time; and with fogd stopped
 // outright, a request starts it.
 func TestUnderSystemdSocketHoldsThePortAcrossRestarts(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.install(f.exe, f.good)
 	if err := f.systemctl("start", sdUnit); err != nil {
@@ -552,6 +562,8 @@ func TestUnderSystemdSocketHoldsThePortAcrossRestarts(t *testing.T) {
 
 // A unit without the socket (an install from before it) still works: fogd binds FOG_LISTEN itself.
 func TestUnderSystemdFogdBindsItselfWithoutTheSocket(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.install(f.exe, f.good)
 	// An install from before the socket: the unit names it, but it isn't there.
@@ -572,6 +584,8 @@ func TestUnderSystemdFogdBindsItselfWithoutTheSocket(t *testing.T) {
 }
 
 func TestUnderSystemdExecStartPreRestoresAtStart(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.trial(time.Now().Add(-time.Second))
 	if err := f.systemctl("start", sdUnit); err != nil {
@@ -590,6 +604,8 @@ func TestUnderSystemdExecStartPreRestoresAtStart(t *testing.T) {
 // A new fogd that crash-loops: systemd restarts it every RestartSec, and the
 // first start after the deadline runs the previous binary.
 func TestUnderSystemdCrashLoopRollsBackAtTheDeadline(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	f.trial(time.Now().Add(8 * time.Second))
 	f.systemctl("start", "--no-block", sdUnit)
@@ -604,6 +620,8 @@ func TestUnderSystemdCrashLoopRollsBackAtTheDeadline(t *testing.T) {
 // A unit from before the ExecStartPre line: the timer the updater arms
 // (armTimer, the real systemd-run call) does the rollback and restarts fogd.
 func TestUnderSystemdTimerRollsBackWithoutExecStartPre(t *testing.T) {
+	t.Parallel()
+
 	f := newSDFixture(t)
 	os.MkdirAll("/etc/systemd/system/"+sdUnit+".d", 0o755)
 	os.WriteFile("/etc/systemd/system/"+sdUnit+".d/old.conf", []byte("[Service]\nExecStartPre=\n"), 0o644)

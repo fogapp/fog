@@ -72,6 +72,8 @@ func (f *testFog) renew(t *testing.T, breakPairings bool) (int, string) {
 // it can pair with anyone new — minting an invite, or joining one — and
 // once renewed it pairs.
 func TestLegacyFogRenewsToPairAnew(t *testing.T) {
+	t.Parallel()
+
 	a, b := newFog(t, true), newFog(t, false)
 	if a.keyBound(t) || !b.keyBound(t) {
 		t.Fatal("keyBound reads wrong")
@@ -108,6 +110,8 @@ func TestLegacyFogRenewsToPairAnew(t *testing.T) {
 // households — and done, it says it again in the Inbox. Pairing again
 // refreshes the household's row in place.
 func TestRenewingAPairedLegacyFogIsExplicit(t *testing.T) {
+	t.Parallel()
+
 	a, c := newFog(t, true), newFog(t, false)
 	aID, cID := mustIdentity(t, a.s), mustIdentity(t, c.s)
 	cOnA, err := a.s.store.CreatePairedPeer(cID.InstanceID, "cedar", c.srv.URL, cID.PublicKeyB64())
@@ -157,6 +161,8 @@ func TestRenewingAPairedLegacyFogIsExplicit(t *testing.T) {
 // The inviter turns a legacy joiner away before spending its invite, and
 // tells it what to do.
 func TestInviterRefusesALegacyJoinerBeforeSpending(t *testing.T) {
+	t.Parallel()
+
 	b := newFog(t, false)
 	code := mintInvite(t, b.h, b.cookie, `[]`)
 	inv, err := fed.ParseInvite(code)

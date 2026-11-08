@@ -92,7 +92,7 @@ func load1() float64 {
 }
 
 // Swap reads swap use from /proc/meminfo. Not part of Sample, which the
-// dashboard draws; Lucid's host gauges report it.
+// dashboard draws; Glass's host gauges report it.
 func Swap() (used, total uint64, ok bool) {
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {

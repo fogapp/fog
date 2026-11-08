@@ -213,6 +213,10 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
   // The listing above the card carries the explanation; here it only holds
   // the button.
   const blocker = entry.blocker ?? "";
+  // An app from a catalog that isn't one of fog's own is somebody else's
+  // spec: it is created held, and its page opens on the review of what it
+  // will run. A restore waits until it is approved.
+  const held = !entry.trusted;
 
   async function install() {
     setBusy(true);
@@ -220,8 +224,9 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
     try {
       const { spec, secrets } = buildInstallPayload(entry, values, placements, name.trim(), subdomain);
       await post("/api/apps", {
-        name: name.trim(), spec, secrets,
-        ...(artifact ? { restoreFrom: { path: artifactPath, confirmIdentity } } : {}),
+        name: name.trim(), spec, secrets, catalog: entry.catalog,
+        ...(held ? { review: true } : {}),
+        ...(artifact && !held ? { restoreFrom: { path: artifactPath, confirmIdentity } } : {}),
       });
     } catch (err) {
       setError(errorText(err, "Install failed"));
@@ -234,7 +239,10 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
     for (const c of selected) {
       try {
         const { spec, secrets } = buildInstallPayload(c.target, defaultValues(c.target, browserTZ), {}, c.target.id);
-        await post("/api/apps", { name: c.target.id, spec, secrets });
+        await post("/api/apps", {
+          name: c.target.id, spec, secrets, catalog: c.target.catalog,
+          ...(c.target.trusted ? {} : { review: true }),
+        });
       } catch (err) {
         failed.push(`${c.target.title} (${err instanceof Error ? err.message : "install failed"})`);
       }
@@ -257,6 +265,13 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
           Backups and update checks are on by default. Everything here is editable later in the app's Config tab.
         </p>
       </div>
+      {held && (
+        <p className="rounded-md border border-warn/30 bg-warn/10 p-3 text-xs text-ink-muted">
+          {entry.title} comes from the <span className="font-medium text-ink">{entry.catalog}</span> catalog, which
+          isn't one of fog's own. Fog creates it held: you read what it will run — its image, folders, ports and
+          access — and approve it before anything deploys.
+        </p>
+      )}
       <Field label="Name" value={name} onChange={(e) => setName(e.target.value)}
         hint={label ? "How the app is labelled in Fog." : "Also becomes the address, unless you set one under Advanced."} />
       {primary.map((o) => (
@@ -312,7 +327,7 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
           </div>
         )}
       </div>
-      {delegated && (
+      {delegated && !held && (
         <div className="space-y-3 rounded-lg border border-hair p-4">
           <div>
             <p className="text-sm font-semibold text-ink">Migrating from another instance?</p>
@@ -451,6 +466,7 @@ export default function InstallPanel({ entry, all }: { entry: CatalogEntry; all:
       <button onClick={install} disabled={busy || reading || restoreBlocked || !!subdomainError || !!blocker}
         className="w-full rounded-md bg-accent py-2 text-sm font-semibold text-accent-on hover:bg-accent-hover disabled:opacity-50">
         {busy ? (artifact ? "Installing & staging restore…" : "Installing…")
+          : held ? `Install ${entry.title} for review`
           : artifact ? `Install ${entry.title} from artifact`
           : selected.length > 0 ? `Install ${entry.title} + ${selected.length} more`
           : `Install ${entry.title}`}

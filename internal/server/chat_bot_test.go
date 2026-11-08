@@ -19,6 +19,7 @@ import (
 // messages they can read, and reads what they post — and nothing else on
 // the box can.
 func TestFogBotIsAMember(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -156,6 +157,8 @@ func mustContent(t *testing.T, text string) []byte {
 // A member adding the bot to a private group by Welcome: the bot joins from
 // one of its published KeyPackages.
 func TestFogBotJoinsByWelcome(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")
@@ -206,6 +209,8 @@ func TestFogBotJoinsByWelcome(t *testing.T) {
 // room it forgets the room and all it read there, so webhooks, apps and MCP
 // can't reach it any more.
 func TestFogBotLetsGoOfWhatTheRoomTookBack(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")
@@ -261,6 +266,7 @@ func TestFogBotLetsGoOfWhatTheRoomTookBack(t *testing.T) {
 // Fog's bot, like members' clients, sends nothing into a group that still
 // holds a departed person's leaves: it waits for a member to remove them.
 func TestFogBotWaitsForDepartedLeaves(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

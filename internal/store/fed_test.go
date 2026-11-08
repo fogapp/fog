@@ -11,6 +11,8 @@ import (
 // driver's UNIQUE-violation code, not message text — because fed pairing
 // branches on it to try the next alias.
 func TestCreatePairedPeerNameCollision(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if _, err := s.CreatePairedPeer("inst-1", "attic", "", "pk1"); err != nil {
 		t.Fatal(err)
@@ -25,6 +27,8 @@ func TestCreatePairedPeerNameCollision(t *testing.T) {
 }
 
 func TestRenameFedPeerCollision(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if _, err := s.CreatePairedPeer("inst-1", "attic", "", "pk1"); err != nil {
 		t.Fatal(err)
@@ -46,6 +50,8 @@ func TestRenameFedPeerCollision(t *testing.T) {
 // A real, non-uniqueness failure must pass through unwrapped, not be
 // mislabeled as a collision.
 func TestCreatePairedPeerOtherErrorsPassThrough(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	s.Close() // closed DB: any error but not a UNIQUE violation
 	_, err := s.CreatePairedPeer("inst-1", "attic", "", "pk1")
@@ -60,6 +66,8 @@ func TestCreatePairedPeerOtherErrorsPassThrough(t *testing.T) {
 // "Keep on this box" exclusions follow a renamed folder, the folder itself
 // and everything under it, and leave other paths alone.
 func TestRenamePathShareExcludes(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, p := range []string{"a", "a/b", "ab", "c"} {
 		if err := s.AddFileShareExclude(p); err != nil {

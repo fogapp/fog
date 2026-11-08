@@ -70,6 +70,7 @@ func (p *chatPair) heartbeat(t *testing.T) {
 }
 
 func TestChatAcrossHouseholds(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	// People: the operator on A; eve, a member, on B.
@@ -295,6 +296,8 @@ collect:
 }
 
 func TestChatFedRefusesUngrantedPeer(t *testing.T) {
+	t.Parallel()
+
 	// A grants B nothing chat-related: B's fog cannot fetch A's key material
 	// or read A's rooms, and A's people are absent from B's directory.
 	p := twoFogs(t, `[{"capability":"apps.directory"}]`)

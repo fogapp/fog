@@ -136,10 +136,12 @@ type Manager struct {
 	// Snapshot state: the scheduler's retry and alert throttles.
 	lastSnapAttempt time.Time
 	// snapFullAt and snapFullNeed: the last run refused for want of space,
-	// and what it needed (runDue backs off until there is room).
+	// and what it needed (runDue backs off until there is room, or until
+	// the excludes differ from snapFullExcl, those it was refused under).
 	snapFullMu     sync.Mutex
 	snapFullAt     time.Time
 	snapFullNeed   int64
+	snapFullExcl   string
 	lastStaleAlert time.Time
 
 	imu     sync.Mutex

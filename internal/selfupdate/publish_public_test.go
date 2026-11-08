@@ -95,6 +95,8 @@ func (f *publicFixture) run(args ...string) (string, error) {
 }
 
 func TestPublishPublicUsesThePublicIdentity(t *testing.T) {
+	t.Parallel()
+
 	f := newPublicFixture(t)
 	os.WriteFile(filepath.Join(f.repo, "main.go"), []byte("package main\n"), 0o644)
 	f.commit("a change")
@@ -123,6 +125,8 @@ func TestPublishPublicUsesThePublicIdentity(t *testing.T) {
 }
 
 func TestPublishPublicScanCatchesWhatItMissed(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name, want string
 		change     func(f *publicFixture)

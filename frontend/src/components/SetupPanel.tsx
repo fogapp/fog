@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { post, type AppDetail, type DeployStatusResponse } from "../api";
 import { DeployKey, WebhookURL } from "./GitAccess";
 import CancelDeploy from "./CancelDeploy";
+import { isHTTPSRepo } from "../lib/gitUrl";
 
 // SetupPanel owns a git app's first run: connect the repo, optionally wire
 // the webhook, deploy — with live progress and plain-English failures. Shown
@@ -27,22 +28,34 @@ export default function SetupPanel({
   const last = deployStatus?.last;
   const deploying = current?.running ?? false;
   const failed = !deploying && last?.status === "failed";
+  const keyless = isHTTPSRepo(detail.spec.source.repo);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="rounded-lg border border-veil-edge bg-veil p-5">
         <h2 className="text-lg font-semibold text-ink">Almost there — let's connect the repository</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Two steps: give the repository Fog's key, then deploy. Fog builds and runs the app from source.
+          {keyless
+            ? "Fog builds and runs the app from its public repository — check it's reachable, then deploy."
+            : "Two steps: give the repository Fog's key, then deploy. Fog builds and runs the app from source."}
         </p>
       </div>
 
-      <Step n={1} title="Add the deploy key to the repository">
-        <p className="mb-2 text-sm text-ink-muted">
-          In your git host, open the repository's settings and add this as a <strong className="text-ink-muted">read-only deploy key</strong>.
-        </p>
-        {detail.git && <DeployKey name={name} git={detail.git} />}
-      </Step>
+      {keyless ? (
+        <Step n={1} title="Check the repository">
+          <p className="mb-2 text-sm text-ink-muted">
+            This is a public repository, cloned over https — there's no key to add. Test that Fog can reach it, or go straight to deploying.
+          </p>
+          {detail.git && <DeployKey name={name} git={detail.git} keyless />}
+        </Step>
+      ) : (
+        <Step n={1} title="Add the deploy key to the repository">
+          <p className="mb-2 text-sm text-ink-muted">
+            In your git host, open the repository's settings and add this as a <strong className="text-ink-muted">read-only deploy key</strong>.
+          </p>
+          {detail.git && <DeployKey name={name} git={detail.git} />}
+        </Step>
+      )}
 
       <Step n={2} title="Auto-deploy on push (optional)">
         <p className="mb-2 text-sm text-ink-muted">

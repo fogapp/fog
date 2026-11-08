@@ -89,6 +89,8 @@ func packCopies(t *testing.T, st *store.Store) int {
 // night uploads only the packs it does not share; and fetching it back
 // rebuilds the very artifact fog verified.
 func TestStoreBackedSyncFetchAndVerify(t *testing.T) {
+	t.Parallel()
+
 	h := newStoreHarness(t)
 	ctx := context.Background()
 	art1 := noise(1, 600<<10)
@@ -145,6 +147,8 @@ func TestStoreBackedSyncFetchAndVerify(t *testing.T) {
 // Damage found in the local store is repaired from the locker's copy of
 // the same pack.
 func TestHealFromLocker(t *testing.T) {
+	t.Parallel()
+
 	h := newStoreHarness(t)
 	ctx := context.Background()
 	art := noise(2, 300<<10)
@@ -176,6 +180,8 @@ func TestHealFromLocker(t *testing.T) {
 
 // Packs no retained row uses are hidden; packs a retained row uses stay.
 func TestSweepPacksHidesOnlyUnreferenced(t *testing.T) {
+	t.Parallel()
+
 	h := newStoreHarness(t)
 	ctx := context.Background()
 	h.backup(t, "20261103-030000", noise(3, 200<<10))
@@ -218,6 +224,8 @@ func TestSweepPacksHidesOnlyUnreferenced(t *testing.T) {
 // A Drive snapshot the store holds goes up as packs and comes back from
 // the locker whole.
 func TestStoreBackedDriveSnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newStoreHarness(t)
 	ctx := context.Background()
 	big := noise(5, 300<<10)
@@ -260,6 +268,8 @@ func TestStoreBackedDriveSnapshot(t *testing.T) {
 // A pack the sweep hid is uploaded again when a backup needs its chunks
 // once more, so no row is written naming an object the provider deletes.
 func TestHiddenPackIsUploadedAgainWhenNeeded(t *testing.T) {
+	t.Parallel()
+
 	h := newStoreHarness(t)
 	ctx := context.Background()
 	art := noise(9, 200<<10)
@@ -300,5 +310,92 @@ func TestHiddenPackIsUploadedAgainWhenNeeded(t *testing.T) {
 	}
 	if err := FetchStoreSnapshot(ctx, r, &row, t.TempDir(), filepath.Join(t.TempDir(), "out"), nil); err != nil {
 		t.Fatalf("backup reusing swept packs is not restorable: %v", err)
+	}
+}
+
+// A removed app's copies stay until they age out, but its spec — what says
+// which extensions a scratch restore may recreate — went with it. Its copy
+// is read back whole and checked, and not test-restored; an installed app's
+// still is.
+func TestVerifyRemovedAppReadsBackWithoutRestoring(t *testing.T) {
+	t.Parallel()
+
+	h := newStoreHarness(t)
+	ctx := context.Background()
+	h.backup(t, "20261103-030000", noise(3, 300<<10))
+	if err := runSync(t, h.harness, "cloud"); err != nil {
+		t.Fatal(err)
+	}
+	var restored []string
+	h.m.TestRestore = func(_ context.Context, app, artifact, _ string) error {
+		if _, err := os.Stat(artifact); err != nil {
+			return err
+		}
+		restored = append(restored, app)
+		return nil
+	}
+	targets, _ := h.st.ListOffsiteTargets()
+	if err := h.m.verifyTarget(ctx, &targets[0]); err != nil || len(restored) != 1 {
+		t.Fatalf("an installed app's copy is test-restored: %v %v", err, restored)
+	}
+
+	h.st.DB().Exec(`UPDATE offsite_copies SET verified_at = NULL`)
+	if _, err := h.st.DB().Exec(`DELETE FROM apps WHERE name = 'hub'`); err != nil {
+		t.Fatal(err)
+	}
+	restored = nil
+	if err := h.m.verifyTarget(ctx, &targets[0]); err != nil {
+		t.Fatalf("a removed app's copy must still verify: %v", err)
+	}
+	if len(restored) != 0 {
+		t.Fatalf("a removed app's copy must not be test-restored: %v", restored)
+	}
+	copies, _ := h.st.ListOffsiteCopies(targets[0].ID, store.OffsiteKindApp, store.OffsiteStored)
+	if len(copies) != 1 || copies[0].VerifiedAt == "" {
+		t.Fatalf("the copy is verified: %+v", copies)
+	}
+}
+
+// A check that would fill this server's disk is not run, and is not a
+// failed copy: it raises its own notice, leaves the copy unverified, and
+// clears once a check runs again.
+func TestVerifyWithoutRoomIsNotAFailedCopy(t *testing.T) {
+	t.Parallel()
+
+	h := newStoreHarness(t)
+	ctx := context.Background()
+	h.backup(t, "20261103-030000", noise(4, 300<<10))
+	if err := runSync(t, h.harness, "cloud"); err != nil {
+		t.Fatal(err)
+	}
+	h.m.TestRestore = func(context.Context, string, string, string) error { return nil }
+	h.m.DiskSpace = func(string) (int64, int64, bool) { return 1 << 20, 100 << 30, true }
+
+	targets, _ := h.st.ListOffsiteTargets()
+	if err := h.m.verifyTarget(ctx, &targets[0]); err == nil {
+		t.Fatal("a check with no room must report it")
+	}
+	kinds := map[string]bool{}
+	notices, _ := h.st.ActiveNotices()
+	for _, n := range notices {
+		kinds[n.Kind] = true
+	}
+	if !kinds[NoticeVerifyNoRoom] || kinds[NoticeVerifyFailed] {
+		t.Fatalf("want the no-room notice and no failed-copy one: %v", kinds)
+	}
+	copies, _ := h.st.ListOffsiteCopies(targets[0].ID, store.OffsiteKindApp, store.OffsiteStored)
+	if copies[0].VerifiedAt != "" {
+		t.Fatal("an unchecked copy is not verified")
+	}
+
+	h.m.DiskSpace = plentyOfRoom
+	if err := h.m.verifyTarget(ctx, &targets[0]); err != nil {
+		t.Fatalf("with room: %v", err)
+	}
+	notices, _ = h.st.ActiveNotices()
+	for _, n := range notices {
+		if n.Kind == NoticeVerifyNoRoom {
+			t.Fatal("the no-room notice clears once the check runs")
+		}
 	}
 }

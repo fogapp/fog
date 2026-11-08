@@ -53,6 +53,8 @@ func plant(t *testing.T, r *Reader, key string, plain []byte) {
 }
 
 func TestDiscoverAndOpenFromNothing(t *testing.T) {
+	t.Parallel()
+
 	r, client, _ := testBucket(t)
 	ctx := context.Background()
 	ids, err := Discover(ctx, client, "backups")
@@ -88,6 +90,8 @@ func TestDiscoverAndOpenFromNothing(t *testing.T) {
 // open or parse) must not break reading the locker: Index skips it and falls
 // back to the newest valid index.
 func TestIndexSkipsJunkAndFallsBack(t *testing.T) {
+	t.Parallel()
+
 	r, client, _ := testBucket(t)
 	ctx := context.Background()
 	good := Index{Format: Format, LockerID: r.Layout.ID, Fog: "house", WrittenAt: "2026-08-27T01:00:00Z"}
@@ -125,6 +129,8 @@ func TestFetchKitCapsSize(t *testing.T) {
 // One unreadable blob must not strand a whole Drive restore: the other files
 // land and the error names what failed.
 func TestRestoreFilesContinuesPastABadBlob(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	good := []byte("good file contents")
@@ -158,6 +164,8 @@ func TestRestoreFilesContinuesPastABadBlob(t *testing.T) {
 }
 
 func TestRowsIndexAndFetch(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	row := AppRow{Format: Format, App: "hub", Stamp: "20260827-010314", Kind: "scheduled", Mode: "delegated", SizeBytes: 3}
@@ -207,6 +215,8 @@ func TestRowsIndexAndFetch(t *testing.T) {
 }
 
 func TestRestoreFiles(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	files := map[string][]byte{
@@ -255,6 +265,8 @@ func TestRestoreFiles(t *testing.T) {
 // staging name is fixed-length, not its name plus a suffix that would be
 // too long to create.
 func TestRestoreFilesWithANameAtTheLimit(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	body := []byte("long name")

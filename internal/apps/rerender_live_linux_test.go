@@ -20,7 +20,7 @@ import (
 	"gitea.lan/matthew/fog/internal/execx"
 	"gitea.lan/matthew/fog/internal/livetest"
 	"gitea.lan/matthew/fog/internal/randx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -60,7 +60,7 @@ func TestLiveUpgradeReappliesTheRulesToRunningApps(t *testing.T) {
 	os.MkdirAll(filepath.Join(drive, "Content/Movies"), 0o777)
 	os.WriteFile(filepath.Join(drive, "Content/Movies/movie.mkv"), []byte("m"), 0o644)
 
-	st, err := store.Open(filepath.Join(base, "fog.db"))
+	st, err := storetest.Open(filepath.Join(base, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func liveRig(t *testing.T, base string) (*Engine, *Materializer, string) {
 	t.Helper()
 	data, drive := filepath.Join(base, "data"), filepath.Join(base, "drive")
 	os.MkdirAll(drive, 0o755)
-	st, err := store.Open(filepath.Join(base, "fog.db"))
+	st, err := storetest.Open(filepath.Join(base, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

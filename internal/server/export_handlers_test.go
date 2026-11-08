@@ -23,6 +23,8 @@ func corruptApp(t *testing.T, srv *Server, name string) {
 // clean 200 with an empty spec the UI would render — or worse, export a blank
 // manifest an operator archives as if it were the app.
 func TestCorruptSpecIsA500NotAnEmptySpec(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	corruptApp(t, srv, "blog")
@@ -45,6 +47,8 @@ func TestCorruptSpecIsA500NotAnEmptySpec(t *testing.T) {
 // boundary have to survive the trip in both directions. Losing one of them
 // quietly would hand back an unsealed app.
 func TestManifestCarriesTheNetworkBoundary(t *testing.T) {
+	t.Parallel()
+
 	m, err := yamlManifest(`
 name: fit
 spec:

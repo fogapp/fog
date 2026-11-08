@@ -14,7 +14,7 @@ import (
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/livetest"
 	"gitea.lan/matthew/fog/internal/randx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack, live: an app container holds a port of fog's when fog's own
@@ -56,7 +56,7 @@ func TestLiveReclaimFogPorts(t *testing.T) {
 		t.Fatalf("fog's container published the app's port: %s", out)
 	}
 
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

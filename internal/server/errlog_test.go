@@ -14,6 +14,8 @@ import (
 // the client may never render it, and the log ring is what feedback reports
 // read — a bare "status=500" there tells nobody what broke.
 func TestInternalErrorReachesTheLog(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 	s := &Server{log: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))}
 	h := s.protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

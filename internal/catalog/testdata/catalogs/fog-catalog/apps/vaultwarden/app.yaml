@@ -1,0 +1,39 @@
+id: vaultwarden
+title: Vaultwarden
+description: Bitwarden-compatible password manager server.
+category: Utilities
+icon: '🔐'
+spec:
+  source:
+    type: image
+    image: vaultwarden/server:latest
+  env:
+    TZ: Etc/UTC
+  volumes:
+    - name: data
+      mount: /data
+  routes:
+    - port: 80
+  health:
+    path: /alive
+  backup:
+    enabled: true
+projectUrl: https://github.com/dani-garcia/vaultwarden
+about: |-
+  Vaultwarden is a password manager server that speaks Bitwarden's protocol. The official Bitwarden apps and browser extensions connect to it as if it were bitwarden.com — but the vault is here, encrypted with keys that never leave your devices.
+
+  It is written in Rust, needs a fraction of the resources of the upstream server, and includes the features Bitwarden charges for.
+highlights:
+  - Works with every official Bitwarden app and extension
+  - Organisations and collections for sharing within the household
+  - Two-factor sign-in, emergency access, and Send
+  - Admin page for users and settings
+logo: logo.svg
+developer: Daniel García
+license: AGPL-3.0
+docs: https://github.com/dani-garcia/vaultwarden/wiki
+footprint:
+  memory: 52428800
+  memoryPeak: 157286400
+  cpu: light
+  disk: 104857600

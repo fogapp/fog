@@ -47,6 +47,8 @@ func appGet(t *testing.T, f *idpFixture, token, path string) (int, []byte) {
 }
 
 func TestAppDirectoryIsTheHouseholdByAddress(t *testing.T) {
+	t.Parallel()
+
 	f, token := directoryFixture(t, nil, false)
 	code, body := appGet(t, f, token, "/app/v1/people")
 	if code != 200 {
@@ -70,6 +72,8 @@ func TestAppDirectoryIsTheHouseholdByAddress(t *testing.T) {
 }
 
 func TestAppDirectoryEmailOnlyWithTheScope(t *testing.T) {
+	t.Parallel()
+
 	f, token := directoryFixture(t, nil, true)
 	_, body := appGet(t, f, token, "/app/v1/people")
 	if !strings.Contains(string(body), "kim@example.com") {
@@ -78,6 +82,8 @@ func TestAppDirectoryEmailOnlyWithTheScope(t *testing.T) {
 }
 
 func TestAppDirectoryPeersForFederatingAppsOnly(t *testing.T) {
+	t.Parallel()
+
 	f, token := directoryFixture(t, []string{ContractConnectV1}, true)
 	_, body := appGet(t, f, token, "/app/v1/people")
 	var out struct{ People []directoryEntry }
@@ -101,6 +107,8 @@ func TestAppDirectoryPeersForFederatingAppsOnly(t *testing.T) {
 }
 
 func TestAppDirectoryNeedsTheContract(t *testing.T) {
+	t.Parallel()
+
 	f, _ := directoryFixture(t, nil, false)
 	other, _ := f.srv.store.CreateApp("sab")
 	f.srv.store.SetAppAPITokenDigest(other.ID, auth.DigestToken("sab-token"))
@@ -110,6 +118,8 @@ func TestAppDirectoryNeedsTheContract(t *testing.T) {
 }
 
 func TestPersonPagesStayOnTheAppsOwnHosts(t *testing.T) {
+	t.Parallel()
+
 	f, token := directoryFixture(t, []string{ContractConnectV1}, false)
 	spec := `{"source":{"type":"image","image":"x"},"routes":[{"port":80}]}`
 	f.srv.store.CreateRevision(f.app.ID, spec, "", "t")

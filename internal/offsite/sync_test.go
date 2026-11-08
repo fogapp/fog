@@ -86,6 +86,8 @@ type syncErr struct{ msg string }
 func (e *syncErr) Error() string { return e.msg }
 
 func TestSyncCopiesEverythingAndWritesTheIndex(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	fake.Lock = fakes3.LockConfig{Enabled: true}
 	h := newHarness(t, fake)
@@ -228,6 +230,8 @@ func TestSyncCopiesEverythingAndWritesTheIndex(t *testing.T) {
 // runs when a copy moved or the policy changed, and otherwise once a day,
 // not on every 15-minute tick.
 func TestSyncHousekeepsOnlyWhenSomethingMoved(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	fake.Lock = fakes3.LockConfig{Enabled: true}
 	h := newHarness(t, fake)
@@ -285,6 +289,8 @@ func TestSyncHousekeepsOnlyWhenSomethingMoved(t *testing.T) {
 // The staleness check runs after a pass that landed a copy, and otherwise
 // hourly.
 func TestSyncAllChecksStalenessHourlyWhenQuiet(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	plantBackups(t, h)
@@ -312,6 +318,8 @@ func TestSyncAllChecksStalenessHourlyWhenQuiet(t *testing.T) {
 }
 
 func TestSyncRetentionHidesWhatThePolicyDrops(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	plantBackups(t, h)
@@ -356,6 +364,8 @@ func TestSyncRetentionHidesWhatThePolicyDrops(t *testing.T) {
 }
 
 func TestSyncSkipsCorruptArtifactsAndReportsFailure(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, _ := plantBackups(t, h)
@@ -439,6 +449,8 @@ func TestSyncResumesAnInterruptedUpload(t *testing.T) {
 }
 
 func TestStalenessKeysOnAbsenceOfCopies(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	h.st.SetSetting("backup_hour_utc", "1")
@@ -498,6 +510,8 @@ func TestStalenessKeysOnAbsenceOfCopies(t *testing.T) {
 // A hidden copy's row goes once the provider has had time to expire the
 // object — and only if nothing local would send it back up.
 func TestPruneHiddenForgetsOnlyExpiredCopiesOfWhatIsGone(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	_, ids := plantBackups(t, h)
@@ -544,6 +558,8 @@ func TestPruneHiddenForgetsOnlyExpiredCopiesOfWhatIsGone(t *testing.T) {
 // The index reads a Files snapshot's line from its summary alone; a row
 // without one is left out rather than costing a manifest read.
 func TestFilesSummaryReadsTheSummary(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	target, _, err := h.m.AddTarget(context.Background(), h.spec("cloud"), "key-1", "secret")
 	if err != nil {
@@ -577,6 +593,8 @@ func TestFilesSummaryReadsTheSummary(t *testing.T) {
 // the old box had left there — jen's restore wizard came up with nothing
 // to restore. The index lists what the locker holds, whoever wrote it.
 func TestAnAdoptedLockersBackupsStayInTheIndex(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	fake.Lock = fakes3.LockConfig{Enabled: true}
 	old := newHarness(t, fake)

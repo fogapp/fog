@@ -9,6 +9,8 @@ import (
 // too, so a fog that saved its visible set or Manor's clone URL still shows
 // Fin and knows where to clone it; settings without Manor are untouched.
 func TestCatalogFinMigration(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name               string
 		enabled, overrides string // "" = setting absent

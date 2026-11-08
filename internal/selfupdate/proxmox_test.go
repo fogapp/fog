@@ -90,6 +90,8 @@ func (f *proxmoxFixture) pwned(t *testing.T) {
 }
 
 func TestProxmoxScriptsNeverRunUnverifiedCode(t *testing.T) {
+	t.Parallel()
+
 	for _, script := range []string{"proxmox-lxc.sh", "proxmox-vm.sh"} {
 		t.Run(script, func(t *testing.T) {
 			t.Run("manifest signed by someone else", func(t *testing.T) {

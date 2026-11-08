@@ -18,6 +18,8 @@ import (
 // a regular file or folder is ever really opened: a FIFO's writer, waiting
 // for a reader, is never released.
 func TestOpenNeverOpensASpecialFile(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root, err := m.openRoot()
 	if err != nil {

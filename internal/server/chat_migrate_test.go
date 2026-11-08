@@ -19,6 +19,7 @@ import (
 // keep posting (now through B), a hub-moved notice is the first event B
 // sequences, and the old hub is a follower that stays in sync.
 func TestChatRoomMigratesHub(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
@@ -176,6 +177,7 @@ func TestChatRoomMigratesHub(t *testing.T) {
 // blob but not substitute one. A name that isn't a digest never reaches the
 // filesystem or the hub.
 func TestChatReplicaBlobFetchChecksDigest(t *testing.T) {
+
 	p := twoChatFogs(t)
 	ctx := context.Background()
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")

@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 
 	"golang.org/x/crypto/argon2"
@@ -59,12 +60,29 @@ const (
 )
 
 // Kit Argon2id costs — the locker's, so the two agree on how hard a
-// passphrase is to attack (docs/locker-contract.md).
-const (
-	kitArgonTime   = 4
-	kitArgonMemKiB = 256 * 1024
-	kitArgonThread = 1
+// passphrase is to attack (docs/locker-contract.md). A kit doesn't record
+// them: they are the format. Variables only so a test binary can lower
+// them (CheapKitKDFForTests).
+var (
+	kitArgonTime   uint32 = 4
+	kitArgonMemKiB uint32 = 256 * 1024
 )
+
+const kitArgonThread = 1
+
+// CheapKitKDFForTests makes sealing and opening a kit cost milliseconds
+// instead of seconds, for the rest of this test binary: at full strength
+// each one takes ~4s under -race. Every kit the binary seals and opens uses
+// the same lowered costs, so they still round-trip; a kit sealed this way
+// can't be opened by a real fog, which is why it panics outside a test.
+// The legacy scrypt format keeps its cost: tests build those kits by hand,
+// and only a few do. Call it from a test file's init.
+func CheapKitKDFForTests() {
+	if !testing.Testing() {
+		panic("backup.CheapKitKDFForTests called outside a test binary")
+	}
+	kitArgonTime, kitArgonMemKiB = 1, 8*1024
+}
 
 // The recovery-kit passphrase at rest. It is the one secret fog must keep in
 // the clear-at-runtime to run unattended — it seals every nightly kit and

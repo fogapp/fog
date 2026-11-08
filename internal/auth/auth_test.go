@@ -339,7 +339,7 @@ func TestStrangersFillOnlyStrangersRoom(t *testing.T) {
 	}
 	// And a validated key's limiter is another limiter altogether.
 	apps := NewRateLimiter(5, time.Hour)
-	if !apps.Allow("app:lucid") {
+	if !apps.Allow("app:glass") {
 		t.Fatal("an app was refused by strangers")
 	}
 }

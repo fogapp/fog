@@ -133,6 +133,8 @@ func setupReq() B2SetupRequest {
 }
 
 func TestSetupB2MakesAnImmutableTarget(t *testing.T) {
+	t.Parallel()
+
 	h, b2 := setupHarness(t)
 	rep, probe, err := h.m.SetupB2(context.Background(), setupReq())
 	if err != nil {
@@ -172,6 +174,8 @@ func TestSetupB2MakesAnImmutableTarget(t *testing.T) {
 }
 
 func TestSetupB2FallsBackWhenHidingNeedsDelete(t *testing.T) {
+	t.Parallel()
+
 	h, b2 := setupHarness(t)
 	b2.hideNeedsDelete = true
 	rep, probe, err := h.m.SetupB2(context.Background(), setupReq())
@@ -191,6 +195,8 @@ func TestSetupB2FallsBackWhenHidingNeedsDelete(t *testing.T) {
 }
 
 func TestSetupB2Refusals(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		shape func(*fakeB2, *B2SetupRequest)
@@ -222,6 +228,8 @@ func TestSetupB2Refusals(t *testing.T) {
 }
 
 func TestSetupB2UndoesAFailedProbe(t *testing.T) {
+	t.Parallel()
+
 	h, b2 := setupHarness(t)
 	req := setupReq()
 	req.Bucket = "fog-elsewhere" // B2 makes it; the S3 side never finds it
@@ -237,6 +245,8 @@ func TestSetupB2UndoesAFailedProbe(t *testing.T) {
 }
 
 func TestSetupB2RetryAdoptsItsBucket(t *testing.T) {
+	t.Parallel()
+
 	h, b2 := setupHarness(t)
 	if _, _, err := h.m.SetupB2(context.Background(), setupReq()); err != nil {
 		t.Fatal(err)

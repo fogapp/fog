@@ -15,6 +15,8 @@ import (
 // (selfupdate.ValidateSource), so a source the updater would refuse never
 // reaches the store, and the refusal says why.
 func TestUpdateSourceSettingUsesTheResolversRules(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	put := func(v string) (int, string) {
@@ -54,6 +56,8 @@ func TestUpdateSourceSettingUsesTheResolversRules(t *testing.T) {
 // pointing the source at their own server), a change within the host keeps
 // it, and a token for a plain-http source is refused outright.
 func TestUpdateTokenDoesNotFollowTheSourceToAnotherHost(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	putSetting := func(v string) {

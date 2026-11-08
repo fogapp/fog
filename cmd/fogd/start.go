@@ -50,6 +50,9 @@ func (d *daemon) startRuntime() {
 	d.spawn("retention", func(ctx context.Context) { retention.Run(ctx, d.log, jobs) })
 	// Registry digest polling with notify/auto policies.
 	d.spawn("update checks", func(ctx context.Context) { d.upd.Loop(ctx, 6*time.Hour) })
+	// The app store's catalogs: fetched now and every few hours, so the
+	// store is the catalogs' latest without a fog release.
+	d.spawn("catalog sync", d.api.CatalogLoop)
 	// Fog's own release polling — feeds the header update notification.
 	d.spawn("fog release checks", func(ctx context.Context) { d.updater.Loop(ctx, 30*time.Minute, d.notifier.Send) })
 	// Signing keys: publish the next key a week before it signs, retire
@@ -70,10 +73,10 @@ func (d *daemon) startRuntime() {
 	// Configuration scanner: spec-vs-reality discrepancies filed as issues
 	// (the Inbox's Issues tab).
 	d.spawn("issue scanner", func(ctx context.Context) { d.iss.Loop(ctx, time.Hour) })
-	// fogd's own telemetry to Lucid (lucid.go): the sender, and a minute's
-	// check that it points at Lucid as it runs now.
-	d.spawn("lucid telemetry", d.telemetry.Run)
-	d.spawn("lucid connection", func(ctx context.Context) { loop.Every(ctx, 5*time.Second, time.Minute, d.keepLucid) })
+	// fogd's own telemetry to Glass (glass.go): the sender, and a minute's
+	// check that it points at Glass as it runs now.
+	d.spawn("glass telemetry", d.telemetry.Run)
+	d.spawn("glass connection", func(ctx context.Context) { loop.Every(ctx, 5*time.Second, time.Minute, d.keepGlass) })
 	// Compute: fogd as each pool's transcoder to the apps that hand work to
 	// machines (docs/compute-contract.md).
 	d.spawn("compute relay", d.relay.Run)

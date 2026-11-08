@@ -21,7 +21,9 @@ func (s *Store) ListDeploys(appID int64, limit int) ([]Deploy, error) {
 }
 
 func TestListDeploySummariesTrimsLogs(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,9 @@ func TestListDeploySummariesTrimsLogs(t *testing.T) {
 // it — the boot sweep must close it out, or the UI reports an eternal
 // in-flight deploy. Finished deploys are not its business.
 func TestFailInterruptedDeploys(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +154,9 @@ func TestFailInterruptedDeploys(t *testing.T) {
 // The summary variant must not carry spec JSON — that is the whole reason it
 // exists — while still returning the fields the history table renders.
 func TestListRevisionSummariesOmitSpec(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +199,9 @@ func TestListRevisionSummariesOmitSpec(t *testing.T) {
 // ClearOldDeployLogs empties the bulk (the log column) on kept-but-older
 // rows without touching the history itself.
 func TestDeployRetention(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +277,9 @@ func TestDeployRetention(t *testing.T) {
 // The deploy tray's clock: the running deploy's start, and the median of
 // the last five successful deploys — failures and older runs left out.
 func TestDeployTiming(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

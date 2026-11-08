@@ -85,6 +85,8 @@ func (f *fakeSCIM) take() []string {
 }
 
 func TestSCIMProvisioningReconciles(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", SCIM: "/scim/v2",
 		Roles: []string{"admin", "member"}, Default: map[string]string{"operator": "admin", "member": "member"}})
 	tok, err := f.srv.scim.Token(f.app)

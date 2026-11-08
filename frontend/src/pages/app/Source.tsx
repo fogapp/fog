@@ -22,7 +22,7 @@ export function useSourceLink(name: string, detail: AppDetailT): { link: RepoLin
   return { link, shown: !!link };
 }
 
-export function SourceGroup({ name, detail, gap }: { name: string; detail: AppDetailT; gap: string }) {
+export function SourceGroup({ name, detail, gap, first = true }: { name: string; detail: AppDetailT; gap: string; first?: boolean }) {
   const src = detail.spec.source;
   const { link, shown } = useSourceLink(name, detail);
   if (!shown) return null;
@@ -30,7 +30,7 @@ export function SourceGroup({ name, detail, gap }: { name: string; detail: AppDe
   const branch = src.branch || "default branch";
 
   return (
-    <Group title="Source" first gap={gap} right={link?.url ? <SlotLink to={link.url} external>Open</SlotLink> : undefined}>
+    <Group title="Source" first={first} gap={gap} right={link?.url ? <SlotLink to={link.url} external>Open</SlotLink> : undefined}>
       {!link ? (
         <div className="break-all font-mono text-hint text-ink-muted">{src.repo}</div>
       ) : (

@@ -1,0 +1,61 @@
+id: jellyfin
+title: Jellyfin
+description: Media server — stream your library to any device.
+category: Media servers
+icon: '🍿'
+spec:
+  source:
+    type: image
+    image: lscr.io/linuxserver/jellyfin:latest
+  env:
+    PGID: "1000"
+    PUID: "1000"
+    TZ: Etc/UTC
+  volumes:
+    - name: config
+      mount: /config
+      owner: 1000:1000
+    - name: media
+      mount: /data
+      files: Content
+  routes:
+    - port: 8096
+  health:
+    path: /health
+  backup:
+    enabled: true
+options:
+  - key: tz
+    label: Timezone
+    target: env:TZ
+    required: false
+    default: Etc/UTC
+  - key: media
+    label: Media folder
+    hint: Your media library, mounted read-write at /data.
+    target: volume:media
+    required: false
+projectUrl: https://github.com/jellyfin/jellyfin
+about: |-
+  Jellyfin is a media server: your films, series, and music, streamed to any screen in the house and beyond. Point it at the media folder and it fetches artwork and metadata, tracks what everyone has watched, and plays to the TV, the phone, and the browser.
+
+  It is the free and open alternative to Plex and Emby — no account with anyone, no features held back, no phoning home.
+highlights:
+  - Apps for every TV platform, phone, and browser
+  - Artwork, metadata, and subtitles fetched automatically
+  - Per-user libraries, parental controls, and watch history
+  - Hardware transcoding where the machine allows it
+  - Live TV and DVR with a tuner
+  - SyncPlay to watch together from different rooms
+logo: logo.svg
+developer: Jellyfin project
+license: GPL-2.0
+website: https://jellyfin.org
+docs: https://jellyfin.org/docs
+footprint:
+  memory: 419430400
+  memoryPeak: 2097152000
+  cpu: heavy
+  cpuWhen: transcoding video
+  disk: 1048576000
+  diskGrows: with artwork and metadata for your library

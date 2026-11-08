@@ -48,6 +48,8 @@ func bearerOf(tok string) func(*http.Request) {
 // chat device is bound to the browser's own session, never a new one; and
 // revoking a device ends its token.
 func TestANativeTokenCantBecomeAnOperatorSession(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	tok, dev := nativeToken(t, registerChatDevice(t, h, "native", withCookie(op)))
@@ -122,6 +124,7 @@ func TestANativeTokenCantBecomeAnOperatorSession(t *testing.T) {
 // the minting session, a device holds one token, device tokens are never
 // evicted, and the budgets and caps are checked before anything is written.
 func TestMintingCantLockAPersonOut(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	phone, _ := nativeToken(t, registerChatDevice(t, h, "native", withCookie(op)))
@@ -277,6 +280,8 @@ func TestShareGuessesLockOutTheGuesserNotTheLink(t *testing.T) {
 // /oauth2/authorize and spent the person's 120-a-minute budget. Only a
 // top-level page load is charged; anything else is refused uncharged.
 func TestSubresourcesCantSpendAuthorize(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	op, _ := f.srv.store.PersonByHandle("admin")

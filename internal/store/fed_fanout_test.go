@@ -3,6 +3,8 @@ package store
 import "testing"
 
 func TestFedPeersByInstanceIDsAndFanoutEnqueue(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, _ := s.CreatePairedPeer("inst-a", "a", "", "pk-a")
 	b, _ := s.CreatePairedPeer("inst-b", "b", "", "pk-b")

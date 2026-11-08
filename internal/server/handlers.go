@@ -553,6 +553,8 @@ var editableSettings = map[string]func(string) bool{
 	catalog.SettingSourceBase: func(v string) bool { return catalog.ValidBase(v) == nil },
 	// JSON object of first-party repository name to its full clone URL.
 	catalog.SettingSourceOverrides: func(v string) bool { return catalog.ValidOverrides(v) == nil },
+	// JSON list of the catalogs the store is built from (catalog.Remote).
+	catalog.SettingRemotes: func(v string) bool { return catalog.ValidRemotes(v) == nil },
 	SettingCatalogEnabled: func(v string) bool {
 		if v == "" {
 			return true
@@ -623,6 +625,10 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 				badRequest(w, "app source overrides: "+catalog.ValidOverrides(strings.TrimSpace(v)).Error())
 				return
 			}
+			if k == catalog.SettingRemotes {
+				badRequest(w, "catalogs: "+catalog.ValidRemotes(strings.TrimSpace(v)).Error())
+				return
+			}
 			badRequest(w, "invalid value for "+k)
 			return
 		}
@@ -689,6 +695,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if touchProxy {
 		s.goSafe("proxy apply", s.applyProxy)
+	}
+	if _, ok := req[catalog.SettingRemotes]; ok {
+		s.catalogsChanged()
 	}
 	if rootChanged {
 		s.files.RootChanged()

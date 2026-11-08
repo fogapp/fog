@@ -15,6 +15,8 @@ import (
 )
 
 func TestFilesRequireAuth(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	setup(t, h)
 	for _, p := range []string{"/api/files/ls", "/api/files/status", "/api/files/raw/x", "/api/files/zip?path=x"} {
@@ -25,6 +27,8 @@ func TestFilesRequireAuth(t *testing.T) {
 }
 
 func TestFilesListAndRaw(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()
@@ -82,6 +86,8 @@ func TestFilesListAndRaw(t *testing.T) {
 // The root setting is validated for real, and refuses to silently
 // abandon a populated tree.
 func TestFilesRootSetting(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	// Relative and inside-fog paths are rejected.
@@ -120,6 +126,8 @@ func jsonString(s string) string {
 }
 
 func TestFilesVerbs(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()
@@ -185,6 +193,8 @@ func TestFilesVerbs(t *testing.T) {
 }
 
 func TestFilesUploadOverHTTP(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	w := do(t, h, "POST", "/api/files/uploads", `{"path":"drop/hello.txt","size":11}`, withCookie(c))
@@ -227,6 +237,7 @@ func TestFilesUploadOverHTTP(t *testing.T) {
 }
 
 func TestFilesAccessAndShares(t *testing.T) {
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()

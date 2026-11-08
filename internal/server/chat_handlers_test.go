@@ -156,6 +156,7 @@ func keysFor(t *testing.T, h http.Handler, as *http.Cookie, handle string) []byt
 }
 
 func TestChatRoomLifecycle(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -301,6 +302,7 @@ func TestChatRoomLifecycle(t *testing.T) {
 }
 
 func TestChatChannelExternalJoin(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -374,6 +376,7 @@ func TestChatChannelExternalJoin(t *testing.T) {
 }
 
 func TestChatStreamDeliversLive(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	_ = srv
 	admin := setup(t, h)
@@ -446,6 +449,7 @@ func TestChatStreamDeliversLive(t *testing.T) {
 }
 
 func TestChatBlobs(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	eveS := inviteAndJoin(t, h, admin, "eve", "correct horse battery")
@@ -498,6 +502,7 @@ func TestChatBlobs(t *testing.T) {
 // unverified — that is the ghost-device attack. Once the person attests it,
 // it may; and a fresh session can bind to a device by proving its key.
 func TestChatUnverifiedDeviceCannotSelfJoin(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

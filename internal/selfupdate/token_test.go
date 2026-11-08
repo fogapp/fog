@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -16,8 +16,10 @@ import (
 // only while the source is the one it was saved for — an admin who points
 // the source at a server of their own collects nothing.
 func TestUpdateTokenStaysWithItsSource(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +83,8 @@ func TestUpdateTokenStaysWithItsSource(t *testing.T) {
 // redirects there must not receive the token: it is decided again on every
 // hop, and goes only to https on the origin it was saved for.
 func TestUpdateTokenIsNotResentOnARedirect(t *testing.T) {
+	t.Parallel()
+
 	var leaked atomic.Value
 	leaked.Store("")
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +106,7 @@ func TestUpdateTokenIsNotResentOnARedirect(t *testing.T) {
 	defer src.Close()
 
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

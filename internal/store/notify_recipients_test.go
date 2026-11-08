@@ -10,6 +10,8 @@ import (
 // unset prefs as "{}", revoked devices' subscriptions left out, and
 // unknown refs absent.
 func TestNotifyRecipientsMatchesPerPersonReads(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	ann, _ := s.CreatePerson("ann", "Ann", PersonRoleMember)
 	bob, _ := s.CreatePerson("bob", "Bob", PersonRoleMember)
@@ -68,6 +70,8 @@ func TestNotifyRecipientsMatchesPerPersonReads(t *testing.T) {
 
 // Everyone's live devices at once, as PersonDevices lists each person's.
 func TestAllPersonDevicesMatchesPersonDevices(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	ann, _ := s.CreatePerson("ann", "Ann", PersonRoleMember)
 	bob, _ := s.CreatePerson("bob", "Bob", PersonRoleMember)

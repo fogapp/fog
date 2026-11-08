@@ -18,6 +18,7 @@ import (
 	"gitea.lan/matthew/fog/internal/fed"
 	"gitea.lan/matthew/fog/internal/files"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -37,7 +38,7 @@ type originFixture struct {
 func newOriginFixture(t *testing.T, detail string) *originFixture {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func newOriginFixture(t *testing.T, detail string) *originFixture {
 	f := &originFixture{st: st, root: fm.Root()}
 	f.s = New(fm, &fed.Service{Store: st, Vault: vlt, Log: log}, st, log)
 
-	ost, err := store.Open(filepath.Join(t.TempDir(), "origin.db"))
+	ost, err := storetest.Open(filepath.Join(t.TempDir(), "origin.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +107,8 @@ func (f *originFixture) serveManifest(entries []ManifestEntry, blob []byte) {
 // subscription folder — to overwrite, dehydrate or prune the subscriber's
 // own files — is refused whole, before anything is written.
 func TestManifestCannotReachOutsideTheSubscription(t *testing.T) {
+	t.Parallel()
+
 	for _, detail := range []string{DetailFull, DetailPreviews} {
 		for _, evil := range []string{
 			"../../../Documents/taxes.pdf",
@@ -161,6 +164,8 @@ func TestManifestCannotReachOutsideTheSubscription(t *testing.T) {
 // from whatever answers at its address now — a proxy, a stranger on a
 // recycled lease — must not end the subscription.
 func TestOnlyTheOriginCanRevokeASubscription(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	for _, body := range []string{`{"error":"no such share"}`, `{"error":"unknown peer","code":"unknown_peer"}`} {
 		f.raw = func(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +204,8 @@ func sha(b []byte) string {
 // pull, pinned or not, and what the origin withdrew is pruned in the same
 // pull.
 func TestNarrowingToAListingScrubsAndPrunes(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	blob := []byte("a photo")
 	keep := ManifestEntry{Path: "beach.jpg", Kind: "file", Size: int64(len(blob)), SHA256: sha(blob), Mtime: "2026-11-02T10:00:00Z"}
@@ -238,6 +245,8 @@ func TestNarrowingToAListingScrubsAndPrunes(t *testing.T) {
 // A filtered share lists the folders leading to what crosses, not the
 // folder tree of everything else.
 func TestFilteredManifestHidesOtherFolders(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	os.MkdirAll(filepath.Join(root, "Home", "Holidays"), 0o755)
 	os.MkdirAll(filepath.Join(root, "Home", "Divorce lawyer"), 0o755)
@@ -264,6 +273,8 @@ func TestFilteredManifestHidesOtherFolders(t *testing.T) {
 // A copy shared for people and not for apps can't be reached by mounting a
 // folder above it.
 func TestParentMountsHonourEachCopysAppsLens(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	if _, err := s.Store.CreateFileFedSubscription(&store.FileFedSubscription{PeerID: peer.ID, RemoteShareID: 1,
 		Title: "Diary", Folder: "Peers/north/Diary", Mode: ModeRead, DetailOffered: DetailFull, DetailWanted: DetailFull}); err != nil {
@@ -284,6 +295,8 @@ func TestParentMountsHonourEachCopysAppsLens(t *testing.T) {
 // to see it. A new subscription is refused; a live copy is taken off the
 // disk and paused.
 func TestAppsDeniedCopyNeverLandsWhereAnAppSees(t *testing.T) {
+	t.Parallel()
+
 	f := newOriginFixture(t, DetailFull)
 	blob := []byte("a diary")
 	f.serveManifest([]ManifestEntry{{Path: "2026/day.txt", Kind: "file", Size: int64(len(blob)), SHA256: sha(blob), Mtime: "2026-11-02T10:00:00Z"}}, blob)

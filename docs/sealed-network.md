@@ -52,7 +52,7 @@ operator's approval for that pair:
   ([widgets](widgets-contract.md)).
 
 It reaches an approved app on the ports its `http://` (or `ws://`) env URLs
-name — `http://lucid`, `http://gotenberg:3000`, an integration's `{{url}}`
+name — `http://glass`, `http://gotenberg:3000`, an integration's `{{url}}`
 — else on the app's connection port, else its route ports. An env URL
 naming any other app wires nothing: an app installed after another
 mentions its name is never wired to it on its own. The issues sweep asks
@@ -62,7 +62,7 @@ the app's newest revision, so it takes effect without a redeploy.
 
 Every wire runs through **`fog-wire`**, a Caddy of fog's own with no
 published port, in its own compose project under `<data>/wire`. On the
-consumer's network it answers to the provider's name, so `http://lucid`
+consumer's network it answers to the provider's name, so `http://glass`
 resolves to it; for each port a consumer reaches a provider on, it serves
 that port and forwards a request only when its Host is the provider (its
 name, or a public name it is routed at) and its peer is on one of that
@@ -79,7 +79,7 @@ What it costs: a wire carries HTTP (and websockets) only. A `uses` or env
 URL of another scheme (`https://app`, `postgres://app`) isn't wired, and
 the app can't reach that app; the issues sweep says so (`wire-unsupported`).
 Every connection the catalog and fog's own apps make is HTTP: integration
-offers (`{{url}}`), Lucid's ingest (`POST /ingest/v1/batch`, gzip),
+offers (`{{url}}`), Glass's ingest (`POST /ingest/v1/batch`, gzip),
 ntfy, Gotenberg, Immich's API. An app configured inside itself to call
 another by name (a Sonarr pointed at `http://sabnzbd:8080`) must have that
 app in its `uses` list.
@@ -134,7 +134,11 @@ A sealed app is wired only to sealed apps and to apps that declare
 `sealedPeer: true` (see [Isolation](#isolation-every-app-on-a-network-of-its-own)):
 that is how it reaches ntfy or a collector, by name, at the same address any
 app would use, through fog-wire. A spec that names any other app gets no wire, and the issues
-sweep says so (`sealed-wire-refused`).
+sweep says so (`sealed-wire-refused`). When the operator connected the two
+on the Integrations tab, the sealed app holds a credential for something it
+can't reach, and the sweep files `sealed-integration-refused` in its place,
+naming the provider to make a sealed peer: a sealed app connected to Glass
+before Glass declared `sealedPeer` is the case it is there for.
 
 The deploy checks the result. After the containers are up, fog asks Docker
 what every running container of a sealed app is attached to, and fails the

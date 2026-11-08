@@ -18,6 +18,7 @@ import (
 	"gitea.lan/matthew/fog/internal/cloudflare"
 	"gitea.lan/matthew/fog/internal/proxy"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 	"gitea.lan/matthew/fog/internal/wan"
 )
@@ -40,7 +41,7 @@ func activeKind(t *testing.T, st *store.Store, kind string) *store.Notice {
 // Warn line every five minutes forever, and not a fresh notice per tick —
 // and the next success must take it back down.
 func TestFailureStreakRaisesOneNoticeAndRecoveryClearsIt(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "t.db"))
+	st, err := storetest.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

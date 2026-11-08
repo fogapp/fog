@@ -156,6 +156,26 @@ func (m *Manager) runStoreSnapshot(ctx context.Context, p *jobs.Progress) (store
 			p.Set("starting", 0, st.Bytes)
 		}
 	}
+	// Left out of the snapshot: what is excluded, and what fog says is not
+	// Drive's to back up.
+	skipped := func(rel string) bool {
+		return es.prunes(rel) || (m.BackupSkip != nil && rel != "" && m.BackupSkip(rel))
+	}
+	// Before anything is written: will it fit? A run that cannot is
+	// refused here, having written nothing, and says where the bytes are —
+	// rather than filling the disk file by file until the floor stops it
+	// and leaving what it wrote for the next collection.
+	p.Set("measuring", 0, 0)
+	need, where, err := m.measureStoreSnapshot(ctx, root, prev, skipped)
+	if err != nil {
+		return store.FileSnapshot{}, err
+	}
+	if err := checkSpace(cs.Dir(), need); need > 0 && err != nil {
+		m.diskFull(need)
+		m.Store.CreateNotice(NoticeFilesBackupNoSpace, "", "Drive backup can't fit on the backup disk",
+			tooBigDetail(err, need, where))
+		return store.FileSnapshot{}, err
+	}
 	w, err := cs.Begin(DriveSeries)
 	if err != nil {
 		return store.FileSnapshot{}, err
@@ -166,7 +186,7 @@ func (m *Manager) runStoreSnapshot(ctx context.Context, p *jobs.Progress) (store
 	var tooDeep []string
 	var bytes int64
 	walkErr := m.snapWalk(ctx, root, "", func(p string) { tooDeep = append(tooDeep, p) }, func(rel string, info fs.FileInfo) error {
-		if es.prunes(rel) || (m.BackupSkip != nil && rel != "" && m.BackupSkip(rel)) {
+		if skipped(rel) {
 			if info.IsDir() {
 				return fs.SkipDir
 			}
@@ -237,6 +257,80 @@ func (m *Manager) runStoreSnapshot(ctx context.Context, p *jobs.Progress) (store
 	}
 	m.Log.Info("files snapshot written", "stamp", stamp, "files", snap.Files, "bytes", bytes, "new", snap.New, "torn", len(meta.Torn), "mode", ModeStore)
 	return *row, nil
+}
+
+// measureStoreSnapshot walks Drive as the snapshot will — the same folders
+// left out — reading only metadata, and adds up what the snapshot would
+// have to read: every file not carried over unchanged from prev. The store
+// may need less (chunks it already holds, compression), never more, so a
+// run refused on it could not have fitted except by that luck. where is the
+// same total by folder (two levels deep: Content/Models), for saying where
+// the bytes are.
+func (m *Manager) measureStoreSnapshot(ctx context.Context, root *os.Root, prev map[string]chunkstore.Entry, skipped func(rel string) bool) (need int64, where map[string]int64, err error) {
+	where = map[string]int64{}
+	err = m.snapWalk(ctx, root, "", nil, func(rel string, info fs.FileInfo) error {
+		if skipped(rel) {
+			if info.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if rel == "" || !info.Mode().IsRegular() {
+			return nil
+		}
+		if old, ok := prev[rel]; ok && old.Size == info.Size() && old.MTime == info.ModTime().UnixNano() {
+			return nil
+		}
+		need += info.Size()
+		where[folderOf(rel)] += info.Size()
+		return nil
+	})
+	return need, where, err
+}
+
+// folderOf is the folder a file is counted under when saying where a
+// snapshot's bytes are: its first two levels (Content/Models, Apps/Fin),
+// or the file itself when it sits higher.
+func folderOf(rel string) string {
+	parts := strings.SplitN(rel, "/", 3)
+	if len(parts) < 3 {
+		return rel
+	}
+	return parts[0] + "/" + parts[1]
+}
+
+// tooBigDetail is the notice for a snapshot refused before it started: how
+// much it needed, and the folders holding most of it — the ones worth
+// excluding when they hold what can be fetched again.
+func tooBigDetail(err error, need int64, where map[string]int64) string {
+	type folder struct {
+		name  string
+		bytes int64
+	}
+	var top []folder
+	for n, b := range where {
+		top = append(top, folder{n, b})
+	}
+	sort.Slice(top, func(i, j int) bool {
+		if top[i].bytes != top[j].bytes {
+			return top[i].bytes > top[j].bytes
+		}
+		return top[i].name < top[j].name
+	})
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s. Nothing was written: tonight's Drive backup needs up to %s for files that are new or changed since the last one.", err.Error(), fsx.HumanBytes(need))
+	if len(top) > 0 {
+		b.WriteString(" Most of it is in ")
+		for i, f := range top[:min(3, len(top))] {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s (%s)", DisplayName(f.name), fsx.HumanBytes(f.bytes))
+		}
+		b.WriteString(".")
+	}
+	b.WriteString(" Exclude folders that hold what can be fetched again (select the folder in Files → Exclude from backups), free space on the backup disk, or move the backup directory to a bigger disk.")
+	return b.String()
 }
 
 // storeFile reads one file into the store, re-reading it if it changed

@@ -1,4 +1,5 @@
-// Settings › Preferences › App store: which catalog entries appear when adding an app.
+// Settings › Preferences › App store: the catalogs the store is built from
+// (Catalogs.tsx), and which of their entries appear when adding an app.
 // The whole catalog as one table — the icon and the name, what kind of
 // thing it is, whether this machine can run it, whether it is already
 // here — and a switch per row. The switch is the only control; the name
@@ -16,6 +17,7 @@ import { useApps } from "../../lib/useApps";
 import { approx } from "../../lib/useCapacity";
 import { useFlash } from "../../lib/useFlash";
 import { paths } from "../../lib/paths";
+import Catalogs from "./Catalogs";
 import { SettingsPage } from "./Frame";
 import { useSettingsForm } from "./useSettingsForm";
 import { catalogQuery, settingsQuery } from "../../queries";
@@ -64,6 +66,7 @@ export default function AppStore() {
   return (
     <SettingsPage description="The apps offered under Add app. Switching one off hides it from the store; anything already installed keeps running.">
       <div className="space-y-4">
+        {catalog.data && <Catalogs data={catalog.data} />}
         <AppSources unsourced={catalog.data?.unsourced ?? 0} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <FilterInput value={filter} onChange={setFilter} label="Filter the catalog" />
@@ -220,7 +223,7 @@ function AppSources({ unsourced }: { unsourced: number }) {
       <Field label="Repository base" value={value("catalog_source_base")}
         onChange={(e) => setValue("catalog_source_base", e.target.value)}
         placeholder="ssh://git@git.example.com/you/"
-        hint="An SSH clone URL ending in /. Each app clones from this plus its name, e.g. …/you/fin.git. Apps already installed keep the address they were installed from." />
+        hint="A clone URL prefix ending in /: SSH for private repositories, or https:// if they are public. Each app clones from this plus its name, e.g. …/you/fin.git. Apps already installed keep the address they were installed from." />
       <TextArea label="Per-app overrides" rows={3} value={text}
         onChange={(e) => {
           setOverrides(e.target.value);

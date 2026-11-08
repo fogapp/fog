@@ -186,6 +186,7 @@ func patchRoom(t *testing.T, h http.Handler, d *testDevice, roomID, body string)
 // where the hub can't see it, to change who is in the room behind the hub's
 // back. The hub refuses anything but application data on the private path.
 func TestChatPrivateHandshakeRefused(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -217,6 +218,7 @@ func TestChatPrivateHandshakeRefused(t *testing.T) {
 // view and lock them out. An inline Update is always the committer's own,
 // which RFC 9420 forbids: the hub refuses it, and nothing moves.
 func TestChatLeafTakeoverRefused(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -269,6 +271,7 @@ func TestChatLeafTakeoverRefused(t *testing.T) {
 // is back only when a member adds it again. A hub that missed the reset (here:
 // a reset made straight in the store) catches it at the self-join.
 func TestChatIdentityResetIsADeparture(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -357,6 +360,7 @@ func TestChatIdentityResetIsADeparture(t *testing.T) {
 // identity key never attested — the ghost device an operator holding the
 // person's sign-in can register — is refused, however the client was built.
 func TestChatAddRefusesUnattestedDevice(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -402,6 +406,7 @@ func registerUnattested(t *testing.T, h http.Handler, session *http.Cookie, hand
 // the owner, touch another admin, or make someone an admin; nobody changes
 // their own role; a role the policy lacks is refused. The owner can.
 func TestChatRolesMoveOnlyDownward(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -468,6 +473,7 @@ func TestChatRolesMoveOnlyDownward(t *testing.T) {
 // member can add them back, they can't let themselves back in, and any
 // member may remove their leaves. Lifting the ban is a role change.
 func TestChatBanSticks(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -538,6 +544,7 @@ func TestChatBanSticks(t *testing.T) {
 // before, not among the attachments, not in the room's details. What they
 // were sent before they left stays theirs.
 func TestChatFormerMemberAccessEnds(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -639,6 +646,7 @@ func TestChatFormerMemberAccessEnds(t *testing.T) {
 // A member without the capability changes nothing, and a refused patch
 // writes no part of itself.
 func TestChatRoomPatchIsAllOrNothing(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -740,6 +748,7 @@ func TestChatRevokedDeviceIsCutOff(t *testing.T) {
 // has none left — gets the device's last-resort package, never used up, so
 // adds still work.
 func TestChatKeyPackagesCantBeDrained(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -793,6 +802,7 @@ func TestChatKeyPackagesCantBeDrained(t *testing.T) {
 // (Commits a member signs over a bad tree are refused in mlsview's
 // TestPublicGroupRefusesSignedForgeries, by the same check.)
 func TestChatHubVerifiesCommits(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -867,6 +877,7 @@ func TestChatHubVerifiesCommits(t *testing.T) {
 // for its epoch whose tree holds exactly the members the hub knows; until
 // then it takes no commit, and a GroupInfo that doesn't match seeds nothing.
 func TestChatLegacyRoomSeedsVerifiedState(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -907,6 +918,7 @@ func TestChatLegacyRoomSeedsVerifiedState(t *testing.T) {
 // Each message carries the role its sender held when the hub sequenced it,
 // which clients judge moderation acts by.
 func TestChatEventsRecordTheSendersRole(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -935,6 +947,7 @@ func TestChatEventsRecordTheSendersRole(t *testing.T) {
 
 // Someone who left a DM gets nothing of it by asking to create it again.
 func TestChatDepartedDMMemberSeesNothing(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -960,6 +973,8 @@ func TestChatDepartedDMMemberSeesNothing(t *testing.T) {
 
 // A push endpoint is one fog will dial: never on its own network.
 func TestChatPushEndpointMustBePublic(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")
@@ -975,6 +990,7 @@ func TestChatPushEndpointMustBePublic(t *testing.T) {
 // identity can't let itself back into any of them — not even an open
 // channel anyone in the household may join. Only a member's Add does.
 func TestChatResetIdentityCantRejoinAnyRoom(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

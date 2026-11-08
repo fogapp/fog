@@ -25,13 +25,13 @@ import (
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/backup"
 	"gitea.lan/matthew/fog/internal/jobs"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func newManager(t *testing.T) *Manager {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +53,8 @@ func write(t *testing.T, m *Manager, rel, content string) {
 }
 
 func TestCleanRel(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in, want string
 		err      error
@@ -78,6 +80,8 @@ func TestCleanRel(t *testing.T) {
 // apps.ValidateFilesRel is the spec-side twin of CleanRel: a Files folder
 // a spec accepts is one Files would address unchanged, and vice versa.
 func TestSpecFilesRelAgreesWithCleanRel(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []string{
 		"Apps/Books", "Apps/Media/Movies", "Photos", "a b/c", ".fog", ".fog/trash", "Apps/.fog", "Content/.fog/uploads", "Apps/x/.fog",
 		"/Apps/Books", "Apps//Books", "Apps/../etc", "..", ".", "Apps/.", "Apps/Books/", "",
@@ -95,6 +99,8 @@ func TestSpecFilesRelAgreesWithCleanRel(t *testing.T) {
 }
 
 func TestListRefreshesFromDisk(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/readme.md", "hello")
 	write(t, m, "photo.jpg", "not really")
@@ -127,6 +133,8 @@ func TestListRefreshesFromDisk(t *testing.T) {
 }
 
 func TestListPagination(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for _, n := range []string{"b", "a", "c", "e", "d"} {
 		write(t, m, n+".txt", n)
@@ -167,6 +175,8 @@ func TestListPagination(t *testing.T) {
 }
 
 func TestWalkSizesAndSearch(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "a/b/deep.bin", "0123456789")
 	write(t, m, "a/top.txt", "12345")
@@ -211,6 +221,8 @@ func TestWalkSizesAndSearch(t *testing.T) {
 // Every escape route a client could try is refused before the syscall
 // layer, and a symlink pointing out of the root cannot be read through.
 func TestNoEscape(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	outside := filepath.Join(t.TempDir(), "secret.txt")
 	os.WriteFile(outside, []byte("secret"), 0o644)
@@ -239,6 +251,8 @@ func TestNoEscape(t *testing.T) {
 }
 
 func TestZipStreamsFolder(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Photos/2024/a.jpg", "jpeg")
 	write(t, m, "Photos/note.txt", "note")
@@ -260,6 +274,8 @@ func TestZipStreamsFolder(t *testing.T) {
 }
 
 func TestValidateRoot(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	bad := []string{"relative", "/", m.DataDir, filepath.Join(m.DataDir, "data", "x"), filepath.Dir(m.DataDir)}
 	for _, b := range bad {
@@ -277,6 +293,8 @@ func TestValidateRoot(t *testing.T) {
 }
 
 func TestRootMove(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "keep/me.txt", "data")
 	m.List("", ListOpts{})
@@ -338,6 +356,8 @@ func names(l Listing) []string {
 }
 
 func TestMutations(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "a/one.txt", "1")
 	write(t, m, "a/sub/two.txt", "22")
@@ -411,6 +431,8 @@ func TestMutations(t *testing.T) {
 }
 
 func TestTrashRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/a.txt", "aaa")
 	write(t, m, "docs/b.txt", "bb")
@@ -469,6 +491,8 @@ func TestTrashRoundTrip(t *testing.T) {
 // Deleting an app with its data trashes its own folder in Drive, and only
 // that; an app that never had one deletes without complaint.
 func TestTrashAppFolder(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Apps/Paperless/config/a.txt", "aaa")
 	write(t, m, "Apps/Manor/b.txt", "bb")
@@ -492,6 +516,8 @@ func TestTrashAppFolder(t *testing.T) {
 }
 
 func TestMountedGuard(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "media/movies/x.mkv", "m")
 	m.MountedPaths = func() []MountedPath {
@@ -517,6 +543,8 @@ func TestMountedGuard(t *testing.T) {
 // folder an app mounts says which app and at what container path — the
 // facts the Drive page turns into "bookorbit sees this folder as /books".
 func TestAppsFolderRolesAndMounts(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	if err := m.EnsureDir(AppsDir + "/Books"); err != nil {
 		t.Fatal(err)
@@ -570,6 +598,8 @@ func TestAppsFolderRolesAndMounts(t *testing.T) {
 }
 
 func TestUploadSessions(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	m.List("", ListOpts{})
 	data := []byte(strings.Repeat("0123456789", 50))
@@ -664,6 +694,8 @@ func inode(t *testing.T, p string) uint64 {
 }
 
 func TestSnapshotsLinkUnchangedFiles(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	backups := t.TempDir()
 	m.BackupRoot = func() string { return backups }
@@ -804,6 +836,8 @@ func TestSnapshotsLinkUnchangedFiles(t *testing.T) {
 }
 
 func TestExcludesFollowRenames(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "a/b/c.txt", "c")
 	m.SetExcluded("a/b", true)
@@ -832,6 +866,8 @@ func TestExcludesFollowRenames(t *testing.T) {
 }
 
 func TestThumbnails(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	m.List("", ListOpts{})
 	// A real 40x20 PNG with a red left half.
@@ -882,6 +918,8 @@ func TestThumbnails(t *testing.T) {
 }
 
 func TestSharesAndDAV(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "pub/hello.txt", "hi there")
 	m.List("", ListOpts{})
@@ -961,6 +999,8 @@ func TestSharesAndDAV(t *testing.T) {
 // left behind — and the count has to agree with the page, or the folder
 // claims to hold rows nobody can scroll to.
 func TestListingHidesDotfilesAndSystemNames(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for _, name := range []string{"report.pdf", ".env", "Thumbs.db", "@eaDir", ".DS_Store", "holiday.jpg"} {
 		write(t, m, name, "x")
@@ -1013,6 +1053,8 @@ func TestListingHidesDotfilesAndSystemNames(t *testing.T) {
 // A download that doesn't hash to the required digest must leave whatever
 // was already at the path untouched, and no staging file behind.
 func TestMaterializeMismatchKeepsExistingFile(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "sync/a.txt", "good bytes")
 	good := sha256.Sum256([]byte("good bytes"))
@@ -1038,6 +1080,8 @@ func TestMaterializeMismatchKeepsExistingFile(t *testing.T) {
 }
 
 func TestSnapshotSurvivesVanishingFilesAndLeftovers(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	backups := t.TempDir()
 	m.BackupRoot = func() string { return backups }
@@ -1156,5 +1200,10 @@ func TestSchedulerWaitsForTomorrowAfterADiskFullRun(t *testing.T) {
 	m.runDue(context.Background(), now.Add(3*time.Hour))
 	if m.lastSnapAttempt.IsZero() {
 		t.Fatal("did not retry once there was room")
+	}
+	// The retry runs as a job: let it finish before the temp dirs it
+	// writes into are removed.
+	if j, ok := m.Jobs.Current("snapshot"); ok {
+		waitJob(t, m, j.ID)
 	}
 }

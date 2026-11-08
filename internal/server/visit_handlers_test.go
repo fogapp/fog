@@ -243,6 +243,8 @@ func (f *visitFixture) visit(t *testing.T) (*url.URL, *http.Response) {
 }
 
 func TestVisitorSignsInWithTheirOwnFog(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	cb, stopped := f.visit(t)
@@ -355,6 +357,8 @@ func sidOf(t *testing.T, tok *gooidc.IDToken) string {
 }
 
 func TestVisitorNeedsBothOperators(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	// The host opens Stream, but the home never lets its people visit.
 	f.grant(t, "guest", http.StatusOK)
@@ -376,6 +380,8 @@ func TestVisitorNeedsBothOperators(t *testing.T) {
 }
 
 func TestVisitorRoleIsCapped(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.grant(t, "member", http.StatusBadRequest) // above the app's visitors.role
 	f.grant(t, "admin", http.StatusBadRequest)
@@ -384,6 +390,8 @@ func TestVisitorRoleIsCapped(t *testing.T) {
 }
 
 func TestVisitorCallbackIsBoundToTheBrowser(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	// A callback carrying a state the browser never began is refused.
@@ -397,6 +405,8 @@ func TestVisitorCallbackIsBoundToTheBrowser(t *testing.T) {
 }
 
 func TestVisitorUserInfoAndGrantWithdrawal(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	cb, stopped := f.visit(t)
@@ -428,6 +438,8 @@ func TestVisitorUserInfoAndGrantWithdrawal(t *testing.T) {
 }
 
 func TestVisitEndsWhenTheHostUnpairs(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	sid := sidOf(t, f.signedIn(t))
@@ -441,6 +453,8 @@ func TestVisitEndsWhenTheHostUnpairs(t *testing.T) {
 }
 
 func TestVisitEndsWhenTheHomeWithdraws(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	sid := sidOf(t, f.signedIn(t))
@@ -456,6 +470,7 @@ func TestVisitEndsWhenTheHomeWithdraws(t *testing.T) {
 }
 
 func TestVisitorPasskeyRequirementTravelsHome(t *testing.T) {
+
 	f := newVisitFixture(t)
 	// Stream now requires a passkey; the visitor's home session was a
 	// password.
@@ -494,6 +509,8 @@ func (f *visitFixture) confirmVisit(t *testing.T, authorize string) *http.Respon
 }
 
 func TestVisitAsksThePersonFirst(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	// A host steering the browser to the home learns nothing without the
@@ -530,6 +547,8 @@ func TestVisitAsksThePersonFirst(t *testing.T) {
 // refuse only new sign-ins. Now the grants it no longer allows are
 // withdrawn and the visits holding them end.
 func TestLoweringVisitorsEndsVisits(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	tok := f.signedIn(t)
@@ -552,6 +571,8 @@ func TestLoweringVisitorsEndsVisits(t *testing.T) {
 // the redirect's shape, so a peer's request could send the home's person
 // anywhere. Now it must be the peer's own address.
 func TestHomeRefusesARedirectOffThePeer(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	push := func(redirect string) error {
@@ -573,6 +594,8 @@ func TestHomeRefusesARedirectOffThePeer(t *testing.T) {
 // revoked nothing. Now the replay is refused and the visit the first
 // redemption opened ends at the host.
 func TestAReplayedVisitCodeEndsTheVisit(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	f.signedIn(t)
@@ -597,6 +620,8 @@ func TestAReplayedVisitCodeEndsTheVisit(t *testing.T) {
 // session ends; the host's visit — and the ID token the app gets — end
 // no later.
 func TestAVisitNeverOutlastsTheHomeSession(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	homeEnds := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
@@ -620,6 +645,8 @@ func TestAVisitNeverOutlastsTheHomeSession(t *testing.T) {
 // config used to be read as "everyone" when it was missing or unreadable.
 // It fails closed now: only a config that names its people lets them visit.
 func TestAnUnreadablePeopleConfigLetsNobodyVisit(t *testing.T) {
+	t.Parallel()
+
 	for cfg, want := range map[string]bool{
 		``:                          false,
 		`not json`:                  false,
@@ -654,6 +681,8 @@ func TestAnUnreadablePeopleConfigLetsNobodyVisit(t *testing.T) {
 // minted — as it does a person's. Visitor tokens used to keep no record of
 // their code, so nothing was revoked.
 func TestAReplayedCodeRevokesAVisitorsToken(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	cb, stopped := f.visit(t)
@@ -679,6 +708,8 @@ func TestAReplayedCodeRevokesAVisitorsToken(t *testing.T) {
 // that no person's subject names; the emergency key rotation reaches it by
 // sid, and with the sessions-revoked logout besides.
 func TestEmergencyRotationEndsVisits(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	sid := sidOf(t, f.signedIn(t))
@@ -694,6 +725,8 @@ func TestEmergencyRotationEndsVisits(t *testing.T) {
 // — Chromium then blocked the redirect after Continue. The page now carries
 // the disclosure, and form-action names fog and the peer's callback origin.
 func TestTheConsentPageSaysWhatItDisclosesAndCanContinue(t *testing.T) {
+	t.Parallel()
+
 	f := newVisitFixture(t)
 	f.allow(t, "guest")
 	f.verifier = oauth2.GenerateVerifier()

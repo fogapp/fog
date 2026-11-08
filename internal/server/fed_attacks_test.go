@@ -42,6 +42,8 @@ func (c *countingReader) Read(b []byte) (int, error) {
 // read into memory. And only a few such callers are read at once — the
 // rest are turned away before anything of theirs is read.
 func TestUnauthenticatedFedRequestsAreBounded(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	stranger := mustIdentity(t, mustServer(t))
 
@@ -118,6 +120,8 @@ func TestUnauthenticatedFedRequestsAreBounded(t *testing.T) {
 // The unauthenticated pool has room for fedUnauthSlots in all, and no
 // address more than fedUnauthPerAddr of them.
 func TestUnauthenticatedPoolBounds(t *testing.T) {
+	t.Parallel()
+
 	s := mustServer(t)
 	c := s.fedCap()
 	var held []func()
@@ -167,6 +171,8 @@ func badPair(t *testing.T, p *fogPair, invEncKey string) int {
 // at invite codes uses up only the guessers' allowance: the household
 // holding a real code still pairs.
 func TestPairGuessingDoesNotLockOutTheInvited(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	code := mintInvite(t, p.aH, p.aCookie, `[]`)
 	inv, err := fed.ParseInvite(code)
@@ -192,6 +198,8 @@ func TestPairGuessingDoesNotLockOutTheInvited(t *testing.T) {
 // it on the way is not the peer changing keys: the request is refused, the
 // pinned key stays, and nobody is alarmed.
 func TestUnboundEncryptionKeyRaisesNoAlarm(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID := mustIdentity(t, p.b)
 	other := mustIdentity(t, mustServer(t))
@@ -224,6 +232,8 @@ func TestUnboundEncryptionKeyRaisesNoAlarm(t *testing.T) {
 // any other route — the API, the UI, or a fed path that climbs out — is
 // not dispatched.
 func TestInnerRequestsReachOnlyFedRoutes(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID := mustIdentity(t, p.b)
 	for _, target := range []string{
@@ -248,6 +258,8 @@ func TestInnerRequestsReachOnlyFedRoutes(t *testing.T) {
 // grants it has: the invite's grants are not applied, and the operator is
 // told.
 func TestLeakedInviteDoesNotWidenAnExistingPeer(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	code := mintInvite(t, p.aH, p.aCookie, `[{"capability":"flare.ingest"}]`)
 	before, _ := p.a.store.ListFedCapabilities(p.bPeerOnA.ID)
@@ -275,6 +287,8 @@ func TestLeakedInviteDoesNotWidenAnExistingPeer(t *testing.T) {
 // gets no thumbnail, and the origin decodes nothing: the federation path
 // goes through the same pixel limit as the household's own browsing.
 func TestFedThumbnailOfADecompressionBomb(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	root := p.a.files.Root()
 	os.MkdirAll(filepath.Join(root, "Photos"), 0o755)
@@ -315,6 +329,8 @@ func TestFedThumbnailOfADecompressionBomb(t *testing.T) {
 // then re-pair with a leaked invite. It is still the peer this side holds:
 // the invite's grants don't land.
 func TestPeerStampedUnpairedCannotWidenWithALeakedInvite(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	for i := 0; i < 3; i++ {
 		if err := p.a.store.RecordFedPeerRejection(p.bPeerOnA.ID, 3); err != nil {
@@ -338,6 +354,8 @@ func TestPeerStampedUnpairedCannotWidenWithALeakedInvite(t *testing.T) {
 // learned from its first record — while it is still arriving, and the
 // body is opened only as the route's handler reads it.
 func TestGrantlessPeerCannotSendHugeEnvelopes(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID, aID := mustIdentity(t, p.b), mustIdentity(t, p.a)
 	huge := bytes.Repeat([]byte("x"), 60<<20)
@@ -407,6 +425,8 @@ func (g *gatedBody) Read(p []byte) (int, error) {
 // and the next is turned away; held by bodies not yet verified — headers
 // anyone could have copied — and the next request takes the oldest.
 func TestPeerConcurrencyIsCapped(t *testing.T) {
+	t.Parallel()
+
 	s := mustServer(t)
 	c := s.fedCap()
 	for i := 0; i < fedPeerSlots; i++ {
@@ -451,6 +471,8 @@ func TestPeerConcurrencyIsCapped(t *testing.T) {
 // next request takes the slot, the replay record isn't spent until a body
 // verifies, and a trickle is cut off at its deadline.
 func TestRelayedHeadersCannotLockAPeerOut(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID := mustIdentity(t, p.b)
 	hb := []byte(`{"fogVersion":"x","grants":[],"directory":[]}`)
@@ -544,6 +566,8 @@ func trickle(t *testing.T, base string, req *http.Request, wire []byte, n int) [
 // record outlives the longest the copy's body could take. A copy whose
 // body fails gives the reservation back.
 func TestWithheldBodyCannotOutliveTheReplayRecord(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID := mustIdentity(t, p.b)
 	req, _ := http.NewRequest("POST", p.aHTTP.URL+"/fed/v1/heartbeat", nil)
@@ -593,6 +617,8 @@ func TestWithheldBodyCannotOutliveTheReplayRecord(t *testing.T) {
 // never /tmp, which is memory where fog runs — against one allowance for
 // every request at once.
 func TestSpoolLivesUnderTheDataDirAndIsCapped(t *testing.T) {
+	t.Parallel()
+
 	s := mustServer(t)
 	sp := s.fedSpoolFor()
 	if !strings.HasPrefix(sp.dir, s.cfg.DataDir) || s.cfg.DataDir == "" {
@@ -628,6 +654,8 @@ func TestSpoolLivesUnderTheDataDirAndIsCapped(t *testing.T) {
 // Strangers are counted by their network: an IPv6 caller by its /64, not
 // one address of the many it holds.
 func TestStrangerCapCountsANetwork(t *testing.T) {
+	t.Parallel()
+
 	s := mustServer(t)
 	key := func(remote string) string {
 		r := httptest.NewRequest("POST", "/fed/v1/sealed", nil)
@@ -647,6 +675,8 @@ func TestStrangerCapCountsANetwork(t *testing.T) {
 // and unsealed: an on-path attacker who tampers with B's request can't
 // carry A's refusal back to B as A's answer to the request B sent.
 func TestRefusalOfATamperedRequestIsNotSigned(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID, aID := mustIdentity(t, p.b), mustIdentity(t, p.a)
 	req, _ := http.NewRequest("POST", p.aHTTP.URL+"/fed/v1/heartbeat", nil)

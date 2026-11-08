@@ -16,6 +16,7 @@ import (
 // pairs the fogs and drives heartbeats once both devices exist, so the
 // directories carry each other's people; the script does the rest.
 func TestSDKFederatedEndToEnd(t *testing.T) {
+
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not installed")

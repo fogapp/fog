@@ -12,7 +12,7 @@ who a person is; the app keeps its own users, sessions and roles, and fog's
 tokens are never its API credential.
 
 Three paths: **fog-signin/1 apps** (reference implementation
-`FogClient::Signin`; adopters include Stream, Manor, Lucid, Office, Fit);
+`FogClient::Signin`; adopters include Stream, Manor, Glass, Office, Fit);
 **third-party OIDC images**, declared in the spec (Paperless); and **apps that
 speak nothing**, behind [the gate](#the-gate).
 
@@ -660,7 +660,7 @@ Guarantees:
 - **Secrets stay off logs and traces.** fogd logs a request by the route it
   matched (`/api/join/{secret}`), never its path or query, so invite, share,
   webhook and pairing secrets in a path never reach the log, the feedback
-  reports drawn from it, or Lucid's traces, which record the route alone. A path
+  reports drawn from it, or Glass's traces, which record the route alone. A path
   that matches no route is cut to two segments in the log and not traced.
 - **A burst can't outrun the budgets or the memory.** Each attempt is reserved
   in its buckets before the credential is checked, in one step, and refunded

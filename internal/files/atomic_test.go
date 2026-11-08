@@ -10,6 +10,8 @@ import (
 )
 
 func TestAtomicWrite(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	root, err := os.OpenRoot(dir)
 	if err != nil {

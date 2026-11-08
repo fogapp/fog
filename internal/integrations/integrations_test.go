@@ -18,6 +18,7 @@ import (
 	"gitea.lan/matthew/fog/internal/appcall"
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // fakeCaller is the provider as the service sees it, no HTTP in between:
@@ -63,13 +64,13 @@ type fixture struct {
 	caller   *fakeCaller
 	specs    *specWriter
 	consumer *store.App
-	lucidID  int64
+	glassID  int64
 	mk       func(string, apps.AppSpec) *store.App
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,23 +87,23 @@ func newFixture(t *testing.T) *fixture {
 		}
 		return app
 	}
-	lucid := mk("lucid", apps.AppSpec{
-		Source: apps.Source{Type: "image", Image: "lucid"},
+	glass := mk("glass", apps.AppSpec{
+		Source: apps.Source{Type: "image", Image: "glass"},
 		Routes: []apps.Route{{Port: 80}},
 		Connection: &apps.Connection{Port: 80, Offers: []apps.Offer{{
-			ID: "telemetry", Title: "Telemetry", Capabilities: []string{"Requests and errors in Lucid"},
-			Env: map[string]string{"LUCID_URL": "{{url}}"}, Secrets: []string{"LUCID_API_KEY"},
+			ID: "telemetry", Title: "Telemetry", Capabilities: []string{"Requests and errors in Glass"},
+			Env: map[string]string{"GLASS_URL": "{{url}}"}, Secrets: []string{"GLASS_API_KEY"},
 		}, {
-			ID: "read", Title: "Read access", Consent: true, Blurb: "Reads Lucid's charts.",
-			Env: map[string]string{"LUCID_READ_URL": "{{url}}"}, Secrets: []string{"LUCID_READ_TOKEN"},
+			ID: "read", Title: "Read access", Consent: true, Blurb: "Reads Glass's charts.",
+			Env: map[string]string{"GLASS_READ_URL": "{{url}}"}, Secrets: []string{"GLASS_READ_TOKEN"},
 		}}},
 	})
-	st.SetAppCurrentRev(lucid.ID, 1)
-	st.SetAppDesiredState(lucid.ID, "running")
+	st.SetAppCurrentRev(glass.ID, 1)
+	st.SetAppDesiredState(glass.ID, "running")
 	consumer := mk("newtab", apps.AppSpec{Source: apps.Source{Type: "image", Image: "newtab"},
-		Wants: []apps.Want{{Offer: "lucid/telemetry"}}})
+		Wants: []apps.Want{{Offer: "glass/telemetry"}}})
 
-	f := &fixture{st: st, consumer: consumer, lucidID: lucid.ID, mk: mk,
+	f := &fixture{st: st, consumer: consumer, glassID: glass.ID, mk: mk,
 		caller: &fakeCaller{}, specs: &specWriter{st: st, secrets: map[string]string{}}}
 	f.caller.fn = f.provider
 	f.svc = &Service{Store: st, Specs: f.specs, Apps: f.caller,
@@ -122,7 +123,7 @@ func (f *fixture) wants(t *testing.T, w ...apps.Want) {
 	}
 }
 
-// provider answers like Lucid: mints, reports active, revokes.
+// provider answers like Glass: mints, reports active, revokes.
 func (f *fixture) provider(ctx context.Context, method, path string, body any) ([]byte, error) {
 	switch {
 	case method == "POST" && path == Path:
@@ -130,7 +131,7 @@ func (f *fixture) provider(ctx context.Context, method, path string, body any) (
 		if ask["offer"] == "read" {
 			return json.Marshal(map[string]any{"id": "read_" + ask["consumer"], "consent": "/connect/tkt"})
 		}
-		return json.Marshal(map[string]any{"id": "telemetry_" + ask["consumer"], "secrets": map[string]string{"LUCID_API_KEY": "key"}})
+		return json.Marshal(map[string]any{"id": "telemetry_" + ask["consumer"], "secrets": map[string]string{"GLASS_API_KEY": "key"}})
 	case method == "GET":
 		return []byte(`{"active":true,"last_activity_at":"2026-10-13T09:00:00Z"}`), nil
 	case method == "DELETE":
@@ -159,17 +160,17 @@ func TestServiceConnectListDisconnect(t *testing.T) {
 	if len(list.Connected) != 0 || len(list.Available) != 1 {
 		t.Fatalf("before: %+v", list)
 	}
-	if a := list.Available[0]; a.Provider != "lucid" || a.State != StateAvailable || !a.Installed || a.Consent ||
-		!slices.Equal(a.Capabilities, []string{"Requests and errors in Lucid"}) {
+	if a := list.Available[0]; a.Provider != "glass" || a.State != StateAvailable || !a.Installed || a.Consent ||
+		!slices.Equal(a.Capabilities, []string{"Requests and errors in Glass"}) {
 		t.Fatalf("available: %+v", a)
 	}
 
-	consent, err := f.connect(t, "lucid")
+	consent, err := f.connect(t, "glass")
 	if err != nil || consent != "" {
 		t.Fatalf("connect: %q %v", consent, err)
 	}
 	spec, _ := apps.LatestSpec(f.st, f.consumer.ID)
-	if spec.Env["LUCID_URL"] != "http://lucid" || !slices.Contains(spec.Secrets, "LUCID_API_KEY") || f.specs.secrets["LUCID_API_KEY"] != "key" {
+	if spec.Env["GLASS_URL"] != "http://glass" || !slices.Contains(spec.Secrets, "GLASS_API_KEY") || f.specs.secrets["GLASS_API_KEY"] != "key" {
 		t.Fatalf("spec: %v %v %v", spec.Env, spec.Secrets, f.specs.secrets)
 	}
 
@@ -182,22 +183,22 @@ func TestServiceConnectListDisconnect(t *testing.T) {
 		t.Fatalf("connected: %+v", c)
 	}
 
-	if _, err := f.connect(t, "lucid"); !errors.Is(err, ErrConflict) || !strings.Contains(err.Error(), "already connected") {
+	if _, err := f.connect(t, "glass"); !errors.Is(err, ErrConflict) || !strings.Contains(err.Error(), "already connected") {
 		t.Fatalf("second connect: %v", err)
 	}
 
-	changed, err := f.svc.Disconnect(context.Background(), f.consumer, "lucid", false, "op")
+	changed, err := f.svc.Disconnect(context.Background(), f.consumer, "glass", false, "op")
 	if err != nil || !changed {
 		t.Fatalf("disconnect: %v %v", changed, err)
 	}
-	if !slices.Contains(f.caller.calls, "DELETE lucid"+Path+"/telemetry_newtab") {
+	if !slices.Contains(f.caller.calls, "DELETE glass"+Path+"/telemetry_newtab") {
 		t.Fatalf("calls: %v", f.caller.calls)
 	}
 	spec, _ = apps.LatestSpec(f.st, f.consumer.ID)
-	if _, set := spec.Env["LUCID_URL"]; set || slices.Contains(spec.Secrets, "LUCID_API_KEY") {
+	if _, set := spec.Env["GLASS_URL"]; set || slices.Contains(spec.Secrets, "GLASS_API_KEY") {
 		t.Fatalf("spec after disconnect: %v %v", spec.Env, spec.Secrets)
 	}
-	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "lucid", false, "op"); !errors.Is(err, ErrNotFound) {
+	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "glass", false, "op"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("disconnect again: %v", err)
 	}
 }
@@ -212,8 +213,8 @@ func TestServiceListsWhatTheAppWants(t *testing.T) {
 	f.st.SetAppDesiredState(hub.ID, "running")
 	f.wants(t,
 		apps.Want{Offer: "newtab/self"},
-		apps.Want{Offer: "lucid/telemetry"},
-		apps.Want{Offer: "lucid/read"},
+		apps.Want{Offer: "glass/telemetry"},
+		apps.Want{Offer: "glass/read"},
 		apps.Want{Offer: "stream/library"},
 	)
 	got := f.list(t).Available
@@ -221,28 +222,28 @@ func TestServiceListsWhatTheAppWants(t *testing.T) {
 	for _, e := range got {
 		order = append(order, e.Provider)
 	}
-	if !slices.Equal(order, []string{"lucid", "stream"}) {
+	if !slices.Equal(order, []string{"glass", "stream"}) {
 		t.Fatalf("entries: %v", order)
 	}
-	if !got[0].Consent || !slices.Equal(got[0].Capabilities, []string{"Requests and errors in Lucid", "Reads Lucid's charts."}) {
-		t.Fatalf("lucid: %+v", got[0])
+	if !got[0].Consent || !slices.Equal(got[0].Capabilities, []string{"Requests and errors in Glass", "Reads Glass's charts."}) {
+		t.Fatalf("glass: %+v", got[0])
 	}
 	if got[1].Installed || got[1].Problem != "Install stream, then connect it" {
 		t.Fatalf("stream: %+v", got[1])
 	}
 
 	// A want's own capabilities say what this app gets, in place of the offers'.
-	f.wants(t, apps.Want{Offer: "lucid/telemetry", Capabilities: []string{"Your traffic on the start page"}})
+	f.wants(t, apps.Want{Offer: "glass/telemetry", Capabilities: []string{"Your traffic on the start page"}})
 	if got := f.list(t).Available[0].Capabilities; !slices.Equal(got, []string{"Your traffic on the start page"}) {
 		t.Fatalf("want capabilities: %v", got)
 	}
 
 	// An offer the provider doesn't make yet: listed, not connectable.
-	f.wants(t, apps.Want{Offer: "lucid/dashboards"})
-	if got := f.list(t).Available[0]; !strings.Contains(got.Problem, "update lucid") {
+	f.wants(t, apps.Want{Offer: "glass/dashboards"})
+	if got := f.list(t).Available[0]; !strings.Contains(got.Problem, "update glass") {
 		t.Fatalf("missing offer: %+v", got)
 	}
-	if _, err := f.connect(t, "lucid"); !errors.Is(err, ErrNotFound) {
+	if _, err := f.connect(t, "glass"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("connect missing offer: %v", err)
 	}
 }
@@ -252,22 +253,22 @@ func TestServiceListsWhatTheAppWants(t *testing.T) {
 // until connected again, which adds only what is missing.
 func TestServiceConnectsEveryOfferOfAnApp(t *testing.T) {
 	f := newFixture(t)
-	f.svc.Store.SetAppIntegrations(f.lucidID, (&apps.Declared{Offers: []apps.Offer{{
-		ID: "ingest", Title: "Ingest", Env: map[string]string{"LUCID_INGEST": "{{url}}/i"}, Secrets: []string{"LUCID_API_KEY"},
+	f.svc.Store.SetAppIntegrations(f.glassID, (&apps.Declared{Offers: []apps.Offer{{
+		ID: "ingest", Title: "Ingest", Env: map[string]string{"GLASS_INGEST": "{{url}}/i"}, Secrets: []string{"GLASS_API_KEY"},
 	}}}).JSON())
-	if _, err := f.connect(t, "lucid"); err != nil {
+	if _, err := f.connect(t, "glass"); err != nil {
 		t.Fatal(err)
 	}
-	f.wants(t, apps.Want{Offer: "lucid/telemetry"}, apps.Want{Offer: "lucid/ingest"})
+	f.wants(t, apps.Want{Offer: "glass/telemetry"}, apps.Want{Offer: "glass/ingest"})
 	if c := f.list(t).Connected[0]; !c.Incomplete {
 		t.Fatalf("a new want: %+v", c)
 	}
 	before, _ := f.st.LatestRevision(f.consumer.ID)
 	f.caller.calls = nil
-	if _, err := f.connect(t, "lucid"); err != nil {
+	if _, err := f.connect(t, "glass"); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(f.caller.calls, []string{"POST lucid" + Path}) {
+	if !slices.Equal(f.caller.calls, []string{"POST glass" + Path}) {
 		t.Fatalf("only the missing offer is minted: %v", f.caller.calls)
 	}
 	if after, _ := f.st.LatestRevision(f.consumer.ID); after.Rev != before.Rev+1 {
@@ -281,7 +282,7 @@ func TestServiceConnectsEveryOfferOfAnApp(t *testing.T) {
 		t.Fatalf("rows: %+v", rows)
 	}
 	f.caller.calls = nil
-	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "lucid", false, "op"); err != nil {
+	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "glass", false, "op"); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.caller.calls) != 2 {
@@ -339,32 +340,32 @@ func TestServiceRefusalKinds(t *testing.T) {
 		t.Fatalf("itself: %v", err)
 	}
 	f.wants(t)
-	if _, err := f.connect(t, "lucid"); !errors.Is(err, ErrNotFound) {
+	if _, err := f.connect(t, "glass"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not wanted: %v", err)
 	}
-	f.wants(t, apps.Want{Offer: "lucid/telemetry"})
+	f.wants(t, apps.Want{Offer: "glass/telemetry"})
 
 	f.caller.fn = func(context.Context, string, string, any) ([]byte, error) {
-		return nil, errors.New("Lucid has no household yet")
+		return nil, errors.New("Glass has no household yet")
 	}
-	_, err := f.connect(t, "lucid")
-	if !errors.Is(err, ErrProvider) || err.Error() != "lucid refused: Lucid has no household yet" {
+	_, err := f.connect(t, "glass")
+	if !errors.Is(err, ErrProvider) || err.Error() != "glass refused: Glass has no household yet" {
 		t.Fatalf("refused: %v", err)
 	}
 	f.caller.fn = func(context.Context, string, string, any) ([]byte, error) {
 		return nil, fmt.Errorf("%w: no container", appcall.ErrUnreachable)
 	}
-	if _, err := f.connect(t, "lucid"); !errors.Is(err, ErrProvider) || !strings.HasPrefix(err.Error(), "Can't reach lucid") {
+	if _, err := f.connect(t, "glass"); !errors.Is(err, ErrProvider) || !strings.HasPrefix(err.Error(), "Can't reach glass") {
 		t.Fatalf("unreachable: %v", err)
 	}
 
-	f.st.SetAppDesiredState(f.lucidID, "stopped")
-	if _, err := f.connect(t, "lucid"); !errors.Is(err, ErrConflict) {
+	f.st.SetAppDesiredState(f.glassID, "stopped")
+	if _, err := f.connect(t, "glass"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stopped: %v", err)
 	}
 
 	f.svc.Specs = nil
-	if _, err := f.connect(t, "lucid"); err == nil || errors.As(err, new(*Error)) {
+	if _, err := f.connect(t, "glass"); err == nil || errors.As(err, new(*Error)) {
 		t.Fatalf("no engine is an internal error, not a refusal: %v", err)
 	}
 }
@@ -373,9 +374,9 @@ func TestServiceRefusalKinds(t *testing.T) {
 // the request at the provider, approving claims and applies it.
 func TestServiceConsentReturn(t *testing.T) {
 	f := newFixture(t)
-	f.wants(t, apps.Want{Offer: "lucid/read"})
-	consent, err := f.connect(t, "lucid")
-	if err != nil || consent != "https://lucid.home.test/connect/tkt" {
+	f.wants(t, apps.Want{Offer: "glass/read"})
+	consent, err := f.connect(t, "glass")
+	if err != nil || consent != "https://glass.home.test/connect/tkt" {
 		t.Fatalf("ask: %q %v", consent, err)
 	}
 	if c := f.list(t).Connected; len(c) != 1 || c[0].State != StatePending {
@@ -388,15 +389,15 @@ func TestServiceConsentReturn(t *testing.T) {
 			state = u.Query().Get("state")
 		}
 		if strings.HasSuffix(path, "/claim") {
-			return []byte(`{"secrets":{"LUCID_READ_TOKEN":"tok"}}`), nil
+			return []byte(`{"secrets":{"GLASS_READ_TOKEN":"tok"}}`), nil
 		}
 		return f.provider(ctx, method, path, body)
 	}
 	// Cancel the first and ask again so the test holds the state.
-	if changed, err := f.svc.Disconnect(context.Background(), f.consumer, "lucid", false, "op"); err != nil || changed {
+	if changed, err := f.svc.Disconnect(context.Background(), f.consumer, "glass", false, "op"); err != nil || changed {
 		t.Fatalf("cancel: %v %v", changed, err)
 	}
-	if _, err := f.connect(t, "lucid"); err != nil || state == "" {
+	if _, err := f.connect(t, "glass"); err != nil || state == "" {
 		t.Fatalf("ask again: %v %q", err, state)
 	}
 
@@ -404,10 +405,10 @@ func TestServiceConsentReturn(t *testing.T) {
 		t.Fatalf("unknown state: %+v", got)
 	}
 	got := f.svc.Return(context.Background(), state, true, "op")
-	if got.Consumer == nil || got.Outcome != "connected=lucid" || !got.Connected {
+	if got.Consumer == nil || got.Outcome != "connected=glass" || !got.Connected {
 		t.Fatalf("approved: %+v", got)
 	}
-	if f.specs.secrets["LUCID_READ_TOKEN"] != "tok" {
+	if f.specs.secrets["GLASS_READ_TOKEN"] != "tok" {
 		t.Fatalf("secrets: %v", f.specs.secrets)
 	}
 	if again := f.svc.Return(context.Background(), state, true, "op"); again.Consumer != nil {
@@ -417,16 +418,16 @@ func TestServiceConsentReturn(t *testing.T) {
 		t.Fatalf("connected: %+v", c)
 	}
 
-	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "lucid", false, "op"); err != nil {
+	if _, err := f.svc.Disconnect(context.Background(), f.consumer, "glass", false, "op"); err != nil {
 		t.Fatal(err)
 	}
-	f.connect(t, "lucid")
+	f.connect(t, "glass")
 	f.caller.calls = nil
 	got = f.svc.Return(context.Background(), state, false, "op")
-	if got.Outcome != "declined=lucid" || got.Connected {
+	if got.Outcome != "declined=glass" || got.Connected {
 		t.Fatalf("declined: %+v", got)
 	}
-	if !slices.Contains(f.caller.calls, "DELETE lucid"+Path+"/read_newtab") {
+	if !slices.Contains(f.caller.calls, "DELETE glass"+Path+"/read_newtab") {
 		t.Fatalf("declined must revoke: %v", f.caller.calls)
 	}
 	if left, _ := f.st.ListIntegrations(f.consumer.ID); len(left) != 0 {
@@ -449,7 +450,7 @@ func TestServiceRevokeUsesItsContext(t *testing.T) {
 		}
 		return nil, c.Err()
 	}
-	f.svc.revoke(ctx, &store.App{Name: "lucid"}, "remote-1")
+	f.svc.revoke(ctx, &store.App{Name: "glass"}, "remote-1")
 	if !called {
 		t.Fatal("the provider was never asked")
 	}
@@ -482,17 +483,17 @@ func TestApplyRefusesFogsOwnAndInjectableNames(t *testing.T) {
 	for _, name := range []string{"_fog_api_token", "_deploy_key", "LD_PRELOAD", "NODE_OPTIONS", "http_proxy", "FOG_API_URL", "OIDC_ISSUER"} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			f.svc.Store.SetAppIntegrations(f.lucidID, (&apps.Declared{Offers: []apps.Offer{{
+			f.svc.Store.SetAppIntegrations(f.glassID, (&apps.Declared{Offers: []apps.Offer{{
 				ID: "evil", Title: "Evil", Secrets: []string{name},
 			}}}).JSON())
 			f.caller.fn = func(ctx context.Context, method, path string, body any) ([]byte, error) {
 				if method == "POST" {
-					return json.Marshal(map[string]any{"id": "x", "secrets": map[string]string{name: "attacker", "LUCID_API_KEY": "key"}})
+					return json.Marshal(map[string]any{"id": "x", "secrets": map[string]string{name: "attacker", "GLASS_API_KEY": "key"}})
 				}
 				return f.provider(ctx, method, path, body)
 			}
-			f.wants(t, apps.Want{Offer: "lucid/evil"})
-			if _, err := f.connect(t, "lucid"); err == nil {
+			f.wants(t, apps.Want{Offer: "glass/evil"})
+			if _, err := f.connect(t, "glass"); err == nil {
 				t.Fatal("connected an offer that sets " + name)
 			}
 			if v, ok := f.specs.secrets[name]; ok {

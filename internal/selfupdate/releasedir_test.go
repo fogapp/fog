@@ -87,6 +87,8 @@ func serveDir(t *testing.T, dir string) string {
 // install.sh, from the directory alone: the manifest, the binary, the
 // unit and the guard all resolve beside it and verify.
 func TestReleaseDirectoryInstallsOnItsOwn(t *testing.T) {
+	t.Parallel()
+
 	f := newInstallFixture(t, "v0.0.1", "#!/bin/sh\nexit 0\n")
 	dir := releaseDir(t, f.s, "v1.4.0", "#!/bin/sh\n# fogd v1.4.0\nexit 0\n", false)
 	src := serveDir(t, dir)
@@ -130,6 +132,8 @@ func TestReleaseDirectoryInstallsOnItsOwn(t *testing.T) {
 // flash.sh resolves a relative installer entry against the manifest's own
 // URL — before, it handed curl the bare file name.
 func TestFlashResolvesARelativeImage(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	needOpenSSL(t, s)
 	dir := releaseDir(t, s, "v1.4.0", "#!/bin/sh\nexit 0\n", true)
@@ -163,6 +167,8 @@ func TestFlashResolvesARelativeImage(t *testing.T) {
 // flash.sh hashes the bytes on their way to the stick: an image swapped in
 // the cache after its checksum was checked is caught, not booted.
 func TestFlashCatchesAnImageSwappedBeforeWriting(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	dir := t.TempDir()
 	good, evil := "the verified image\n", "a swapped-in image\n"

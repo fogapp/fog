@@ -2,6 +2,7 @@ package files
 
 import (
 	"sort"
+	"strings"
 )
 
 // Exclusions: what the nightly snapshot leaves out. Stored in fog.db by
@@ -113,6 +114,9 @@ func (m *Manager) followRename(old, new string) {
 
 // excludedTree reports whether rel or anything above it is excluded,
 // for the snapshot walk (which prunes whole subtrees).
+// key identifies the set, to tell whether it has changed.
+func (es excludeSet) key() string { return strings.Join(es.sorted, "\x00") }
+
 func (es excludeSet) prunes(rel string) bool {
 	ex, _ := es.check(rel)
 	return ex

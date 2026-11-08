@@ -23,6 +23,8 @@ func withProxy(t *testing.T, srv *Server) string {
 // client Caddy saw; a LAN host claiming to be a proxy, by X-Forwarded-For or
 // by Caddy's own header without the secret, is keyed by its own address.
 func TestClientIPTrustsOnlyCaddy(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	secret := withProxy(t, srv)
 	cases := []struct {

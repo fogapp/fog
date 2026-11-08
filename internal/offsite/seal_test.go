@@ -84,6 +84,8 @@ func roundTrip(t *testing.T, kr *Keyring, name string, plain []byte) []byte {
 }
 
 func TestSealRoundTripSizes(t *testing.T) {
+	t.Parallel()
+
 	kr := testKeyring(t)
 	for _, n := range []int{0, 1, 100, FrameSize - 1, FrameSize, FrameSize + 1, 2 * FrameSize, 3*FrameSize + 12345} {
 		plain := make([]byte, n)
@@ -93,6 +95,8 @@ func TestSealRoundTripSizes(t *testing.T) {
 }
 
 func TestSealDetectsTruncationAndTamper(t *testing.T) {
+	t.Parallel()
+
 	kr := testKeyring(t)
 	plain := make([]byte, 2*FrameSize+100)
 	rand.Read(plain)
@@ -140,6 +144,8 @@ func TestSealDetectsTruncationAndTamper(t *testing.T) {
 // The name is in the additional data: an object served under a different
 // key does not open, so a swapped artifact cannot be passed off.
 func TestSealBindsName(t *testing.T) {
+	t.Parallel()
+
 	kr := testKeyring(t)
 	sealed, _ := kr.SealBytes("apps/hub/a.snapshot", []byte("hub data"))
 	if _, err := kr.OpenBytes("apps/feed/a.snapshot", sealed, 1<<10); !errors.Is(err, ErrBadKey) {
@@ -157,6 +163,8 @@ func TestSealBindsName(t *testing.T) {
 // Re-sealing the same source with the same nonce yields identical bytes —
 // what lets a resumed multipart upload keep its finished parts.
 func TestSealIsDeterministicForANonce(t *testing.T) {
+	t.Parallel()
+
 	kr := testKeyring(t)
 	nonce, _ := NewNonce()
 	plain := make([]byte, FrameSize+7)
@@ -181,6 +189,8 @@ func TestSealIsDeterministicForANonce(t *testing.T) {
 }
 
 func TestPlainSizeRejectsImpossibleLengths(t *testing.T) {
+	t.Parallel()
+
 	if _, ok := PlainSize(int64(headerSize) + 3); ok {
 		t.Fatal("a body shorter than a tag is not a sealed object")
 	}

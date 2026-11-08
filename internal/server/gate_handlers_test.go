@@ -141,6 +141,8 @@ func (f *gateFixture) signIn(t *testing.T, session *http.Cookie, next string) *h
 }
 
 func TestGateHandshakeAndAssertion(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	gate := f.signIn(t, f.operator, "/queue?x=1")
 
@@ -187,6 +189,8 @@ func TestGateHandshakeAndAssertion(t *testing.T) {
 }
 
 func TestGateRefusesClientSuppliedIdentityWithoutACookie(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	w := do(t, f.h, "GET", "/api/authgate", "", forwarded("/"), func(r *http.Request) {
 		r.Header.Set("Remote-User", "admin")
@@ -198,6 +202,8 @@ func TestGateRefusesClientSuppliedIdentityWithoutACookie(t *testing.T) {
 }
 
 func TestGateCodesAreSingleUseAndHostBound(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	authorize, bind := f.begin(t, "/")
 	cb := f.authorize(t, authorize, f.operator)
@@ -231,6 +237,8 @@ func TestGateCodesAreSingleUseAndHostBound(t *testing.T) {
 // link and sign them in to the gated app as themselves. The callback now
 // redeems a code only in the browser whose binding cookie began it.
 func TestGateHandshakeIsBoundToTheBrowser(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	// The attacker begins a handshake in their own browser and lets fog
 	// mint a code for their own session, then sends the callback link to
@@ -277,6 +285,8 @@ func TestGateHandshakeIsBoundToTheBrowser(t *testing.T) {
 }
 
 func TestGateNeverRedirectsOffHost(t *testing.T) {
+	t.Parallel()
+
 	for _, next := range []string{"https://evil.example/", "//evil.example/x", "http://" + gateHost + "/", "https://user@" + gateHost + "/", "javascript:alert(1)"} {
 		if got := sameHostNext(next, gateHost, true); got != "https://"+gateHost+"/" {
 			t.Errorf("next %q → %q", next, got)
@@ -288,6 +298,8 @@ func TestGateNeverRedirectsOffHost(t *testing.T) {
 }
 
 func TestGatePolicyAdmitsMembersOnlyWhenShared(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	kim := addMember(t, f.srv, "kim")
 
@@ -313,6 +325,8 @@ func TestGatePolicyAdmitsMembersOnlyWhenShared(t *testing.T) {
 }
 
 func TestGateSessionEndsWithFogSession(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	gate := f.signIn(t, f.operator, "/")
 	if err := f.srv.store.DeletePersonSessionByDigest(auth.DigestToken(f.operator.Value)); err != nil {
@@ -324,6 +338,8 @@ func TestGateSessionEndsWithFogSession(t *testing.T) {
 }
 
 func TestSessionCookieIsHostOnlyUnderTheDomain(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	if err := srv.store.SetSetting(store.SettingBaseDomain, gateDomain); err != nil {
 		t.Fatal(err)
@@ -353,6 +369,8 @@ func TestSessionCookieIsHostOnlyUnderTheDomain(t *testing.T) {
 // works inside the attacker's session. fog reads only __Host-fog_session
 // there, never adopts the other, and expires it.
 func TestAPlantedDomainCookieIsRefused(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	attacker := setup(t, h) // a valid session the planter holds
 	if err := srv.store.SetSetting(store.SettingBaseDomain, gateDomain); err != nil {
@@ -426,6 +444,8 @@ func addMember(t *testing.T, srv *Server, handle string) *http.Cookie {
 }
 
 func TestAppActsForThePresentPersonOnly(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	gate := f.signIn(t, f.operator, "/")
 	w := do(t, f.h, "GET", "/api/authgate", "", forwarded("/"), withCookie(gate))
@@ -479,6 +499,8 @@ func TestAppActsForThePresentPersonOnly(t *testing.T) {
 // TestAppGateNamesOnlyTheAppsOwnHosts: what fog-client verifies assertions
 // against — the issuer and the app's own gated hosts, never another app's.
 func TestAppGateNamesOnlyTheAppsOwnHosts(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	if err := f.srv.store.SetAppAPITokenDigest(f.appID, auth.DigestToken("sab-token")); err != nil {
 		t.Fatal(err)
@@ -513,6 +535,8 @@ func TestAppGateNamesOnlyTheAppsOwnHosts(t *testing.T) {
 // needs the forgeable trust-the-headers opt-out — and an assertion naming
 // the other scheme is refused.
 func TestGateAssertionsNameOneScheme(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name, scheme, other string
 		https               bool
@@ -598,6 +622,7 @@ func TestGateAssertionsNameOneScheme(t *testing.T) {
 // expired. And an https setup never hands out the plain cookie, whatever a
 // request says of its transport.
 func TestAnHTTPSetupSignsInAndRefusesAPlantedCookie(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	if err := srv.store.SetSetting(store.SettingBaseDomain, gateDomain); err != nil {
 		t.Fatal(err)
@@ -686,6 +711,8 @@ func TestAnHTTPSetupSignsInAndRefusesAPlantedCookie(t *testing.T) {
 // with no opt-out. fog-client used to read the keys through OIDC discovery,
 // whose issuer is always https, so on plain http nothing verified.
 func TestFogClientVerifiesTheGateOnEverySetup(t *testing.T) {
+	t.Parallel()
+
 	ruby, err := exec.LookPath("ruby")
 	if err != nil {
 		t.Skip("ruby not installed")

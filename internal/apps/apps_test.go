@@ -551,6 +551,8 @@ func TestValidateGitRepo(t *testing.T) {
 		"ssh://gitea@gitea.lan:2222/owner/repo.git",
 		"gitea@gitea.lan:matthew/manor.git",
 		"/var/repos/local.git",
+		"https://github.com/fogapp/fin.git",
+		"https://gitea.lan:3000/owner/repo",
 	}
 	for _, v := range valid {
 		if err := validateGitRepo(v); err != nil {
@@ -559,8 +561,11 @@ func TestValidateGitRepo(t *testing.T) {
 	}
 	invalid := map[string]string{
 		"":                                        "required",
-		"http://gitea.lan/matthew/manor.git":      "HTTP",
-		"https://github.com/owner/repo.git":       "HTTP",
+		"http://gitea.lan/matthew/manor.git":      "unencrypted",
+		"https://tok@github.com/owner/repo.git":   "credentials",
+		"https://u:p@github.com/owner/repo.git":   "credentials",
+		"https://github.com/owner/repo.git?x=1":   "query",
+		"https://github.com":                      "missing the repository path",
 		"git://host/repo.git":                     "unauthenticated",
 		"ssh://gitea.lan/matthew/manor.git":       "missing its user",
 		"ssh://gitea@gitea.lan":                   "missing the repository path",

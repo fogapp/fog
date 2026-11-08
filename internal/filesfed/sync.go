@@ -1179,14 +1179,25 @@ func (s *Service) transferAll(ctx context.Context, sub *store.FileFedSubscriptio
 				fail(err)
 				return
 			}
+			// In flight until what it placed is recorded (ids.placed) or it
+			// gives up, so an entry that finds its name taken can wait for
+			// that before deciding whose the name is.
+			finished := ids.start()
+			defer finished()
 			// Marked as being placed first, so a copy that lands but isn't
 			// yet recorded (a crash between) is still known as this sync's.
 			s.beginPlacing(sub.ID, old, had, e, mt)
 			sha, _, err := s.fetchBlob(ctx, dst, peer, sub.RemoteShareID, e, rel, p, lim, mineFor(old, had))
 			if errors.Is(err, files.ErrNotPlaced) {
 				s.abandonPlacing(sub.ID, old, had, e.Path)
-				// Another entry of this manifest got there first under
-				// another form of the name: a duplicate, not a file of the
+				// Another entry of this manifest may have got there first
+				// under another form of the name, and not yet said so: the
+				// placements under way are let finish first.
+				finished()
+				if ids.settle(ctx) != nil {
+					return
+				}
+				// One that did is a duplicate, not a file of the
 				// subscriber's.
 				if derr := ids.check(s, rel, e.Path); derr != nil {
 					fail(derr)
@@ -1212,6 +1223,7 @@ func (s *Service) transferAll(ctx context.Context, sub *store.FileFedSubscriptio
 			row := store.FileFedReplica{SubscriptionID: sub.ID, Rel: e.Path, Kind: "file", SHA256: sha, Hydrated: true, Origin: e.Origin, Pinned: have[e.Path].Pinned}
 			s.recordPlaced(&row, rel)
 			ids.placed(s, rel, e.Path)
+			finished()
 			n := row.Size
 			if err := s.Store.UpsertFileFedReplica(row); err != nil {
 				// The bytes are in place but unrecorded: the next pull sees
@@ -1243,10 +1255,14 @@ func (s *Service) transferAll(ctx context.Context, sub *store.FileFedSubscriptio
 type placedIDs struct {
 	mu sync.Mutex
 	by map[[2]uint64]string
+	// inflight are the placements under way: each channel closes once
+	// what it placed is in by, or it placed nothing.
+	inflight map[int]chan struct{}
+	next     int
 }
 
 func newPlacedIDs(have map[string]store.FileFedReplica) *placedIDs {
-	p := &placedIDs{by: map[[2]uint64]string{}}
+	p := &placedIDs{by: map[[2]uint64]string{}, inflight: map[int]chan struct{}{}}
 	for rel, r := range have {
 		if r.Ino != 0 {
 			p.by[[2]uint64{r.Dev, r.Ino}] = rel
@@ -1273,6 +1289,44 @@ func (p *placedIDs) check(s *Service, rel, entry string) error {
 	defer p.mu.Unlock()
 	if other, ok := p.by[[2]uint64{dev, ino}]; ok && other != entry {
 		return fmt.Errorf("%w: %q and %q are one name on this disk", errSameFileTwice, other, entry)
+	}
+	return nil
+}
+
+// start marks a placement under way; the returned func ends it, and may
+// be called more than once.
+func (p *placedIDs) start() func() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	id, done := p.next, make(chan struct{})
+	p.next++
+	p.inflight[id] = done
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			p.mu.Lock()
+			delete(p.inflight, id)
+			p.mu.Unlock()
+			close(done)
+		})
+	}
+}
+
+// settle waits for the placements under way now to end — not for any
+// begun later — so a check after it sees whatever they placed.
+func (p *placedIDs) settle(ctx context.Context) error {
+	p.mu.Lock()
+	waits := make([]chan struct{}, 0, len(p.inflight))
+	for _, c := range p.inflight {
+		waits = append(waits, c)
+	}
+	p.mu.Unlock()
+	for _, c := range waits {
+		select {
+		case <-c:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return nil
 }

@@ -12,6 +12,8 @@ import (
 // A reserved directory fog can still take back is taken back, silently: the
 // operator gets their delete, not a lecture about permissions.
 func TestReservedDirIsRepairedInPlace(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root := m.Root()
 	res := filepath.Join(root, ReservedDir)
@@ -44,6 +46,8 @@ func TestReservedDirIsRepairedInPlace(t *testing.T) {
 // Deleting a file is the operation an operator reaches this through, so the
 // repair has to happen underneath it rather than being reported.
 func TestTrashRecoversFromAStrandedReservedDir(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "notes.txt", "hello")
 	if _, err := m.Trash([]string{"notes.txt"}); err != nil {
@@ -63,6 +67,8 @@ func TestTrashRecoversFromAStrandedReservedDir(t *testing.T) {
 // When fog cannot take the directory back, the error is the one an operator
 // can act on: who owns it, who fog is here, and what to change.
 func TestReservedRefusedNamesTheIdentities(t *testing.T) {
+	t.Parallel()
+
 	cause := fs.ErrPermission
 	err := reservedRefused("/mnt/nas/files/.fog", cause, 0, 1024, true)
 	if !errors.Is(err, ErrNotConfigured) {

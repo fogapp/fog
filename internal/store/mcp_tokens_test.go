@@ -11,6 +11,8 @@ import (
 // keep opening /mcp afterwards, now as a named row, or every connected
 // client breaks on a version bump.
 func TestSettingsMCPTokenCarriesForward(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "fog.db")
 	db := openAtMigration(t, path, "0018")
 	token, digest := auth.NewToken()
@@ -43,6 +45,8 @@ func TestSettingsMCPTokenCarriesForward(t *testing.T) {
 
 // A fresh box has no tokens at all — the carry-forward must not invent one.
 func TestNoMCPTokenWithoutOne(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	tokens, err := s.ListMCPTokens()
 	if err != nil || len(tokens) != 0 {
@@ -56,6 +60,8 @@ func TestNoMCPTokenWithoutOne(t *testing.T) {
 // Every lookup path reports the chat flag: the digest and ID paths once
 // scanned their own columns and always said CanPostChat=false.
 func TestMCPTokenCanPostChatRoundTrips(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	tok, err := s.CreateMCPToken("poster", "digest-p", true, false)
 	if err != nil {
@@ -73,6 +79,8 @@ func TestMCPTokenCanPostChatRoundTrips(t *testing.T) {
 
 // The Drive scope is narrow unless asked for, and every lookup path reads it.
 func TestMCPTokenCanReadAllFilesRoundTrips(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	narrow, err := s.CreateMCPToken("narrow", "digest-n", false, false)
 	if err != nil || narrow.CanReadAllFiles {
@@ -96,6 +104,8 @@ func TestMCPTokenCanReadAllFilesRoundTrips(t *testing.T) {
 }
 
 func TestMCPTokenLifecycle(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 
 	a, err := s.CreateMCPToken("claude-code", "digest-a", false, false)

@@ -170,6 +170,8 @@ func (f *idpFixture) follow(t *testing.T, raw string) *url.URL {
 }
 
 func TestInteropCodeFlowWithAnIndependentRP(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	verifier := oauth2.GenerateVerifier()
 	cb := f.authorize(t, f.push(t, verifier, nil))
@@ -221,6 +223,8 @@ func TestInteropCodeFlowWithAnIndependentRP(t *testing.T) {
 }
 
 func TestInteropRefusesWithoutPKCEOrWithTheWrongVerifier(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	ctx := gooidc.ClientContext(context.Background(), f.rp)
 	cb := f.authorize(t, f.push(t, oauth2.GenerateVerifier(), nil))
@@ -234,6 +238,8 @@ func TestInteropRefusesWithoutPKCEOrWithTheWrongVerifier(t *testing.T) {
 }
 
 func TestInteropClientMustUsePAR(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	u := f.cfg.AuthCodeURL("st", oauth2.S256ChallengeOption(oauth2.GenerateVerifier()))
 	loc := f.follow(t, u)
@@ -243,6 +249,7 @@ func TestInteropClientMustUsePAR(t *testing.T) {
 }
 
 func TestInteropPromptNoneAndSignIn(t *testing.T) {
+
 	f := newIdP(t, signin.Manifest{})
 	f.browser.Jar, _ = cookiejar.New(nil) // nobody signed in
 	loc := f.authorize(t, f.push(t, oauth2.GenerateVerifier(), url.Values{"prompt": {"none"}}))
@@ -256,6 +263,8 @@ func TestInteropPromptNoneAndSignIn(t *testing.T) {
 }
 
 func TestInteropMaxAgeZeroAsksAgainThenContinues(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	verifier := oauth2.GenerateVerifier()
 	loc := f.authorize(t, f.push(t, verifier, url.Values{"max_age": {"0"}}))
@@ -271,6 +280,7 @@ func TestInteropMaxAgeZeroAsksAgainThenContinues(t *testing.T) {
 }
 
 func TestInteropPasskeyRequiredStepsUp(t *testing.T) {
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", ACR: "phr"})
 	loc := f.authorize(t, f.push(t, oauth2.GenerateVerifier(), nil))
 	if loc.Path != "/confirm" || loc.Query().Get("with") != "passkey" {
@@ -279,6 +289,8 @@ func TestInteropPasskeyRequiredStepsUp(t *testing.T) {
 }
 
 func TestInteropMembersOnlyWhenShared(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	kim := addMember(t, f.srv, "kim")
 	jar, _ := cookiejar.New(nil)
@@ -314,6 +326,7 @@ func TestInteropMembersOnlyWhenShared(t *testing.T) {
 }
 
 func TestInteropEndSessionWithHint(t *testing.T) {
+
 	f := newIdP(t, signin.Manifest{})
 	verifier := oauth2.GenerateVerifier()
 	cb := f.authorize(t, f.push(t, verifier, nil))
@@ -339,6 +352,8 @@ func TestInteropEndSessionWithHint(t *testing.T) {
 }
 
 func TestInteropClientAuthentication(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	for name, set := range map[string]func(*http.Request){
 		"wrong secret": func(r *http.Request) { r.SetBasicAuth("stream", "nope") },
@@ -360,6 +375,8 @@ func TestInteropClientAuthentication(t *testing.T) {
 }
 
 func TestAppSigninProofVerifiesAgainstTheIssuerKeys(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	if err := f.srv.store.SetAppAPITokenDigest(f.app.ID, auth.DigestToken("stream-token")); err != nil {
 		t.Fatal(err)
@@ -387,6 +404,7 @@ func TestAppSigninProofVerifiesAgainstTheIssuerKeys(t *testing.T) {
 }
 
 func TestReauthRecordsOnTheSameSession(t *testing.T) {
+
 	f := newIdP(t, signin.Manifest{})
 	before, _, _ := f.srv.store.SessionPerson(auth.DigestToken(f.operator.Value))
 	w := do(t, f.srv.Handler(), "POST", "/api/people/reauth/password", `{"password":"wrong password here"}`, withCookie(f.operator))
@@ -404,6 +422,8 @@ func TestReauthRecordsOnTheSameSession(t *testing.T) {
 }
 
 func TestSigninTabView(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	addMember(t, f.srv, "kim")
 	w := do(t, f.srv.Handler(), "GET", "/api/apps/stream/signin", "", withCookie(f.operator))
@@ -464,6 +484,8 @@ func (f *idpFixture) signInRP(t *testing.T) *oauth2.Token {
 }
 
 func TestBackchannelLogoutOnSignOut(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -498,6 +520,8 @@ func TestBackchannelLogoutOnSignOut(t *testing.T) {
 }
 
 func TestBackchannelLogoutOnSuspensionAndNarrowing(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -539,6 +563,8 @@ func TestBackchannelLogoutOnSuspensionAndNarrowing(t *testing.T) {
 }
 
 func TestBackchannelLogoutRetriesAndSaysWhenStuck(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{status: 503}
 	f.receiveLogouts(t, app)
@@ -571,6 +597,8 @@ func TestBackchannelLogoutRetriesAndSaysWhenStuck(t *testing.T) {
 }
 
 func TestSignEveryoneOut(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -589,6 +617,8 @@ func TestSignEveryoneOut(t *testing.T) {
 // allauth) is registered with par: false and signs in on the front channel —
 // still with PKCE, still exact redirects.
 func TestInteropFrontChannelClient(t *testing.T) {
+	t.Parallel()
+
 	no := false
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", PAR: &no})
 	verifier := oauth2.GenerateVerifier()
@@ -616,6 +646,8 @@ func TestInteropFrontChannelClient(t *testing.T) {
 // for a code, the person approves it on fog's /device page, the app's poll
 // turns into tokens — once.
 func TestInteropDeviceFlow(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Device: true,
 		Roles: []string{"admin", "member"}, Default: map[string]string{"operator": "admin", "member": "member"}})
 	ctx := gooidc.ClientContext(context.Background(), f.rp)
@@ -670,6 +702,8 @@ func TestInteropDeviceFlow(t *testing.T) {
 }
 
 func TestDeviceFlowNeedsTheGrantAndHonoursNo(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	ctx := gooidc.ClientContext(context.Background(), f.rp)
 	if _, err := f.cfg.DeviceAuth(ctx); err == nil {
@@ -732,6 +766,8 @@ func tokenStatusAt(t *testing.T, f *idpFixture, path string, form url.Values) st
 // (checked against headless Chromium: 'self' alone strands the button). The
 // confirm page's policy names fog and exactly that origin — no other.
 func TestEndSessionConfirmFormActionNamesOnlyTheRedirect(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	f.authorize(t, f.push(t, oauth2.GenerateVerifier(), nil)) // signs the browser in
 	q := url.Values{"client_id": {"stream"}, "post_logout_redirect_uri": {appOrigin + "/"}}
@@ -747,6 +783,8 @@ func TestEndSessionConfirmFormActionNamesOnlyTheRedirect(t *testing.T) {
 }
 
 func TestSigninFormAction(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		form bool
 		to   string

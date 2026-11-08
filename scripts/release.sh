@@ -119,8 +119,19 @@ rm -f bin/.keycheck bin/.keycheck.sig
 # Gate the release on the same checks CI runs. Self-update pushes this binary
 # to the server unattended, so a broken build here is a broken server later —
 # and the CI runner is not guaranteed to exist on the Gitea instance.
+#
+# One pass per tree: `make check` records what it passed on
+# (bin/.check-passed, scripts/check-id), and the tree is clean here, so a
+# matching id means these exact bytes, on these toolchains, already passed —
+# typically the run /ship makes just before committing. FOG_RECHECK=1 runs
+# the checks regardless.
 echo "==> checks"
-make check
+CHECK_ID=$(scripts/check-id)
+if [ "${FOG_RECHECK:-}" != "1" ] && [ -f bin/.check-passed ] && [ "$(cat bin/.check-passed)" = "$CHECK_ID" ]; then
+  echo "    passed already for this tree (${CHECK_ID%% *}); FOG_RECHECK=1 runs them again"
+else
+  make check
+fi
 
 # The credential is looked up for whatever host FOG_GIT_HOST names, so a
 # different server needs no edit here — just its own keychain entry or token.
@@ -147,6 +158,8 @@ api() { curl -K "$CURLCFG" "$@"; }
 # version is stamped with its marker (internal/config): install.sh reads an
 # installed fogd's version from the file.
 echo "==> building $VERSION"
+# fog's own catalogs ride along in the binary as the store's first copy.
+scripts/catalog-seed.sh
 (cd frontend && npm ci --silent && npm run build >/dev/null)
 rm -rf "$REL"
 mkdir -p "$REL"

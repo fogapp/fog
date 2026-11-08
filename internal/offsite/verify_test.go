@@ -21,6 +21,8 @@ import (
 // through the injected hook, samples Files blobs — and only then stamps
 // verified_at. A blob that no longer hashes to the manifest is a notice.
 func TestVerifyStampsCopiesAndCatchesRot(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, ids := plantBackups(t, h)

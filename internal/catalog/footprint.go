@@ -67,67 +67,6 @@ const (
 	gb = uint64(1) << 30
 )
 
-func fp(memMB, peakMB uint64, cpu, cpuWhen string, diskMB uint64, diskGrows string) *Footprint {
-	return &Footprint{Memory: memMB * mb, MemoryPeak: peakMB * mb, CPU: cpu, CPUWhen: cpuWhen, Disk: diskMB * mb, DiskGrows: diskGrows}
-}
-
-// railsApp is the shape the first-party apps share: a Rails server
-// and a job worker on a managed Postgres.
-func railsApp(memMB, peakMB uint64, cpu, cpuWhen, diskGrows string) *Footprint {
-	return fp(memMB, peakMB, cpu, cpuWhen, 1200, diskGrows)
-}
-
-var footprints = map[string]*Footprint{
-	"fin":    railsApp(700, 1500, CPUModerate, "syncing accounts and prices", "with statements and documents"),
-	"hub":    railsApp(700, 1500, CPUModerate, "importing photos and mail", "with the chronicle's photos and files"),
-	"office": railsApp(700, 1500, CPULight, "", "with your documents"),
-	"feed":   railsApp(1000, 3000, CPUHeavy, "ingesting and transcribing", "with the archive — media is kept forever"),
-	"hook":   railsApp(500, 1000, CPULight, "", ""),
-	"stream": railsApp(700, 3000, CPUHeavy, "transcoding video", "with artwork and trickplay for your library"),
-	"once":   railsApp(600, 2000, CPUHeavy, "rendering a film", "with the render cache, up to ONCE_CACHE_MAX_GB"),
-	"hud":    fp(100, 300, CPULight, "", 100, ""),
-	"lucid":  railsApp(500, 768, CPUModerate, "ingesting telemetry", "with telemetry, up to the budget in Settings › Retention"),
-	"newtab": fp(30, 128, CPULight, "", 100, ""),
-	"signet": fp(150, 768, CPUModerate, "enriching new saves", 200, "with snapshots of what you save"),
-	"fit":    railsApp(500, 1000, CPULight, "", "with vendor history and lab documents — raw payloads are kept forever"),
-	// Built from Fit's image, so the disk figure is that same image.
-	"fit-collector": fp(80, 256, CPULight, "", 1200, ""),
-	// A Go binary; the library's model files are on the Content volume, not here.
-	"think-fleet": fp(60, 256, CPULight, "", 40, "with the household's model files, in Content"),
-
-	"immich":    fp(1500, 4000, CPUHeavy, "indexing faces and search", 3500, "with your photo and video library"),
-	"paperless": fp(500, 1500, CPUHeavy, "OCR on new documents", 1500, "with your documents"),
-	"whisper":   fp(1500, 6000, CPUHeavy, "transcribing", 6000, "with the model you choose — large-v3 is several GB"),
-	"openclaw":  fp(600, 1500, CPUModerate, "the assistant is thinking", 2000, ""),
-	"bookorbit": fp(300, 800, CPULight, "", 800, "with your books"),
-
-	"sonarr":     fp(250, 600, CPULight, "", 350, ""),
-	"radarr":     fp(250, 600, CPULight, "", 350, ""),
-	"lidarr":     fp(250, 600, CPULight, "", 350, ""),
-	"prowlarr":   fp(250, 500, CPULight, "", 350, ""),
-	"bazarr":     fp(250, 500, CPULight, "", 400, ""),
-	"jellyseerr": fp(250, 500, CPULight, "", 400, ""),
-
-	"qbittorrent": fp(200, 800, CPUModerate, "downloading and seeding", 300, "with what it downloads"),
-	"sabnzbd":     fp(150, 800, CPUHeavy, "unpacking and repairing downloads", 300, "with what it downloads"),
-
-	"jellyfin":       fp(400, 2000, CPUHeavy, "transcoding video", 1000, "with artwork and metadata for your library"),
-	"navidrome":      fp(100, 400, CPULight, "", 150, ""),
-	"audiobookshelf": fp(200, 600, CPULight, "", 500, "with podcasts it downloads"),
-
-	"uptime-kuma":   fp(150, 300, CPULight, "", 300, ""),
-	"vaultwarden":   fp(50, 150, CPULight, "", 100, ""),
-	"ntfy":          fp(30, 100, CPULight, "", 40, ""),
-	"adguard":       fp(100, 300, CPULight, "", 80, "with the query log"),
-	"homeassistant": fp(500, 1200, CPUModerate, "running automations", 2000, "with history it records"),
-	"homepage":      fp(150, 300, CPULight, "", 400, ""),
-	"gotenberg":     fp(300, 1500, CPUHeavy, "converting documents", 1200, ""),
-	"n8n":           fp(400, 1200, CPUModerate, "running workflows", 1100, "with execution history"),
-
-	"gitea":  fp(200, 800, CPUModerate, "running Actions", 300, "with your repositories"),
-	"vscode": fp(200, 2000, CPUModerate, "running language servers and builds", 350, "with your projects and extensions"),
-}
-
 // EntryForSpec finds the catalog entry an installed app came from, by the
 // name it was given at install (the entry's id is the default), then by
 // the image it runs, then by the repository it builds. Nil for an app

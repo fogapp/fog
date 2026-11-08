@@ -40,6 +40,7 @@ func secretsStatus(t *testing.T, h http.Handler, opts ...func(*http.Request)) in
 // operator's plain cookie and read the secrets. The pin now follows how fog
 // issued the session, and X-Forwarded-* is believed only from Caddy.
 func TestARenamedCookieIsStillPinned(t *testing.T) {
+
 	srv, h, plain := bareIPOperator(t)
 	srv.proxy = &proxy.Proxy{Store: srv.store, Vault: srv.vault} // as in production: Caddy must prove itself
 	if err := srv.store.SetSetting(store.SettingBaseDomain, gateDomain); err != nil {
@@ -100,6 +101,8 @@ func TestARenamedCookieIsStillPinned(t *testing.T) {
 // bearer token stays usable from anywhere, but never as a cookie; and no
 // session of any kind reaches fog from an app container's network.
 func TestAWebChatDeviceSessionIsPinned(t *testing.T) {
+	t.Parallel()
+
 	srv, h, _ := bareIPOperator(t)
 	op, _ := srv.store.PersonByHandle("admin")
 	dev, err := srv.store.CreatePersonDevice(op.ID, "browser", "web", []byte("device-key-web-0123456789abcdef01"), nil)
@@ -157,6 +160,7 @@ func TestAWebChatDeviceSessionIsPinned(t *testing.T) {
 // "set password" for someone needed no fresh proof, took device and bearer
 // sessions, and worked on the operator's own account.
 func TestTheAdminPasswordRouteNeedsAFreshProof(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	addMember(t, srv, "kim")
@@ -215,6 +219,8 @@ func TestParallelGuessesMeetTheBudget(t *testing.T) {
 // on the raw client_id, as long as the form, so each request could park
 // megabytes in the limiter. The form is capped, and the key is fog's own.
 func TestAHugeClientIDCostsNothing(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	huge := strings.Repeat("x", 1<<20)
 	for range 20 {
@@ -234,6 +240,8 @@ func TestAHugeClientIDCostsNothing(t *testing.T) {
 // TestThePinReadsAnyAddressForm is the seventh: an address with a zone
 // (fe80::1%lo0) or IPv4-mapped never matched itself, locking its user out.
 func TestThePinReadsAnyAddressForm(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range [][2]string{
 		{"fe80::1%lo0", "fe80::1%lo0"},
 		{"[fe80::1%lo0]", "fe80::1%lo0"},
@@ -272,6 +280,8 @@ func sameTestClient(h http.Handler) http.Handler {
 // plants are expired at every path the request could have carried them
 // from.
 func TestAPlantedSessionDoesNotWin(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", goodSetup, fromPeer("192.168.1.20", ""))
 	if w.Code != http.StatusOK {
@@ -369,6 +379,8 @@ func TestAPlantedSessionDoesNotWin(t *testing.T) {
 // change to someone else's gets. As with the password route, the
 // operator's own account is refused there; a member's still resets.
 func TestTheOperatorCantResetTheirOwnIdentityAsAdmin(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	addMember(t, srv, "kim")

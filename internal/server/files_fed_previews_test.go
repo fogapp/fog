@@ -35,6 +35,8 @@ func pngBytes(side int, c color.Color) []byte {
 // or pinned; thumbnails come from the origin; the detail switch fills or
 // frees; a listing share never yields bytes.
 func TestFilesFederationPreviews(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	rootA, rootB := p.a.files.Root(), p.b.files.Root()
 	os.MkdirAll(filepath.Join(rootA, "Pics"), 0o755)

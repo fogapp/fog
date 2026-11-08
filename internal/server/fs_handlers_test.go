@@ -9,6 +9,8 @@ import (
 )
 
 func TestFsListRequiresAuth(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	setup(t, h)
 	if w := do(t, h, "GET", "/api/system/fs?path=/", ""); w.Code != http.StatusUnauthorized {
@@ -17,6 +19,8 @@ func TestFsListRequiresAuth(t *testing.T) {
 }
 
 func TestFsList(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -61,6 +65,8 @@ func TestFsList(t *testing.T) {
 }
 
 func TestFsListRejectsBadPaths(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -78,6 +84,8 @@ func TestFsListRejectsBadPaths(t *testing.T) {
 }
 
 func TestFsMkdir(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 

@@ -10,6 +10,8 @@ import (
 // leaves them wherever the sort happens to, and pages of a snapshot
 // listing then repeat or skip entries.
 func TestSortNodesTiesAreDeterministic(t *testing.T) {
+	t.Parallel()
+
 	names := func(ns []Node) []string {
 		out := make([]string, len(ns))
 		for i, n := range ns {

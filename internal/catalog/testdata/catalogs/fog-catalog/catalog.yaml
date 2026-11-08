@@ -1,0 +1,20 @@
+format: fog-catalog/1
+name: fog-catalog
+title: Fog catalog
+description: 'Well-behaved self-hosted apps, packaged for fog: the arr stack, media servers, Immich, Paperless, Gitea and more.'
+featured:
+  - immich
+  - paperless
+  - whisper
+  - gotenberg
+order:
+  - immich
+  - paperless
+  - whisper
+  - sonarr
+  - sabnzbd
+  - jellyfin
+  - bookorbit
+  - vaultwarden
+  - ntfy
+  - gotenberg

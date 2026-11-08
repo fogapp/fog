@@ -6,6 +6,8 @@ import "testing"
 // entry for an app with no revisions — the batch shape of LatestRevision's
 // ErrNotFound.
 func TestLatestRevisionSpecs(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	one, err := s.CreateApp("one")
 	if err != nil {
@@ -45,6 +47,8 @@ func TestLatestRevisionSpecs(t *testing.T) {
 // The latest-spec query must ride the (app_id, rev) index rather than scan
 // every revision's spec: it runs on every dashboard poll.
 func TestLatestRevisionSpecsAvoidsFullScan(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	rows, err := s.db.Query(`EXPLAIN QUERY PLAN SELECT r.app_id, r.spec FROM
 		(SELECT app_id, MAX(rev) AS rev FROM app_revisions GROUP BY app_id) AS latest
@@ -68,6 +72,8 @@ func TestLatestRevisionSpecsAvoidsFullScan(t *testing.T) {
 // PruneRevisions keeps the newest keep revisions and anything still
 // referenced, and drops the rest.
 func TestPruneRevisions(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app, err := s.CreateApp("app")
 	if err != nil {

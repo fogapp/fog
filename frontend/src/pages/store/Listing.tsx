@@ -53,7 +53,10 @@ export default function Listing({
             <h1 className="text-2xl font-bold tracking-[-.015em] text-ink">{entry.title}</h1>
             <p className="max-w-2xl text-base text-ink-muted">{entry.description}</p>
             <p className="text-hint text-ink-muted">
-              {[entry.developer, entry.category, entry.license].filter(Boolean).join(" · ")}
+              {[entry.developer, entry.category, entry.license,
+                // Somebody else's catalog says so up front; fog's own go unremarked.
+                !entry.trusted && entry.catalog && `from the ${entry.catalog} catalog`,
+              ].filter(Boolean).join(" · ")}
             </p>
             {(isInstalled || entry.blocker) && (
               <div className="flex items-center gap-2 pt-1">

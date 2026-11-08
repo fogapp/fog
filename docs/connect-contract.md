@@ -208,7 +208,7 @@ whose fog predates Connect is reported as needing to update.
   allow-list, and the app's contract, before the app is ever contacted, and
   audits both outcomes on both instances (`connect.request`,
   `connect.serve`), each refusal with its reason. The same outcome is set on
-  the request's Lucid trace (`connect.*` attributes, a refusal marking it
+  the request's Glass trace (`connect.*` attributes, a refusal marking it
   errored) and logged on it, with the names — never the values — of the
   credential's fields.
 - A replayed connect request (same nonce, inside the vouch's five minutes)

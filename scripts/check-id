@@ -1,0 +1,27 @@
+#!/bin/sh
+# Prints what a `make check` run judges: the git tree the working directory
+# would commit as (tracked edits and untracked files alike, everything
+# .gitignore doesn't cover), plus the Go and Node toolchains it ran on.
+#
+# `make check` records this in bin/.check-passed when it passes, and
+# release.sh skips its own run when the clean tree it is about to sign has
+# the same id: the commit holds exactly the bytes that were checked, so a
+# second 15-minute run could only repeat the first. Any difference — an
+# edit, a file left out of the commit, a toolchain upgrade — changes the id
+# and the checks run again.
+#
+# The tree is built in a throwaway index, so the real index (and what is
+# staged) is untouched; the objects it writes are ordinary loose objects
+# git gc collects.
+set -eu
+cd "$(dirname "$0")/.."
+
+idx=$(mktemp)
+trap 'rm -f "$idx"' EXIT
+real=$(git rev-parse --git-path index)
+# Starting from a copy of the real index lets git reuse its cached stat
+# data instead of hashing every file again.
+if [ -f "$real" ]; then cp "$real" "$idx"; else rm -f "$idx"; fi
+GIT_INDEX_FILE=$idx git add -A
+tree=$(GIT_INDEX_FILE=$idx git write-tree)
+printf '%s %s node-%s\n' "$tree" "$(go env GOVERSION)" "$(node --version)"

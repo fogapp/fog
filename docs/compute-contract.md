@@ -176,7 +176,7 @@ through as they arrive. Switching "fog · Inference" off for the app in
 Settings › Compute is its revocation (403). The app never learns which
 machine answered, but it can limit which ones may ([Locality](#locality)).
 fog records each request — not its content — in Settings › Compute ›
-Activity, and in Lucid as a model call; send `traceparent` to see it in
+Activity, and in Glass as a model call; send `traceparent` to see it in
 your own trace.
 
 A machine lends the model server it runs, found by itself: think on

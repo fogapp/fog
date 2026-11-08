@@ -16,7 +16,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/dockerx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -50,7 +50,7 @@ func TestAppWaitsThroughThePinHelper(t *testing.T) {
 	}
 	share := filepath.Join(base, "nas")
 	os.MkdirAll(share, 0o755)
-	st, err := store.Open(filepath.Join(base, "fog.db"))
+	st, err := storetest.Open(filepath.Join(base, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

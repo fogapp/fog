@@ -62,6 +62,8 @@ func (st *filesStub) await(t *testing.T, what string) map[string]string {
 // the app learns where its folder comes from, and a sync landing under it
 // is one coalesced notice.
 func TestAppFilesMountsAndNotices(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	rootA, rootB := p.a.files.Root(), p.b.files.Root()
 	os.MkdirAll(filepath.Join(rootA, "Album"), 0o755)

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack: systemd's private socket (root on the host through D-Bus) was
@@ -52,9 +52,9 @@ func TestFogsOwnProjectNamesAreRefused(t *testing.T) {
 // only an approved provider (reach, uses) is wired; the mention is an
 // issue asking the operator, and approving it is what wires.
 func TestEnvURLsWireOnlyApprovedApps(t *testing.T) {
-	importer := &AppSpec{Env: map[string]string{"U": "http://vault:8200/v1", "L": "http://lucid"}, Reach: []string{"lucid"}}
-	specs := map[string]*AppSpec{"importer": importer, "lucid": {}}
-	if w := planNetworks(specs, nil).wires; len(w) != 1 || w[0].Provider != "lucid" {
+	importer := &AppSpec{Env: map[string]string{"U": "http://vault:8200/v1", "L": "http://glass"}, Reach: []string{"glass"}}
+	specs := map[string]*AppSpec{"importer": importer, "glass": {}}
+	if w := planNetworks(specs, nil).wires; len(w) != 1 || w[0].Provider != "glass" {
 		t.Fatalf("wires = %v", w)
 	}
 	specs["vault"] = &AppSpec{} // installed later
@@ -102,7 +102,7 @@ func TestReviewShowsEnvLinksAndReach(t *testing.T) {
 // The one-time upgrade pass: an existing app keeps the wires and host
 // folders it had — as approvals of their own — and the pass runs once.
 func TestGrandfatherOnceApprovesWhatExists(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

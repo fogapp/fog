@@ -39,6 +39,8 @@ func appWithToken(t *testing.T, s *Server, name string) (int64, string) {
 // exposes the peer to its apps, and B's app reads it all through /app/v1
 // with nothing but its FOG_API_TOKEN.
 func TestAppFederationPeersEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	// Instance A: the inviter, publishing a fixed directory to every peer.
 	a, aHandler := newTestServer(t)
 	a.fed.DirectoryFor = func(peer *store.FedPeer) []fed.DirectoryApp {
@@ -130,6 +132,8 @@ func TestAppFederationPeersEndToEnd(t *testing.T) {
 
 // DirectoryFor only publishes what the grant covers.
 func TestDirectoryRespectsGrantAndDomain(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	// A peer with no apps.directory grant gets nothing even with apps around.
 	p, _ := srv.store.CreatePairedPeer("01DIR", "dave", "https://x", "k")
@@ -159,6 +163,8 @@ func TestDirectoryRespectsGrantAndDomain(t *testing.T) {
 // nothing but its FOG_API_TOKEN, and what it reads is byte-for-byte what the
 // Federation page shows the operator — one computation, two doors.
 func TestAppFederationReachabilityMatchesSessionAPI(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	cookie := setup(t, h)
 	_, token := appWithToken(t, s, "feed")

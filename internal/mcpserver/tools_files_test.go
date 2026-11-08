@@ -13,6 +13,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/files"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 const appSecret = "PAPERLESS_DB_PASSWORD=hunter2"
@@ -23,7 +24,7 @@ const appSecret = "PAPERLESS_DB_PASSWORD=hunter2"
 func newDriveHandler(t *testing.T, tok *store.MCPToken) (http.Handler, *files.Manager) {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

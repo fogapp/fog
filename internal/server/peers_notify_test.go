@@ -67,6 +67,8 @@ func (n *noticeStub) awaitSilence(t *testing.T, what string) {
 // to find the new peer. The notice is a nudge, not a payload — what the app
 // then sees comes from the GET.
 func TestDirectoryChangeNotifiesContractedApps(t *testing.T) {
+	t.Parallel()
+
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -137,6 +139,8 @@ func TestDirectoryChangeNotifiesContractedApps(t *testing.T) {
 // An app that never declared fog-connect/1 is not called at all — the
 // notice follows the same contract gate the grant calls do.
 func TestDirectoryChangeSkipsUncontractedApps(t *testing.T) {
+	t.Parallel()
+
 	s, handler := newTestServer(t)
 	setup(t, handler)
 	appWithToken(t, s, "hub")

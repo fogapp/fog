@@ -73,6 +73,8 @@ func signedBy(w *httptest.ResponseRecorder, node, nonce string) bool {
 }
 
 func TestComputePairPollAndRemove(t *testing.T) {
+	t.Parallel()
+
 	_, h, c := withComputeServer(t)
 
 	w := do(t, h, "POST", "/api/compute/codes", "", withCookie(c), withOrigin("http://example.com"))
@@ -205,6 +207,8 @@ func TestComputePairPollAndRemove(t *testing.T) {
 }
 
 func TestComputeInstallerAndBinaries(t *testing.T) {
+	t.Parallel()
+
 	_, h, _ := withComputeServer(t)
 	w := do(t, h, "GET", "/compute/v1/install.sh", "")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"$BIN" join --dir "$DIR" --fog "$FOG"`) {
@@ -224,6 +228,8 @@ func TestComputeInstallerAndBinaries(t *testing.T) {
 }
 
 func TestComputeUnavailableWithoutTheService(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	if w := do(t, h, "POST", "/compute/v1/poll", `{}`, withNodeBearer("fognode_x")); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("poll: %d", w.Code)
@@ -235,6 +241,8 @@ func TestComputeUnavailableWithoutTheService(t *testing.T) {
 }
 
 func TestComputeGrantSwitchesAPoolForAnApp(t *testing.T) {
+	t.Parallel()
+
 	s, h, c := withComputeServer(t)
 	app, err := s.store.CreateApp("stream")
 	if err != nil {

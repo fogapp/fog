@@ -11,6 +11,8 @@ import (
 // with no copy, and the best copy across active targets, a retired
 // target's ignored.
 func TestOffsiteStatesOf(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if st, _ := s.OffsiteStatesOf(OffsiteKindApp); st.Of("1") != "" {
 		t.Errorf("no targets: %q, want empty", st.Of("1"))
@@ -57,6 +59,8 @@ func TestOffsiteStatesOf(t *testing.T) {
 // The all-targets totals answer what the per-target read does for each
 // target, and a target with no copies is absent (zero totals).
 func TestAllOffsiteCopyTotalsMatchesPerTarget(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	var ids []int64
 	for _, n := range []string{"a", "b", "empty"} {
@@ -102,6 +106,8 @@ func TestAllOffsiteCopyTotalsMatchesPerTarget(t *testing.T) {
 // The slim listing leaves the document out, keeps everything else, and
 // filters on state in SQL.
 func TestListOffsiteCopiesSlim(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	tid, err := s.CreateOffsiteTarget(OffsiteTarget{Name: "a", Endpoint: "https://a", Bucket: "a", LockerID: "la"})
 	if err != nil {
@@ -174,6 +180,8 @@ func TestListOffsiteCopiesSlim(t *testing.T) {
 // Migration 0047 fills a Files snapshot's summary from its manifest, and
 // leaves a row it cannot read alone.
 func TestOffsiteSummaryBackfill(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	tid, err := s.CreateOffsiteTarget(OffsiteTarget{Name: "a", Endpoint: "https://a", Bucket: "a", LockerID: "la"})
 	if err != nil {

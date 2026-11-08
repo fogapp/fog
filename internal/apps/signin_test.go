@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/signin"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -16,7 +16,7 @@ import (
 // rather than handed to the image as literal placeholders.
 func TestRegisterSigninFillsOIDCTemplates(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

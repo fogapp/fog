@@ -505,6 +505,12 @@ export interface CatalogEntry {
   // per host from Preflight, so the store, the install pane, and the
   // server's refusal all say the same thing.
   blocker?: string;
+  // Catalog is the name of the catalog the entry came from, and Trusted
+  // whether that is one of fog's own (DefaultRemotes). An entry from any
+  // other catalog installs held for review. Neither is the catalog's to
+  // say: fog fills them in as it loads it.
+  catalog?: string;
+  trusted?: boolean;
   // About is the pitch, two or three short markdown paragraphs. It says
   // what the app is for and what it is like to live with — not a feature
   // list; that is Highlights.
@@ -514,8 +520,9 @@ export interface CatalogEntry {
   highlights?: string[];
   // Screenshots in display order; the first is the one a card leads with.
   screenshots?: CatalogScreenshot[];
-  // Logo is the path of the app's mark under the UI's static files. A
-  // square image; the UI draws the rounded tile around it.
+  // Logo is the app's mark: a square image the UI draws a rounded tile
+  // around — unless the file is named tile.<ext>, which is drawn edge to
+  // edge with its tile already part of the picture.
   logo?: string;
   developer?: string;
   license?: string;
@@ -557,6 +564,45 @@ export interface Fit {
   disk: FitDisk;
   // Tone is the worst of the three — what a card can show in one glance.
   tone: Tone;
+}
+
+// catalogResponse is GET /api/catalog.
+export interface CatalogResponse {
+  entries: CatalogEntry[];
+  enabled: string[];
+  unsourced: number;
+  // Catalogs is every catalog the store is built from, in order, and how
+  // each stands; CatalogKey the public key private ones are cloned with.
+  catalogs: CatalogStatus[];
+  catalogKey: string;
+}
+
+// Status is how one catalog stands on this fog.
+export interface CatalogStatus {
+  // Name is what this fog calls the catalog: a slug, unique in the list,
+  // which its artwork is served under.
+  name: string;
+  // URL is the repository to clone: https:// for a public one, ssh:// or
+  // user@host:path for one that needs this fog's catalog key, or an
+  // absolute path on this machine.
+  url: string;
+  branch?: string;
+  title?: string;
+  description?: string;
+  trusted: boolean;
+  // From is what the store is reading: "clone" (fetched from URL),
+  // "seed" (the copy this fog shipped with, until a fetch succeeds), or
+  // "" when there is nothing to read yet.
+  from?: string;
+  commit?: string;
+  syncedAt?: string;
+  // Error is why the last fetch or read failed; the catalog may still be
+  // served from an earlier one.
+  error?: string;
+  // Detail is what git said, when Error puts it in other words.
+  detail?: string;
+  apps: number;
+  problems?: CatalogProblem[];
 }
 
 export interface SelfUpdateStatus {
@@ -2111,6 +2157,14 @@ export interface FitDisk {
 // feel full.
 export type Tone = "ok" | "tight" | "over";
 
+// Problem is something in a catalog fog could not use, said so the
+// catalog's author can fix it. App is empty for one about the catalog as a
+// whole.
+export interface CatalogProblem {
+  app?: string;
+  error: string;
+}
+
 // Inventory is what a node reports about its machine.
 export interface Inventory {
   name: string;
@@ -2753,5 +2807,7 @@ export interface Settings {
   catalog_source_base: string;
   // JSON object of first-party repository name to its full clone URL.
   catalog_source_overrides: string;
+  // JSON list of the catalogs the store is built from (catalog.Remote).
+  catalog_sources: string;
   catalog_enabled: string;
 }

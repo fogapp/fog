@@ -692,9 +692,20 @@ func (m *Manager) preflight(ctx context.Context, root *os.Root, base string, lin
 // the scheduler stops retrying hourly: free space does not grow by itself,
 // and each doomed attempt costs a walk of the whole Drive.
 func (m *Manager) diskFull(need int64) {
+	excl := m.excludes().key()
 	m.snapFullMu.Lock()
 	defer m.snapFullMu.Unlock()
-	m.snapFullAt, m.snapFullNeed = time.Now(), need
+	m.snapFullAt, m.snapFullNeed, m.snapFullExcl = time.Now(), need, excl
+}
+
+// excludesChanged says whether folders have been excluded (or included)
+// since the last run was refused for want of space: what it needed is then
+// no longer what the next run needs, so it is worth trying again now.
+func (m *Manager) excludesChanged() bool {
+	m.snapFullMu.Lock()
+	was := m.snapFullExcl
+	m.snapFullMu.Unlock()
+	return m.excludes().key() != was
 }
 
 // roomNow says whether the backup disk has since gained room for what the
@@ -916,11 +927,11 @@ func (m *Manager) runDue(ctx context.Context, now time.Time) {
 		return
 	}
 	// A run that could not fit since this night's due waits for tomorrow's,
-	// unless room has been made since.
+	// unless room has been made since or the excludes have changed.
 	m.snapFullMu.Lock()
 	fullAt := m.snapFullAt
 	m.snapFullMu.Unlock()
-	if !fullAt.IsZero() && !fullAt.Before(due) && !m.roomNow() {
+	if !fullAt.IsZero() && !fullAt.Before(due) && !m.roomNow() && !m.excludesChanged() {
 		return
 	}
 	m.lastSnapAttempt = now

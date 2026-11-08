@@ -9,6 +9,8 @@ import (
 // A join that fails leaves no person behind and the invite still usable;
 // one that succeeds spends it.
 func TestJoinPersonIsAllOrNothing(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if _, err := s.CreatePerson("taken", "Taken", PersonRoleMember); err != nil {
 		t.Fatal(err)
@@ -44,6 +46,8 @@ func TestJoinPersonIsAllOrNothing(t *testing.T) {
 }
 
 func TestCreateFirstOperatorOnlyOnce(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	id, err := s.CreateFirstOperator("op", "Op", "hash")
 	if err != nil {

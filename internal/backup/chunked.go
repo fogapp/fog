@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -164,11 +165,14 @@ func (m *Manager) writeToStore(ctx context.Context, appName string, b *store.Bac
 		if err != nil {
 			return "", err
 		}
-		_, err = w.Add(chunkstore.Entry{Path: e.Name(), Type: chunkstore.TypeFile,
-			Mode: uint32(info.Mode().Perm()), MTime: info.ModTime().UnixNano()}, f)
+		name, r, err := storedForm(e.Name(), f)
+		if err == nil {
+			_, err = w.Add(chunkstore.Entry{Path: name, Type: chunkstore.TypeFile,
+				Mode: uint32(info.Mode().Perm()), MTime: info.ModTime().UnixNano()}, r)
+		}
 		f.Close()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("%s: %w", e.Name(), err)
 		}
 	}
 	created, _ := time.Parse(time.RFC3339, b.CreatedAt)
@@ -182,6 +186,24 @@ func (m *Manager) writeToStore(ctx context.Context, appName string, b *store.Bac
 		return "", err
 	}
 	return snap.ID, m.verifyInStore(ctx, cs, snap, b)
+}
+
+// storedForm is how a snapshot directory's file goes into the store: as it
+// is, except a volume archive from before the store (volume-<name>.tar.gz),
+// which goes in unpacked as volume-<name>.tar — what the store's own volume
+// backups hold, and what restore reads first (volumeArchive). Compressed,
+// one night's archive shares next to nothing with the next, and every
+// imported night would cost the store its full size. gzip's own checksum,
+// read at the end of the stream, proves the archive whole on the way in.
+func storedForm(name string, f io.Reader) (string, io.Reader, error) {
+	if !strings.HasPrefix(name, "volume-") || !strings.HasSuffix(name, ".tar.gz") {
+		return name, f, nil
+	}
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		return "", nil, err
+	}
+	return strings.TrimSuffix(name, ".gz"), zr, nil
 }
 
 // verifyInStore reads a store snapshot back in full — every chunk checked
@@ -236,6 +258,50 @@ func (m *Manager) dropFromStore(b *store.Backup) {
 	}
 }
 
+// maintenanceDue says whether the nightly upkeep has yet to run since the
+// most recent backup hour.
+func maintenanceDue(st *store.Store, now time.Time, hour int) bool {
+	anchor := time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, time.UTC)
+	if anchor.After(now) {
+		anchor = anchor.Add(-24 * time.Hour)
+	}
+	last, _ := st.GetSetting(SettingStoreMaintainedAt)
+	t, err := time.Parse(time.RFC3339, last)
+	return last == "" || err != nil || t.Before(anchor)
+}
+
+// guardSpaceBetween looks at the backup disk once an hour between nightly
+// upkeeps. Nearly full, it makes room (guardSpace) — a disk that fills in
+// the afternoon is not left that way until tomorrow night. Below that line
+// but with a backup failing for want of room (SpaceStarved), it collects
+// what is already let go and thins nothing: backups deleted by hand give
+// their space back within the hour, wherever the line happens to sit.
+func (m *Manager) guardSpaceBetween(ctx context.Context, now time.Time) {
+	if now.Sub(m.spaceGuardedAt) < time.Hour {
+		return
+	}
+	m.spaceGuardedAt = now
+	used, total, ok := diskUseSeam(m.baseDir())
+	high := ok && float64(used) >= spaceHigh*float64(total)
+	if !high && (m.SpaceStarved == nil || !m.SpaceStarved()) {
+		return
+	}
+	release, err := m.HoldDir()
+	if err != nil {
+		return
+	}
+	defer release()
+	cs, err := m.ChunkStore()
+	if err != nil {
+		return
+	}
+	if high {
+		m.guardSpace(ctx, cs)
+		return
+	}
+	m.collectNow(ctx, cs)
+}
+
 // dropSeriesFromStore removes every store snapshot of an app (the app is
 // being removed along with its backups).
 func (m *Manager) dropSeriesFromStore(appName string) error {
@@ -261,12 +327,15 @@ func (m *Manager) dropSeriesFromStore(appName string) error {
 // finish an interrupted conversion and apply a change of the encryption
 // setting; bring backups taken before the store into it; make room if the
 // disk is nearly full; collect what retention let go; and scrub a thirtieth
-// of the packs so the whole store is re-read every month.
-func (m *Manager) maintainStore(ctx context.Context) {
-	if last, _ := m.Store.GetSetting(SettingStoreMaintainedAt); last != "" {
-		if t, err := time.Parse(time.RFC3339, last); err == nil && time.Since(t) < 20*time.Hour {
-			return
-		}
+// of the packs so the whole store is re-read every month. It runs once per
+// day, on the first look after the nightly backup hour (hour, UTC) — so an
+// app with its own hour does not pull it elsewhere in the day, and a fogd
+// restarted mid-night catches up. Between upkeeps, a nearly full disk is
+// still seen to within the hour (guardSpaceBetween).
+func (m *Manager) maintainStore(ctx context.Context, now time.Time, hour int) {
+	if !maintenanceDue(m.Store, now, hour) {
+		m.guardSpaceBetween(ctx, now)
+		return
 	}
 	if err := m.convertStore(ctx); err != nil {
 		m.Log.Error("backup store: applying the encryption setting", "err", err)

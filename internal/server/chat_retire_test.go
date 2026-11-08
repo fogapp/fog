@@ -16,6 +16,7 @@ import (
 // A deleted person leaves every room, and whoever is given their handle
 // next inherits nothing: no room, no role, no ban, no history, no DM.
 func TestChatDeletedPersonsHandleStartsFresh(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	aliceS := inviteAndJoin(t, h, admin, "alice", "correct horse battery")
@@ -96,6 +97,7 @@ func TestChatDeletedPersonsHandleStartsFresh(t *testing.T) {
 // different identity key acting under their address is counted out and
 // refused.
 func TestChatHubRefusesAnotherIdentityUnderAParticipantsAddress(t *testing.T) {
+
 	p := twoChatFogs(t)
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
 	op := registerDevice(t, p.aH, p.aCookie, "admin")
@@ -135,6 +137,7 @@ func TestChatHubRefusesAnotherIdentityUnderAParticipantsAddress(t *testing.T) {
 // The hub takes a room's first leaf, and every committer, only from a
 // device its person's identity key attests.
 func TestChatUnattestedDevicesCantCreateOrCommit(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -168,6 +171,7 @@ func TestChatUnattestedDevicesCantCreateOrCommit(t *testing.T) {
 // household, never-joined included; a banned person, like any outsider,
 // gets a channel's summary and nothing of who is in it.
 func TestChatBansReachFormerMembersAndOutsiders(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -249,6 +253,7 @@ func TestChatAttachmentQuotas(t *testing.T) {
 // even one it was never in: members' clients that pinned the old key would
 // refuse the leaf and go stale. A member's Add is the way in.
 func TestChatOpenChannelsTakeNoChangedIdentityByItself(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")
@@ -290,6 +295,7 @@ func TestChatOpenChannelsTakeNoChangedIdentityByItself(t *testing.T) {
 // at the time: the departure is owed until the hub takes it, and the hub
 // takes it for a person no longer in their household's directory.
 func TestChatDeparturesReachTheHubLater(t *testing.T) {
+
 	p := twoChatFogs(t)
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
 	op := registerDevice(t, p.aH, p.aCookie, "admin")
@@ -342,6 +348,7 @@ func TestChatDeparturesReachTheHubLater(t *testing.T) {
 // listed — says nothing about a device: it doesn't let a plain member remove
 // a remote admin's leaf as "revoked".
 func TestChatDirectoryGapsDontMakeLeavesRemovable(t *testing.T) {
+
 	p := twoChatFogs(t)
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
 	daveS := inviteAndJoin(t, p.aH, p.aCookie, "dave", "correct horse battery")
@@ -372,6 +379,7 @@ func TestChatDirectoryGapsDontMakeLeavesRemovable(t *testing.T) {
 // Every commit carries the GroupInfo of the epoch it makes: a member can't
 // leave the hub without a current one for newcomers checking a Welcome.
 func TestChatCommitsMustCarryGroupInfo(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -392,6 +400,7 @@ func TestChatCommitsMustCarryGroupInfo(t *testing.T) {
 // A follower serving the hub's GroupInfo serves a log that reaches it: a
 // newcomer whose fog's copy lagged the hub by a commit isn't left short.
 func TestChatFollowerServesALogThatReachesTheGroupInfo(t *testing.T) {
+
 	p := twoChatFogs(t)
 	eveS := inviteAndJoin(t, p.bH, p.bCookie, "eve", "correct horse battery")
 	op := registerDevice(t, p.aH, p.aCookie, "admin")
@@ -427,6 +436,7 @@ func TestChatFollowerServesALogThatReachesTheGroupInfo(t *testing.T) {
 // their role, and comes back on a new device any member may add — in a DM,
 // where no member may add a person, and for a sole owner, who stays owner.
 func TestChatADeviceLeavesWithoutItsPerson(t *testing.T) {
+
 	for _, kind := range []string{"dm", "group"} {
 		t.Run(kind, func(t *testing.T) {
 			srv, h := newTestServer(t)
@@ -505,6 +515,7 @@ func TestChatADeviceLeavesWithoutItsPerson(t *testing.T) {
 // before, whose private keys it no longer holds: a member's Welcome then
 // goes to one it can open.
 func TestChatARestoredDeviceReplacesItsKeyPackages(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

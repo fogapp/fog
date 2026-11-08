@@ -407,6 +407,44 @@ func TestRestoreRecreatesAppExtensionsInTheirSchemas(t *testing.T) {
 	}
 }
 
+// An app may dump without its extensions (fit: pg_dump --exclude-extension=*,
+// so its non-owner role can replay the dump itself), relying on the ones its
+// spec declares already being there. A restore into a fresh database — a
+// test-restore's scratch one — must put those in first, or the first table
+// using citext fails.
+//
+//	FOG_PG_INTEGRATION=1 go test ./internal/pg/ -run TestRestoreInstallsDeclaredExtensionsTheDumpLeftOut -v
+func TestRestoreInstallsDeclaredExtensionsTheDumpLeftOut(t *testing.T) {
+	m := startBarePG(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if _, err := m.psql(ctx, "postgres", `CREATE ROLE app LOGIN; CREATE DATABASE appdb OWNER app;`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.psql(ctx, "appdb", `CREATE EXTENSION citext;`); err != nil {
+		t.Fatal(err)
+	}
+	asApp(t, "app", "appdb", `CREATE TABLE brands (name public.citext NOT NULL); INSERT INTO brands VALUES ('Acme');`)
+	dump := filepath.Join(t.TempDir(), "appdb.dump")
+	if out, err := exec.Command("docker", "exec", ContainerName, "pg_dump", "-U", "app", "-Fc", "-Z0", "--no-owner", "--exclude-extension=*", "-f", "/tmp/excl.dump", "appdb").CombinedOutput(); err != nil {
+		t.Fatalf("pg_dump: %s", out)
+	}
+	if out, err := exec.Command("docker", "cp", ContainerName+":/tmp/excl.dump", dump).CombinedOutput(); err != nil {
+		t.Fatalf("docker cp: %s", out)
+	}
+
+	if err := m.RestoreDatabase(ctx, "scratchdb", "app", dump, nil); err == nil {
+		t.Fatal("without the declared extension the restore cannot succeed — the test no longer reproduces the dump")
+	}
+	if err := m.RestoreDatabase(ctx, "scratchdb", "app", dump, []string{"citext"}); err != nil {
+		t.Fatalf("a declared extension the dump left out must be installed first: %v", err)
+	}
+	rows, err := m.psqlRows(ctx, "scratchdb", `SELECT count(*) FROM brands WHERE name = 'ACME'::public.citext;`)
+	if err != nil || len(rows) != 1 || rows[0] != "1" {
+		t.Fatalf("the restored data must be the dump's, citext and all: %v %v", rows, err)
+	}
+}
+
 // A restore that cannot complete must leave the live database exactly as it
 // was — whether it is refused up front (an extension the app is not allowed)
 // or fails part way (an object only a superuser can create).

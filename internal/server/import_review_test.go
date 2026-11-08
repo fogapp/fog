@@ -16,6 +16,8 @@ import (
 // lists the socket, every deploy path refuses, and only a confirmation of
 // the revision that was read releases it.
 func TestImportManifestNeverDeploysUnreviewed(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	s.engine = &apps.Engine{Store: s.store, Vault: s.vault, Mat: &apps.Materializer{DataDir: s.cfg.DataDir}}
 	admin := setup(t, h)

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // Fog's own storage binds freely; the short list is refused whatever is
@@ -183,7 +183,7 @@ func TestRenderRefusesHostAccessAtDeploy(t *testing.T) {
 
 func reviewEngine(t *testing.T) *Engine {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,20 +309,20 @@ services:
 func TestReviewShowsOtherAppsDataAndNetworkReach(t *testing.T) {
 	e := reviewEngine(t)
 	ctx := context.Background()
-	if err := e.Create(ctx, "lucid", &AppSpec{Source: Source{Type: "image", Image: "lucid"}}, nil, "admin"); err != nil {
+	if err := e.Create(ctx, "glass", &AppSpec{Source: Source{Type: "image", Image: "glass"}}, nil, "admin"); err != nil {
 		t.Fatal(err)
 	}
 	spec := &AppSpec{
 		Source: Source{Type: "image", Image: "evil"},
-		Uses:   []string{"lucid"},
-		Env:    map[string]string{"TARGET": "http://lucid:3000/api"},
+		Uses:   []string{"glass"},
+		Env:    map[string]string{"TARGET": "http://glass:3000/api"},
 		Volumes: []Volume{
-			{Name: "loot", Mount: "/loot", Files: "Apps/Lucid/config"},
+			{Name: "loot", Mount: "/loot", Files: "Apps/Glass/config"},
 			{Name: "mine", Mount: "/data", Files: "Apps/Evil"},
-			{Name: "tag", Mount: "/tag", Files: "Content/Tag", Follows: "lucid/config"},
-		}, // Lucid's folder needs the manifest's acknowledgement to be saved
+			{Name: "tag", Mount: "/tag", Files: "Content/Tag", Follows: "glass/config"},
+		}, // Glass's folder needs the manifest's acknowledgement to be saved
 		// at all, and the operator's confirmation to bind.
-		AcknowledgeHostAccess: []string{"Apps/Lucid/config"},
+		AcknowledgeHostAccess: []string{"Apps/Glass/config"},
 	}
 	if err := e.CreateForReview(ctx, "evil", spec, nil, "admin"); err != nil {
 		t.Fatal(err)
@@ -340,14 +340,14 @@ func TestReviewShowsOtherAppsDataAndNetworkReach(t *testing.T) {
 			t.Error("the app's own data folder listed as reaching out")
 		}
 	}
-	if loot == nil || loot.OtherApp != "Lucid" || loot.Dangerous == "" || !loot.Acknowledged {
+	if loot == nil || loot.OtherApp != "Glass" || loot.Dangerous == "" || !loot.Acknowledged {
 		t.Errorf("another app's data folder not named: %+v", r.Mounts)
 	}
 	joined := strings.Join(r.Warnings, "\n")
-	if !strings.Contains(joined, "Lucid's own data folder Apps/Lucid/config") || !strings.Contains(joined, "follows lucid/config") {
+	if !strings.Contains(joined, "Glass's own data folder Apps/Glass/config") || !strings.Contains(joined, "follows glass/config") {
 		t.Errorf("warnings miss the other app's folder or the follows:\n%s", joined)
 	}
-	if len(r.Reaches) != 1 || r.Reaches[0] != "lucid" {
-		t.Errorf("reaches = %v, want [lucid]", r.Reaches)
+	if len(r.Reaches) != 1 || r.Reaches[0] != "glass" {
+		t.Errorf("reaches = %v, want [glass]", r.Reaches)
 	}
 }

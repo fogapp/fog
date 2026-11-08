@@ -1,0 +1,46 @@
+id: ntfy
+title: ntfy
+description: Push notifications you can point Fog and your other apps at.
+category: Utilities
+icon: '🔔'
+spec:
+  source:
+    type: image
+    image: binwiederhier/ntfy:latest
+  env:
+    TZ: Etc/UTC
+  volumes:
+    - name: cache
+      mount: /var/cache/ntfy
+    - name: config
+      mount: /etc/ntfy
+  routes:
+    - port: 80
+  health:
+    path: /v1/health
+  command:
+    - serve
+    - --cache-file
+    - /var/cache/ntfy/cache.db
+  backup:
+    enabled: true
+projectUrl: https://github.com/binwiederhier/ntfy
+about: |-
+  ntfy is push notifications with nothing in the way. Publish a message to a topic with a single HTTP request — from a script, a cron job, or any of the apps here — and it arrives on your phone and desktop.
+
+  Feed, Hook, Uptime Kuma, and Jellyseerr can all be pointed at it, and Fog can send its own alerts here too.
+highlights:
+  - Publish with curl; receive in the iOS and Android apps or the browser
+  - Topics with access control
+  - Priorities, tags, attachments, and action buttons
+  - Scheduled delivery and email forwarding
+logo: logo.svg
+developer: Philipp C. Heckel
+license: Apache-2.0 / GPL-2.0
+website: https://ntfy.sh
+docs: https://docs.ntfy.sh
+footprint:
+  memory: 31457280
+  memoryPeak: 104857600
+  cpu: light
+  disk: 41943040

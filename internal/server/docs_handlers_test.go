@@ -12,6 +12,8 @@ import (
 )
 
 func TestAppDocs(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	if w := do(t, h, "GET", "/api/apps/manor/docs", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("docs without session: %d, want 401", w.Code)

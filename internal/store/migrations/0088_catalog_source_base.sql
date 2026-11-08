@@ -22,7 +22,7 @@ FROM (
         WHERE json_extract(r.spec, '$.source.type') = 'git'
     ) AS installed
     JOIN (VALUES ('manor'), ('hub'), ('office'), ('feed'), ('hook'), ('stream'), ('once'),
-                 ('hud'), ('lucid'), ('newtab'), ('signet'), ('fit')) AS n
+                 ('hud'), ('glass'), ('newtab'), ('signet'), ('fit')) AS n
         ON substr(installed.repo, -(length(n.column1) + 5)) = '/' || n.column1 || '.git'
     GROUP BY base
     ORDER BY uses DESC, base

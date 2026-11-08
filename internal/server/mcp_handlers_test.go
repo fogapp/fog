@@ -74,6 +74,8 @@ func withRemoteAddr(addr string) func(*http.Request) {
 // brute-forcer must starve only itself, never the legitimate clients — and
 // authenticated clients on different IPs must not share a bucket.
 func TestMCPRateLimitIsPerSourceIP(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 	tok := createMCPToken(t, h, c, "claude-code")
@@ -102,6 +104,8 @@ func TestMCPRateLimitIsPerSourceIP(t *testing.T) {
 }
 
 func TestMCPRequiresToken(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	setup(t, h)
 
@@ -118,6 +122,8 @@ func TestMCPRequiresToken(t *testing.T) {
 // Two clients, two tokens: each opens /mcp, and revoking one leaves the
 // other working — the whole point of naming them.
 func TestMCPTokensAreIndependent(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -182,6 +188,8 @@ func TestMCPTokensAreIndependent(t *testing.T) {
 // A change made through MCP is attributed to the token that made it, so the
 // audit log distinguishes one client from another.
 func TestMCPAuditNamesTheClient(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	seedIssue(t, srv, "warning")
@@ -216,6 +224,8 @@ func TestMCPAuditNamesTheClient(t *testing.T) {
 }
 
 func TestMCPTokenNameRules(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -236,6 +246,8 @@ func TestMCPTokenNameRules(t *testing.T) {
 }
 
 func TestMCPTokenEndpointsNeedSession(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	setup(t, h)
 	if w := do(t, h, "GET", "/api/settings/mcp-tokens", ""); w.Code != http.StatusUnauthorized {
@@ -254,6 +266,7 @@ func TestMCPTokenEndpointsNeedSession(t *testing.T) {
 // data and hidden files" can. The right comes from the token row, through
 // mcpAuthed, not from anything the client says.
 func TestMCPDriveReachFollowsTheToken(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	root := srv.files.Root()

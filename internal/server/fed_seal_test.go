@@ -77,6 +77,8 @@ func (w *wiretap) url() string { return "http://" + w.ln.Addr().String() }
 // room's ID or an app's name — in a body, a path, a query or a header. Every
 // exchange is the same POST to the same path, answered 200.
 func TestAPassiveObserverSeesNoBody(t *testing.T) {
+	t.Parallel()
+
 	a, b := newFogNode(t), newFogNode(t)
 	tap := newWiretap(t, strings.TrimPrefix(a.http.URL, "http://"))
 	if w := do(t, a.h, "PUT", "/api/federation/identity", fmt.Sprintf(`{"url":%q}`, tap.url()), withCookie(a.cookie)); w.Code != http.StatusOK {
@@ -186,6 +188,8 @@ func TestAPassiveObserverSeesNoBody(t *testing.T) {
 // A sealed body moved into another request doesn't open: C, a peer of A in
 // its own right, can't send B's captured heartbeat as its own.
 func TestASealedBodyCannotBeMovedBetweenPeers(t *testing.T) {
+	t.Parallel()
+
 	a, b, c := newFogNode(t), newFogNode(t), newFogNode(t)
 	pairNodes(t, a, b, `[]`)
 	pairNodes(t, a, c, `[]`)
@@ -213,6 +217,8 @@ func TestASealedBodyCannotBeMovedBetweenPeers(t *testing.T) {
 // key, or whose body isn't sealed, is refused; so is a pair request that
 // isn't sealed to the invite's key. Nothing of it is applied.
 func TestUnsealedRequestsAreRefused(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	bID := mustIdentity(t, p.b)
 	body := []byte(`{"fogVersion":"x","grants":[],"directory":[],"url":"https://downgraded.example"}`)
@@ -268,6 +274,8 @@ func TestUnsealedRequestsAreRefused(t *testing.T) {
 // pairing (the envelope tells a pair request by how it opens) and refreshes
 // the rows it has.
 func TestRepairWhileStillPaired(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	peer, err := p.b.fed.Join(context.Background(), mintInvite(t, p.aH, p.aCookie, `[]`), "")
 	if err != nil {

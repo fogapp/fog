@@ -1,6 +1,6 @@
 # fog-integration/1 — connecting one app to another
 
-An app that offers something to the other apps on the box (Lucid takes
+An app that offers something to the other apps on the box (Glass takes
 their telemetry) declares the offer. An app that can use another declares
 that it wants it. Its **Integrations** tab lists one entry per app it
 wants, and connecting one is a single click: fog asks the provider to mint
@@ -24,24 +24,24 @@ The catalog and an imported manifest only seed an app's spec at install,
 and are never re-read.
 
 ```yaml
-# lucid's fog.yaml
+# glass's fog.yaml
 integrations:
   offers:
     - id: monitoring
       title: Monitoring
-      blurb: Requests, errors, logs and profiles from this app show up in Lucid, …
+      blurb: Requests, errors, logs and profiles from this app show up in Glass, …
       env:
-        LUCID_URL: "{{url}}"
-      secrets: [LUCID_API_KEY, LUCID_READ_TOKEN]
+        GLASS_URL: "{{url}}"
+      secrets: [GLASS_API_KEY, GLASS_READ_TOKEN]
       capabilities:
-        - Requests, errors, logs and profiles show up in Lucid
-        - Read Lucid's charts, monitors, incidents and deploys
+        - Requests, errors, logs and profiles show up in Glass
+        - Read Glass's charts, monitors, incidents and deploys
 
 # newtab's fog.yaml
 integrations:
   wants:
-    - offer: lucid/monitoring
-      as: { LUCID_READ_TOKEN: NEWTAB_LUCID_TOKEN }
+    - offer: glass/monitoring
+      as: { GLASS_READ_TOKEN: NEWTAB_GLASS_TOKEN }
 
 # hook's fog.yaml
 integrations:
@@ -53,7 +53,7 @@ integrations:
 ```
 
 Make one offer per thing an operator would connect, not one per
-credential. Connecting an app to Lucid is one choice, so Lucid's single
+credential. Connecting an app to Glass is one choice, so Glass's single
 offer mints both the ingest key the app reports with and the read-only
 token its widgets read with; an app that only reports leaves the token
 unread.
@@ -126,13 +126,13 @@ written, so make it a sentence they can act on.
 Mint a credential for the consumer, which is a fog app name. Answer `201`:
 
 ```json
-{ "id": "8c1e…", "secrets": { "LUCID_API_KEY": "lucid_ing_…", "LUCID_READ_TOKEN": "lucid_…" } }
+{ "id": "8c1e…", "secrets": { "GLASS_API_KEY": "glass_ing_…", "GLASS_READ_TOKEN": "glass_…" } }
 ```
 
 `id` is opaque to fog and is how fog names the credential from then on.
 `secrets` must hold every name the offer declares. If one is missing, fog
 revokes the id and applies nothing. Refuse with `422` when the provider
-can't mint yet, for example because Lucid has no household until its
+can't mint yet, for example because Glass has no household until its
 setup is finished.
 
 ### `GET /fog/integrations/{id}`
@@ -186,7 +186,7 @@ minutes it has expired, and connecting again replaces it.
    connected.
 2. Ask a consent offer's provider first, if one is wanted (one at a time).
 3. Mint every other wanted offer through the provider.
-4. Write one revision of the app's spec, `integration: connect lucid`,
+4. Write one revision of the app's spec, `integration: connect glass`,
    with the offers' env and secret names, and the provider in `uses` for
    an `app` want. The secret values go to the vault, so the Config tab
    and History show the change like any other.

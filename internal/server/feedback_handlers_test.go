@@ -45,6 +45,8 @@ func postFeedback(t *testing.T, h http.Handler, cookie *http.Cookie, body string
 // B's people write feedback; B sends it to A, which granted feedback.ingest
 // in the invite. Both run the real handler stack, A over real HTTP.
 func TestFeedbackRelaysToPeer(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"feedback.ingest"}]`)
 
 	// B keeps a log tail, and something worth reading is in it.
@@ -186,6 +188,8 @@ func TestFeedbackRelaysToPeer(t *testing.T) {
 
 // A peer without the grant is turned away before anything is read.
 func TestFedFeedbackNeedsGrant(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	batch, _ := json.Marshal(feedback.Batch{Items: []feedback.Item{{UID: "x", Body: "hi", CreatedAt: "2026-09-10T10:00:00Z"}}})
 	if _, err := p.b.fed.SignedPostVerified(context.Background(), p.aPeerOnB, "/fed/v1/feedback", "application/json", batch); err == nil {
@@ -200,6 +204,8 @@ func TestFedFeedbackNeedsGrant(t *testing.T) {
 // address, and in the answer to B's dial otherwise. B's person is told,
 // the row shows who resolved it, and a reopen on B is not overruled.
 func TestFeedbackResolutionReachesOrigin(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"feedback.ingest"}]`)
 	ctx := context.Background()
 	feedbackSendMode(t, p.bH, p.bCookie, p.aPeerOnB.ID, "note")
@@ -320,6 +326,8 @@ func TestFeedbackResolutionReachesOrigin(t *testing.T) {
 // Feedback filed from a route that names no installed app is not a gap in
 // the dossier: there is simply no app to describe.
 func TestDossierAppMissingIsNotAGap(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	d := &feedback.Dossier{}
 	srv.dossierApp(context.Background(), d, "no-such-app")

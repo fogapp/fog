@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -18,7 +18,7 @@ import (
 // loop starts a second cloudflared beside it.
 func TestStopStartDuringBackoffKeepsOneLoop(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

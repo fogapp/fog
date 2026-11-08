@@ -13,6 +13,8 @@ import (
 // written now and the indented one earlier fogd wrote, counts every file,
 // returns distinct real entries, and refuses a foreign format.
 func TestSampleManifest(t *testing.T) {
+	t.Parallel()
+
 	mf := &snapManifest{Format: snapshotFormat, Mode: "links", Excluded: []string{"x"}}
 	for i := range 1000 {
 		mf.Files = append(mf.Files, snapFile{Path: fmt.Sprintf("f%04d", i), Size: int64(i), SHA256: "s"})

@@ -20,6 +20,8 @@ import (
 // heard it — through an outage and a restart — and an outage that lasts is
 // in the Inbox until it heals.
 func TestSCIMDeprovisionsAPersonFogDeleted(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", SCIM: "/scim/v2",
 		Roles: []string{"admin", "member"}, Default: map[string]string{"operator": "admin", "member": "member"}})
 	tok, err := f.srv.scim.Token(f.app)
@@ -106,6 +108,8 @@ func hasNotice(t *testing.T, srv *Server, kind, app string) bool {
 // delivery. fog follows no redirect: the 3xx is a failed delivery, and the
 // target is never reached.
 func TestAnAppCantRedirectFogsDeliveries(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Logout: "/auth/oidc/backchannel",
 		SCIM: "/scim/v2", Roles: []string{"admin", "member"}, Default: map[string]string{"operator": "admin", "member": "member"}})
 	var internalHits atomic.Int32

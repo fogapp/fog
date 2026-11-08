@@ -42,6 +42,8 @@ func hasSession(rec *httptest.ResponseRecorder) bool {
 }
 
 func TestClaimHappyPathIsSingleUse(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	token := seedClaim(t, srv, time.Now().Add(time.Hour))
 
@@ -60,6 +62,8 @@ func TestClaimHappyPathIsSingleUse(t *testing.T) {
 }
 
 func TestClaimWrongToken(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	seedClaim(t, srv, time.Now().Add(time.Hour))
 	rec := claimReq(h, "not-the-token")
@@ -73,6 +77,8 @@ func TestClaimWrongToken(t *testing.T) {
 }
 
 func TestClaimExpired(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	token := seedClaim(t, srv, time.Now().Add(-time.Minute))
 	rec := claimReq(h, token)
@@ -85,6 +91,8 @@ func TestClaimExpired(t *testing.T) {
 }
 
 func TestClaimNoTokenSeeded(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	rec := claimReq(h, "anything")
 	if hasSession(rec) {

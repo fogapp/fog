@@ -13,6 +13,8 @@ import (
 // since the store cuts by characters and LogTail by bytes), and a diagnosis
 // matched anywhere in the log, not just in the tail it read.
 func TestDeployStatusReadsTailButDiagnosesWholeLog(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	srv.engine = &apps.Engine{Store: srv.store}
 	cookie := setup(t, h)
@@ -65,6 +67,8 @@ func TestDeployStatusReadsTailButDiagnosesWholeLog(t *testing.T) {
 // stage, and how long its deploy has run once a deploy row exists — an
 // update's snapshot comes first and reads as a stage alone.
 func TestLiveDeploysListsAppsInFlight(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	srv.engine = &apps.Engine{Store: srv.store}
 	cookie := setup(t, h)

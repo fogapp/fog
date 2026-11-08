@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/backup"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The scanner must flag exactly the directories no app accounts for: data
@@ -16,7 +16,7 @@ import (
 // checkouts without a git app — and nothing belonging to live apps.
 func TestOrphans(t *testing.T) {
 	dataDir := t.TempDir()
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

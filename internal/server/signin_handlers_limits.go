@@ -492,24 +492,29 @@ func busyHashing(w http.ResponseWriter, err error, bs ...bucket) bool {
 // minted lately.
 var errSessionRate = errors.New("too many sign-ins for this account; wait a few minutes")
 
-// successesSpent answers 429 — keeping the address's charge, giving back
-// the account's — when the account or the address has had all the right
-// passwords it may in this window, before any hashing is done.
-func (s *Server) successesSpent(w http.ResponseWriter, r *http.Request, account string, bs ...bucket) bool {
+// reserveSuccess takes a right password from the account's and the
+// address's success budgets before any hashing is done, and answers 429 —
+// keeping the address's attempt charge, giving back the account's — when
+// either has none left. Taking and checking for room are one step, so a
+// burst of right passwords can't all see room before any is charged. The
+// returned release gives the reservation back, for a check that turns out
+// not to be a right password; reports false when it refused.
+func (s *Server) reserveSuccess(w http.ResponseWriter, r *http.Request, account string, bs ...bucket) (release func(), ok bool) {
 	l := s.signinLimits()
-	if !l.accountSuccess.Exhausted(account) && !s.successBucket(r).Exhausted() {
-		return false
+	addr := s.successBucket(r)
+	if l.accountSuccess.Reserve(account) {
+		if addr.reserve() {
+			return func() {
+				l.accountSuccess.Refund(account)
+				addr.refund()
+			}, true
+		}
+		l.accountSuccess.Refund(account)
 	}
 	refundAccounts(bs...)
 	w.Header().Set("Retry-After", strconv.Itoa(int(failureWindow.Seconds())))
 	writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many sign-ins; try again later", "code": "rate_limited"})
-	return true
-}
-
-// chargeSuccess charges a right password to its account and address.
-func (s *Server) chargeSuccess(r *http.Request, account string) {
-	s.signinLimits().accountSuccess.Allow(account)
-	s.successBucket(r).take()
+	return nil, false
 }
 
 // successBucket is the request's address's success budget: its own, or the
@@ -529,19 +534,19 @@ type successBudget struct {
 	key    string
 }
 
-func (b successBudget) Exhausted() bool {
+func (b successBudget) reserve() bool {
 	if b.shared != nil {
-		return b.shared.Exhausted(b.key)
+		return b.shared.Reserve(b.key)
 	}
-	return b.own.Exhausted(b.key)
+	return b.own.Reserve(b.key)
 }
 
-func (b successBudget) take() {
+func (b successBudget) refund() {
 	if b.shared != nil {
-		b.shared.Allow(b.key)
+		b.shared.Refund(b.key)
 		return
 	}
-	b.own.Allow(b.key)
+	b.own.Refund(b.key)
 }
 
 // clearAccount forgets an account's failures after it proves itself.

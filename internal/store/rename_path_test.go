@@ -31,6 +31,8 @@ func tablePaths(t *testing.T, s *Store, table string) []string {
 // descendants move; siblings that only share a prefix, names where LIKE's
 // wildcards or case-folding would over-match, and unrelated paths stay put.
 func TestRenamePathAllTables(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	peer, err := s.CreatePairedPeer("inst-1", "attic", "", "pk1")
 	if err != nil {
@@ -96,6 +98,8 @@ func TestRenamePathAllTables(t *testing.T) {
 
 // An exclusion that lands on one already there merges into it.
 func TestRenamePathMergesExcludes(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	for _, p := range []string{"a", "a/x", "b/x"} {
 		if err := s.AddFileExclude(p); err != nil {

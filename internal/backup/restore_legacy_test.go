@@ -14,6 +14,7 @@ import (
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/execx"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // fakeDocker puts a stub docker on PATH so the compose stop/up bracketing a
@@ -36,7 +37,7 @@ func fakeDocker(t *testing.T, exitCode string) string {
 // volume holds old.txt; the snapshot archive holds new.txt.
 func legacyRestoreManager(t *testing.T) (m *Manager, b *store.Backup, appRow *store.App, volDir string) {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

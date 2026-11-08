@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // Every rule runs cleanly against a real, freshly migrated database — a
 // rule naming a column or table that doesn't exist fails here, not on the
 // first daily pass in production.
 func TestStoreJobsRunAgainstARealDatabase(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestRunWaitsForItsJobs(t *testing.T) {
 // issues scan: a resolved row past the window goes, an open one of any age
 // and a recently resolved one stay.
 func TestResolvedIssuesAgeOutInTheList(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

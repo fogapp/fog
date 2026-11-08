@@ -10,6 +10,8 @@ import (
 )
 
 func TestShutdownCancelsAndWaitsForBackgroundTasks(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	s.bgCtx, s.bgCancel = context.WithCancel(context.Background())
 
@@ -41,6 +43,8 @@ func TestShutdownCancelsAndWaitsForBackgroundTasks(t *testing.T) {
 }
 
 func TestShutdownGivesUpAtItsDeadline(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	s.bgCtx, s.bgCancel = context.WithCancel(context.Background())
 	release := make(chan struct{})

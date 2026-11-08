@@ -16,6 +16,8 @@ import (
 // the tree, so fog now does that itself: the damaged file is kept aside, a
 // fresh one opened, and a walk refills it.
 func TestADamagedIndexIsReplacedAndRebuilt(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for i := range 200 {
 		write(t, m, filepath.Join("docs", "note-"+strconv.Itoa(i)+".txt"), "hello")

@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/lucid"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/store"
 )
 
 // Activity is what Settings › Compute › Activity shows: every request an app
 // made to the inference pool and every video run it started, the machine
 // each went to, and how it ended. A row is written as fog takes the work
-// and finished when it ends. Each also goes to Lucid, when fogd reports
+// and finished when it ends. Each also goes to Glass, when fogd reports
 // there, as a "compute" transaction — and an inference call as an llm
-// record too, which is what Lucid's Models page reads.
+// record too, which is what Glass's Models page reads.
 
 // Outcomes of compute work.
 const (
@@ -37,11 +37,11 @@ const (
 const ActivityRestarted = "fogd restarted while it ran"
 
 // tracked is one piece of work as it is recorded: its row, and its
-// transaction in Lucid (nil when fogd doesn't report there).
+// transaction in Glass (nil when fogd doesn't report there).
 type tracked struct {
 	row   store.ComputeActivity
 	start time.Time
-	txn   *lucid.Txn
+	txn   *glass.Txn
 	ctx   context.Context
 }
 
@@ -51,7 +51,7 @@ func (s *Service) begin(parent context.Context, row store.ComputeActivity) *trac
 	t := &tracked{row: row, start: time.Now()}
 	t.row.Outcome = OutcomeRunning
 	t.row.At = t.start.UTC().Format(time.RFC3339)
-	t.ctx, t.txn = lucid.Start(parent, "compute", activityName(row))
+	t.ctx, t.txn = glass.Start(parent, "compute", activityName(row))
 	t.txn.Attr("app", row.App)
 	t.txn.Attr("pool", row.Pool)
 	if row.Machine != "" {
@@ -67,7 +67,7 @@ func (s *Service) begin(parent context.Context, row store.ComputeActivity) *trac
 }
 
 // finish records how work ended. Lost or failed work is an error in
-// Lucid; displaced and stopped work did what was asked of it.
+// Glass; displaced and stopped work did what was asked of it.
 func (s *Service) finish(t *tracked, outcome string, status *int, message string) {
 	t.row.Outcome, t.row.Status, t.row.Message = outcome, status, message
 	t.row.DurationMS = time.Since(t.start).Milliseconds()
@@ -102,7 +102,7 @@ func (s *Service) refused(parent context.Context, row store.ComputeActivity, sta
 	t.txn.End(nil)
 }
 
-// activityName is the transaction's name in Lucid: few enough distinct
+// activityName is the transaction's name in Glass: few enough distinct
 // ones to group by — the endpoint or the class, never an id.
 func activityName(row store.ComputeActivity) string {
 	if row.What == "" {

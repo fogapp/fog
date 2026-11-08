@@ -18,6 +18,7 @@ import (
 // here against this build: every check must pass, including "the server
 // holds ciphertext only".
 func TestChatConformanceSuite(t *testing.T) {
+
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not installed")

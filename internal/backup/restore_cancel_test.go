@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/apps"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // stagingLocOf is the staging directory of a managed volume, addressed the
@@ -237,7 +237,7 @@ func TestStageArtifactRefusesSymlinkEscape(t *testing.T) {
 // folder. jen's hook did, and fog never saw it: no "Cancel restore", and a
 // cancel that left the app booting into the same failing restore.
 func TestRestoreStagedInADriveVolume(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

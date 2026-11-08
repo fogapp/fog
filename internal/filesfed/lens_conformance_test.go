@@ -12,6 +12,8 @@ import (
 // asserts filesfed hasn't drifted from fed.Lens; a renamed or added value here
 // without the same change to the shared vocabulary fails CI.
 func TestFilesfedModeScopeMatchSharedVocabulary(t *testing.T) {
+	t.Parallel()
+
 	assertSameSet(t, "mode", []string{ModeRead, ModeContribute}, lensValues(fed.LensModes))
 	assertSameSet(t, "scope", []string{ScopeAll, ScopePicked, ScopeFiltered}, lensValues(fed.LensScopes))
 	// And every value filesfed uses is a valid shared term.

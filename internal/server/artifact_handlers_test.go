@@ -38,6 +38,8 @@ func writeTar(t *testing.T, path string, entries [][2]string) {
 // against the artifact before an app is created, so it has to report the
 // fingerprints — and has to refuse anything that isn't an artifact.
 func TestInspectArtifactEndpoint(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 	dir := t.TempDir()

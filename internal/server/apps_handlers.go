@@ -27,7 +27,7 @@ import (
 )
 
 // SettingCatalogEnabled stores a JSON array of visible catalog ids; unset
-// means the default set (Fin + Hub).
+// means what the catalogs feature (catalog.Manifest.Featured).
 const SettingCatalogEnabled = "catalog_enabled"
 
 // deployLogTailBytes is how much of each historical deploy log travels with
@@ -38,22 +38,23 @@ const deployLogTailBytes = 8000
 func (s *Server) enabledCatalogIDs() []string {
 	raw, _ := s.store.GetSetting(SettingCatalogEnabled)
 	if raw == "" {
-		return catalog.DefaultEnabled
+		return s.catalogs.Featured()
 	}
 	var ids []string
 	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		return catalog.DefaultEnabled
+		return s.catalogs.Featured()
 	}
 	return ids
 }
 
-// catalogEntries is the catalog with the household's own apps pointed at
-// this fog's source settings (catalog/source.go). Entries with no source
-// are still here, with an empty repository; the store leaves them out.
+// catalogEntries is the store — every catalog's entries, merged — with the
+// household's own apps pointed at this fog's source settings
+// (catalog/source.go). Entries with no source are still here, with an
+// empty repository; the store leaves them out.
 func (s *Server) catalogEntries() []catalog.Entry {
 	base, _ := s.store.GetSetting(catalog.SettingSourceBase)
 	overrides, _ := s.store.GetSetting(catalog.SettingSourceOverrides)
-	return catalog.Resolve(catalog.Entries(), catalog.ParseSources(base, overrides))
+	return catalog.Resolve(s.catalogs.Entries(), catalog.ParseSources(base, overrides))
 }
 
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
@@ -72,11 +73,24 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		e.Blocker = e.Preflight(host)
 		entries = append(entries, e)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"entries":   entries,
-		"enabled":   s.enabledCatalogIDs(),
-		"unsourced": unsourced,
+	writeJSON(w, http.StatusOK, catalogResponse{
+		Entries:    entries,
+		Enabled:    s.enabledCatalogIDs(),
+		Unsourced:  unsourced,
+		Catalogs:   s.catalogs.Statuses(),
+		CatalogKey: s.catalogPublicKey(),
 	})
+}
+
+// catalogResponse is GET /api/catalog.
+type catalogResponse struct {
+	Entries   []catalog.Entry `json:"entries"`
+	Enabled   []string        `json:"enabled"`
+	Unsourced int             `json:"unsourced"`
+	// Catalogs is every catalog the store is built from, in order, and how
+	// each stands; CatalogKey the public key private ones are cloned with.
+	Catalogs   []catalog.Status `json:"catalogs"`
+	CatalogKey string           `json:"catalogKey"`
 }
 
 func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +119,10 @@ type createAppReq struct {
 	// page that turns a pasted compose file into a spec always asks for it
 	// — that spec is somebody else's, whatever the form shows.
 	Review bool `json:"review,omitempty"`
+	// Catalog names the catalog an install from the store came from, for
+	// the audit log. One that isn't fog's own installs with Review set:
+	// somebody else's spec is read before it runs.
+	Catalog string `json:"catalog,omitempty"`
 }
 
 type restoreFromReq struct {
@@ -175,6 +193,10 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
+	if req.Review && req.RestoreFrom != nil {
+		badRequest(w, "an app held for review can't also restore a backup: install it, approve it, then restore from its Backups tab")
+		return
+	}
 	artifact := ""
 	if req.RestoreFrom != nil {
 		var err error
@@ -213,7 +235,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	// The same check the store shows, enforced: an install that would only
 	// crash-loop is refused with the reason rather than started.
-	if why := catalog.PreflightSpec(req.Spec, hostcpu.Detect()); why != "" {
+	if why := catalog.PreflightSpec(s.catalogs.Entries(), req.Spec, hostcpu.Detect()); why != "" {
 		writeErr(w, http.StatusUnprocessableEntity, why)
 		return
 	}
@@ -226,7 +248,11 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 			badRequest(w, err.Error())
 			return
 		}
-		s.auditAs(actor, "app.import", req.Name, map[string]any{"from": "compose"})
+		from := "compose"
+		if req.Catalog != "" {
+			from = "catalog:" + req.Catalog
+		}
+		s.auditAs(actor, "app.import", req.Name, map[string]any{"from": from})
 		writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "name": req.Name, "reviewPending": true})
 		return
 	}

@@ -45,16 +45,16 @@ func TestCallSendsTokenAndBody(t *testing.T) {
 		w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	c := New(resolveTo(map[string]string{"lucid": srv.URL}, nil))
+	c := New(resolveTo(map[string]string{"glass": srv.URL}, nil))
 
-	raw, err := c.Call(context.Background(), &store.App{Name: "lucid"}, "POST", "/fog/x", map[string]string{"a": "b"})
+	raw, err := c.Call(context.Background(), &store.App{Name: "glass"}, "POST", "/fog/x", map[string]string{"a": "b"})
 	if err != nil || string(raw) != `{"ok":true}` {
 		t.Fatalf("call: %q %v", raw, err)
 	}
-	if gotAuth != "Bearer tok-lucid" || gotType != "application/json" || gotBody != `{"a":"b"}` {
+	if gotAuth != "Bearer tok-glass" || gotType != "application/json" || gotBody != `{"a":"b"}` {
 		t.Fatalf("request: auth %q type %q body %q", gotAuth, gotType, gotBody)
 	}
-	if _, err := c.Call(context.Background(), &store.App{Name: "lucid"}, "POST", "/fog/x", []byte("{}")); err != nil || gotBody != "{}" {
+	if _, err := c.Call(context.Background(), &store.App{Name: "glass"}, "POST", "/fog/x", []byte("{}")); err != nil || gotBody != "{}" {
 		t.Fatalf("raw body: %q %v", gotBody, err)
 	}
 }
@@ -67,9 +67,9 @@ func TestCallRefusalAndUnreachable(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"errors": []string{"no household yet"}})
 	}))
 	defer srv.Close()
-	c := New(resolveTo(map[string]string{"lucid": srv.URL}, nil))
+	c := New(resolveTo(map[string]string{"glass": srv.URL}, nil))
 
-	_, err := c.Call(context.Background(), &store.App{Name: "lucid"}, "GET", "/fog/x", nil)
+	_, err := c.Call(context.Background(), &store.App{Name: "glass"}, "GET", "/fog/x", nil)
 	if err == nil || err.Error() != "app answered 422 Unprocessable Entity" || errors.Is(err, ErrUnreachable) {
 		t.Fatalf("default refusal: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCallRefusalAndUnreachable(t *testing.T) {
 		json.Unmarshal(raw, &r)
 		return errors.New(strings.Join(r.Errors, "; "))
 	})
-	if _, err := words.Call(context.Background(), &store.App{Name: "lucid"}, "GET", "/fog/x", nil); err == nil || err.Error() != "no household yet" {
+	if _, err := words.Call(context.Background(), &store.App{Name: "glass"}, "GET", "/fog/x", nil); err == nil || err.Error() != "no household yet" {
 		t.Fatalf("own refusal: %v", err)
 	}
 

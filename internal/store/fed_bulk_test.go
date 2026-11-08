@@ -4,6 +4,8 @@ import "testing"
 
 // The bulk reads the peer list uses agree with their per-peer forms.
 func TestFedBulkReads(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	a, err := s.CreatePairedPeer("inst-a", "a", "", "pk-a")
 	if err != nil {

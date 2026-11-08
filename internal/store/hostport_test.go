@@ -7,7 +7,9 @@ import (
 )
 
 func TestAllocateHostPortReusesFreedPorts(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +60,9 @@ func TestAllocateHostPortReusesFreedPorts(t *testing.T) {
 // transaction serializes the read-pick-write, and the unique index on
 // host_port turns any interleaving that slips through into a retry.
 func TestAllocateHostPortConcurrent(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +103,9 @@ func TestAllocateHostPortConcurrent(t *testing.T) {
 // The schema itself refuses a duplicate host port — the invariant holds even
 // against writes that bypass the allocator.
 func TestHostPortUniqueIndex(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +126,9 @@ func TestHostPortUniqueIndex(t *testing.T) {
 }
 
 func TestAllocateHostPortExhaustion(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

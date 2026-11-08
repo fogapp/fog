@@ -81,6 +81,8 @@ func patchPerson(t *testing.T, f *idpFixture, handle, body string) {
 // TestRevokingASecretNowRefusesTheLeakedOne: one act ends a leaked secret,
 // where it used to take two rotations.
 func TestRevokingASecretNowRefusesTheLeakedOne(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	// A routine rotation leaves the running secret working.
@@ -113,6 +115,8 @@ func TestRevokingASecretNowRefusesTheLeakedOne(t *testing.T) {
 // TestDemotionSignsOutOfApps is the demotion finding: a member made guest
 // kept every app session; now each app that saw them is told, by subject.
 func TestDemotionSignsOutOfApps(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -135,6 +139,8 @@ func TestDemotionSignsOutOfApps(t *testing.T) {
 // TestALesserRoleSignsOut: lowering someone's role in an app's policy ends
 // their session there, as removing them does.
 func TestALesserRoleSignsOut(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -155,6 +161,8 @@ func TestALesserRoleSignsOut(t *testing.T) {
 // TestADeployThatNarrowsSignsOut: an app that changes its own role map on
 // deploy ends the sessions it decided under the old one.
 func TestADeployThatNarrowsSignsOut(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -173,6 +181,8 @@ func TestADeployThatNarrowsSignsOut(t *testing.T) {
 // TestTheTokenEndpointAsksPolicyAgain: a code minted before a demotion is
 // not redeemed after it.
 func TestTheTokenEndpointAsksPolicyAgain(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	f.asKim(t)
 	verifier := oauth2.GenerateVerifier()
@@ -189,6 +199,8 @@ func TestTheTokenEndpointAsksPolicyAgain(t *testing.T) {
 // TestIDTokenStatesWhenFogsSessionEnds: every ID token carries the fog
 // session's expiry, so an app can end its own no later.
 func TestIDTokenStatesWhenFogsSessionEnds(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	c := f.idClaims(t, f.signInRP(t))
 	sess, _, err := f.srv.store.SessionPerson(auth.DigestToken(f.operator.Value))
@@ -207,6 +219,8 @@ func TestIDTokenStatesWhenFogsSessionEnds(t *testing.T) {
 // TestAnExpiredSessionSendsALogout: a session that runs out used to be
 // pruned silently; now the apps it signed in to hear by sid.
 func TestAnExpiredSessionSendsALogout(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	app := &appBackchannel{}
 	f.receiveLogouts(t, app)
@@ -226,6 +240,8 @@ func TestAnExpiredSessionSendsALogout(t *testing.T) {
 // keys — here a logout token naming the session — must not sign a person
 // out without asking.
 func TestEndSessionHintMustBeAnIDToken(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	sess, _, _ := f.srv.store.SessionPerson(auth.DigestToken(f.operator.Value))
 	notAnIDToken, err := f.srv.keys.Sign(oidc.LogoutToken(issuerURL, "stream", "", sess.SID, "j", time.Now()), "logout+jwt")
@@ -255,6 +271,7 @@ func recordNtfy(srv *Server) chan string {
 }
 
 func TestThePersonIsToldOfCredentialChanges(t *testing.T) {
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	got := recordNtfy(f.srv)
@@ -319,6 +336,8 @@ func TestThePersonIsToldOfCredentialChanges(t *testing.T) {
 // ---- 9. emergency key rotation ----
 
 func TestEmergencyKeyRotation(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	app := &appBackchannel{}
@@ -390,6 +409,7 @@ func fromIP(ip string) func(*http.Request) {
 // TestPasswordGuessesAreLimitedPerAccount: guesses at one handle from many
 // addresses meet one limit, and a passkey still gets the person in.
 func TestPasswordGuessesAreLimitedPerAccount(t *testing.T) {
+
 	_, h := newTestServer(t)
 	setup(t, h)
 	refused := false
@@ -408,6 +428,7 @@ func TestPasswordGuessesAreLimitedPerAccount(t *testing.T) {
 // TestReauthAndPasswordChangeAreLimitedPerPerson: a stolen session is no
 // place to guess the password behind it.
 func TestReauthAndPasswordChangeAreLimitedPerPerson(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	// At fog's domain, where the session is __Host- and not pinned to an
@@ -445,6 +466,8 @@ func TestReauthAndPasswordChangeAreLimitedPerPerson(t *testing.T) {
 // TestAuthorizeIsLimitedPerPerson: a signed-in person cannot hammer the
 // authorization endpoint.
 func TestAuthorizeIsLimitedPerPerson(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	limited := false
 	for range 130 {
@@ -466,6 +489,8 @@ func TestAuthorizeIsLimitedPerPerson(t *testing.T) {
 // TestClientSecretGuessesDontLockTheAppOut: the per-client limit is per
 // caller, so a stranger spraying wrong secrets can't spend the app's budget.
 func TestClientSecretGuessesDontLockTheAppOut(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	for range 130 {
@@ -479,6 +504,8 @@ func TestClientSecretGuessesDontLockTheAppOut(t *testing.T) {
 // TestDeviceCodeGuessingIsLimited: wrong user codes are charged to the
 // person, and at the limit the lookup is refused before it is made.
 func TestDeviceCodeGuessingIsLimited(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Device: true})
 	da := deviceAuth(t, f, url.Values{"scope": {"openid"}})
 	h := f.srv.Handler()
@@ -496,6 +523,8 @@ func TestDeviceCodeGuessingIsLimited(t *testing.T) {
 // refused before they cost the person a wrong code, and the person can
 // still approve their television.
 func TestASiblingPageCantSpendTheDeviceBudget(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Device: true})
 	da := deviceAuth(t, f, url.Values{"scope": {"openid"}})
 	h := f.srv.Handler()
@@ -512,6 +541,8 @@ func TestASiblingPageCantSpendTheDeviceBudget(t *testing.T) {
 // TestADeviceCodeReplayRevokesItsTokens: the device grant's code, like the
 // authorization code, revokes what it minted when presented again.
 func TestADeviceCodeReplayRevokesItsTokens(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Device: true})
 	ctx := gooidc.ClientContext(context.Background(), f.rp)
 	da := deviceAuth(t, f, url.Values{"scope": {"openid"}})
@@ -534,6 +565,8 @@ func TestADeviceCodeReplayRevokesItsTokens(t *testing.T) {
 // TestTheDeviceGrantRefusesRepeatedParameters: the profile refuses a
 // repeated parameter at the token endpoint, the device grant included.
 func TestTheDeviceGrantRefusesRepeatedParameters(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{Contract: signin.Contract, Redirect: "/auth/oidc/callback", Device: true})
 	da := deviceAuth(t, f, url.Values{"scope": {"openid"}})
 	form := url.Values{"grant_type": {oidc.DeviceGrantType}, "device_code": {da.DeviceCode, "other"}}
@@ -548,6 +581,7 @@ func TestTheDeviceGrantRefusesRepeatedParameters(t *testing.T) {
 // last person's session — and the apps it signed in to — ends when the next
 // person signs in, rather than lingering behind the new cookie.
 func TestSigningInEndsTheBrowsersPreviousSession(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	kim := addMember(t, srv, "kim")

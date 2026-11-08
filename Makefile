@@ -2,7 +2,7 @@ BINARY := fogd
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X gitea.lan/matthew/fog/internal/config.Version=fogd-version=$(VERSION)
 
-.PHONY: build frontend backend fog-node dev-backend dev-frontend test sdk-test conformance vet gen-types fmt typecheck deadcode check clean
+.PHONY: build frontend backend fog-node dev-backend dev-frontend test sdk-test conformance vet gen-types fmt typecheck deadcode check check-steps clean
 
 build: frontend backend
 
@@ -113,7 +113,25 @@ deadcode: clients/chat-sdk/node_modules
 
 # Everything CI runs, in one command. release.sh gates on this, so a release
 # cannot be cut from a tree that doesn't pass.
-check: fmt vet test sdk-test typecheck deadcode
+#
+# A pass is recorded in bin/.check-passed as the id of exactly what was
+# checked (scripts/check-id: the tree the working directory would commit
+# as, and the toolchains). release.sh skips its own run for a clean tree
+# with that id, so checking before the commit and releasing after costs one
+# run, not two. The id is taken before and after: a tree edited while the
+# checks ran records nothing.
+check:
+	@rm -f bin/.check-passed
+	@before=$$(scripts/check-id) && \
+	$(MAKE) --no-print-directory check-steps && \
+	after=$$(scripts/check-id) && \
+	if [ "$$before" = "$$after" ]; then \
+		mkdir -p bin && echo "$$after" > bin/.check-passed; \
+	else \
+		echo "the tree changed while the checks ran: they passed, but release.sh will run them again"; \
+	fi
+
+check-steps: fmt vet test sdk-test typecheck deadcode
 
 clean:
 	rm -rf bin frontend/dist imaging/out

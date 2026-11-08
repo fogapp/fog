@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/jobs"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // pngHeaderOnly is a PNG that declares w×h pixels and holds none: a few
@@ -56,6 +56,8 @@ func pngHeaderOnly(w, h uint32) []byte {
 // operator will browse. Rendering its thumbnail must refuse it from the
 // header, not allocate 1.6 GB finding out.
 func TestThumbnailRefusesDecompressionBomb(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	bomb := pngHeaderOnly(20000, 20000)
 	write(t, m, "Content/Photos/bomb.png", string(bomb))
@@ -84,6 +86,8 @@ func TestThumbnailRefusesDecompressionBomb(t *testing.T) {
 }
 
 func TestDecodeCostLimits(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		w, h   int
 		format string
@@ -109,6 +113,8 @@ func TestDecodeCostLimits(t *testing.T) {
 // share — Stat, OpenFile, List, the zip, the hasher, thumbnails — may then
 // reach Private.
 func TestNothingFollowsALinkSwappedIntoDrive(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Public/sub/secret.txt", "decoy")
 	write(t, m, "Public/hello.txt", "hi")
@@ -180,6 +186,8 @@ func TestNothingFollowsALinkSwappedIntoDrive(t *testing.T) {
 // Writes refuse a path that runs through a link: an upload or a new
 // folder must land where it was asked to, not in another app's folder.
 func TestWritesRefuseALinkOnTheWay(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Content/Books/a.txt", "a")
 	write(t, m, "Apps/Vault/db.sqlite3", "vault")
@@ -214,6 +222,8 @@ func TestWritesRefuseALinkOnTheWay(t *testing.T) {
 // write. A link planted at the staging name must not have the copy's bytes
 // written through it into another app's file.
 func TestCopyStagingIgnoresAPlantedLink(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Docs/report.pdf", "the report")
 	write(t, m, "Apps/Vault/db.sqlite3", "vault")
@@ -239,6 +249,8 @@ func TestCopyStagingIgnoresAPlantedLink(t *testing.T) {
 // A FIFO planted where a file was must not hang a reader: the hasher, a
 // download, a thumbnail all refuse it at once.
 func TestAPlantedFIFOIsNeverOpened(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Content/x.jpg", "x")
 	p := filepath.Join(m.Root(), "Content/pipe.jpg")
@@ -272,6 +284,8 @@ func TestAPlantedFIFOIsNeverOpened(t *testing.T) {
 // purged, the link is gone. Replaced behind fog's back, the link leads
 // nowhere.
 func TestShareFollowsTheItemNotThePath(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Public/report.pdf", "v1")
 	token, sh, err := m.CreateShare("Public/report.pdf", 0, "")
@@ -352,6 +366,8 @@ func TestShareFollowsTheItemNotThePath(t *testing.T) {
 
 // A folder's link survives what happens inside it.
 func TestShareOfAFolderSurvivesItsContentsChanging(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Public/a.txt", "a")
 	token, _, err := m.CreateShare("Public", 0, "")
@@ -380,6 +396,8 @@ func TestUploadRefusedWhenItCannotFit(t *testing.T) {
 // Two chunks sent at one offset at once: one lands, the other is told the
 // real offset; the part never holds both.
 func TestConcurrentChunksAtOneOffset(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	u, err := m.BeginUpload("x.bin", 8, "", "", ConflictAsk)
 	if err != nil {
@@ -415,6 +433,8 @@ func TestConcurrentChunksAtOneOffset(t *testing.T) {
 // never as what it points at: a link an app planted to /etc must not put
 // the host's files into a folder the app can read.
 func TestCopyTreeCopiesLinksAsLinks(t *testing.T) {
+	t.Parallel()
+
 	from, to, outside := t.TempDir(), t.TempDir(), t.TempDir()
 	os.WriteFile(filepath.Join(outside, "shadow"), []byte("host secret"), 0o600)
 	os.MkdirAll(filepath.Join(from, "Apps", "A", "data"), 0o755)
@@ -448,6 +468,8 @@ func TestCopyTreeCopiesLinksAsLinks(t *testing.T) {
 // Digests from a peer name cache files; one that is not a digest must
 // never get as far as a path.
 func TestThumbCacheRefusesANonDigest(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for _, bad := range []string{"../../../../tmp/x", "ab", strings.Repeat("Z", 64)} {
 		if err := m.StoreThumb(bad, 96, []byte("x")); err == nil {
@@ -463,6 +485,8 @@ func TestThumbCacheRefusesANonDigest(t *testing.T) {
 // On a case-insensitive root (macOS, a CIFS share) ".FOG" is fog's own
 // directory. No spelling of it may be addressed, listed or written.
 func TestReservedNamesIgnoreCase(t *testing.T) {
+	t.Parallel()
+
 	for _, p := range []string{".FOG/trash", ".Fog", "apps/.FOG/uploads", "CONTENT/.fog", "Content/.fOg/trash"} {
 		if _, err := CleanRel(p); !errors.Is(err, ErrReserved) {
 			t.Errorf("CleanRel(%q) = %v, want ErrReserved", p, err)
@@ -498,6 +522,8 @@ func TestReservedNamesIgnoreCase(t *testing.T) {
 // through it — outside the destination, as root. By descriptor, the folder
 // "a" meets the name taken and the copy stops; nothing lands outside.
 func TestMoveToCaseInsensitiveDiskCannotWriteThroughALink(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS != "darwin" {
 		t.Skip("needs a case-sensitive and a case-insensitive APFS volume side by side")
 	}
@@ -551,11 +577,13 @@ func caseSensitiveDir(t *testing.T) string {
 // operator's files unbacked because of one app's names. Now the clashing
 // entry is left out and named in the Inbox, and the rest is backed up.
 func TestSnapshotSurvivesCaseCollisions(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS != "darwin" {
 		t.Skip("needs a case-sensitive Drive and a case-insensitive backup disk")
 	}
 	dir := caseSensitiveDir(t)
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,6 +630,8 @@ func TestSnapshotSurvivesCaseCollisions(t *testing.T) {
 //
 // Runs in the Linux VM, whose /Users is the Mac's (normalising) disk.
 func TestSnapshotCatchesNormalisationCollisions(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	nfc, nfd := "caf\u00e9.txt", "cafe\u0301.txt"
 	write(t, m, "Docs/"+nfc, "the user's")
@@ -664,6 +694,8 @@ func TestSnapshotCatchesNormalisationCollisions(t *testing.T) {
 // Set FOG_CASEFOLD_DIR to a +F directory on casefold ext4 to run it there;
 // otherwise it runs where the temp directory folds case (macOS).
 func TestCaseOnlyRenameOnAFoldingDisk(t *testing.T) {
+	t.Parallel()
+
 	base := os.Getenv("FOG_CASEFOLD_DIR")
 	if base == "" {
 		base = t.TempDir()
@@ -676,7 +708,7 @@ func TestCaseOnlyRenameOnAFoldingDisk(t *testing.T) {
 	if !caseInsensitive(dir) {
 		t.Skip("this disk tells case apart (set FOG_CASEFOLD_DIR)")
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

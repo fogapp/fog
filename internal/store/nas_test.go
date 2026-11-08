@@ -3,6 +3,8 @@ package store
 import "testing"
 
 func TestNasShareCRUD(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 
 	id, err := s.CreateNasShare(NasShare{

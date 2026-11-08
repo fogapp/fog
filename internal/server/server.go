@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"gitea.lan/matthew/fog/internal/appevents"
+	"gitea.lan/matthew/fog/internal/catalog"
 	"log/slog"
 	"net"
 	"net/http"
@@ -29,11 +30,11 @@ import (
 	"gitea.lan/matthew/fog/internal/files"
 	"gitea.lan/matthew/fog/internal/filesfed"
 	"gitea.lan/matthew/fog/internal/flare"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/integrations"
 	"gitea.lan/matthew/fog/internal/issues"
 	"gitea.lan/matthew/fog/internal/janitor"
 	"gitea.lan/matthew/fog/internal/logring"
-	"gitea.lan/matthew/fog/internal/lucid"
 	"gitea.lan/matthew/fog/internal/mcpserver"
 	"gitea.lan/matthew/fog/internal/metrics"
 	"gitea.lan/matthew/fog/internal/nas"
@@ -139,7 +140,11 @@ type Server struct {
 	rebootFn   func() error
 	shutdownFn func() error
 	log        *slog.Logger
-	startedAt  time.Time
+	// catalogs are the app store's catalogs (catalog_handlers.go);
+	// catalogWake makes their loop fetch early.
+	catalogs    *catalog.Registry
+	catalogWake chan struct{}
+	startedAt   time.Time
 
 	// Background work handlers start (goSafe): its parent context, and what
 	// Shutdown waits on. bgClosed refuses new tasks once shutdown began.
@@ -330,6 +335,8 @@ func New(cfg config.Config, st *store.Store, deps Deps, log *slog.Logger) *Serve
 		Notice:   st.CreateNotice,
 		Visit:    srv.sendVisitLogout,
 	}
+	srv.catalogs = newCatalogRegistry(srv)
+	srv.catalogWake = make(chan struct{}, 1)
 	return srv
 }
 
@@ -646,6 +653,10 @@ func (s *Server) Handler() http.Handler {
 
 	// App store catalog.
 	admin("GET /api/catalog", s.handleCatalog)
+	admin("POST /api/catalog/sync", s.handleCatalogSync)
+	// Artwork is shown wherever an app's icon is (the home view too), so
+	// any signed-in person may fetch it.
+	person("GET /api/catalog/assets/{catalog}/{id}/{file}", s.handleCatalogAsset)
 	admin("GET /api/capacity", s.handleCapacity)
 	admin("GET /api/system/dependencies", s.handleDependencies)
 
@@ -885,12 +896,12 @@ func (s *Server) Handler() http.Handler {
 	// Everything else: embedded SPA with client-side routing fallback.
 	mux.Handle("/", ui.Handler())
 
-	// Lucid's transaction goes directly around the mux, which is what names
+	// Glass's transaction goes directly around the mux, which is what names
 	// it: the mux writes the matched pattern on the request it is handed.
 	// Refusals on /fed/v1 are signed on the way out (fed_handlers.go).
 	// Security headers (CSP, framing, nosniff) wrap everything, outermost, so
 	// even protect's own refusals carry them (internal/spa/headers.go).
-	return spa.SecurityHeaders(s.protectRoutes(mux, s.signFedRefusals(lucid.Middleware(mux))))
+	return spa.SecurityHeaders(s.protectRoutes(mux, s.signFedRefusals(glass.Middleware(mux))))
 }
 
 // protect applies cross-cutting middleware: panic recovery, request logging,

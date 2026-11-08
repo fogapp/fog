@@ -3,9 +3,11 @@ package files
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +46,8 @@ func bigContent(seed byte, n int) string {
 // files carried over unread, and a big file that changes a little costs the
 // little.
 func TestStoreSnapshotsAreIncremental(t *testing.T) {
+	t.Parallel()
+
 	m, cs, backups := storeManager(t)
 	ctx := context.Background()
 	big := bigContent(1, 600<<10)
@@ -110,6 +114,8 @@ func TestStoreSnapshotsAreIncremental(t *testing.T) {
 
 // Restoring from a store snapshot puts a deleted file back.
 func TestStoreSnapshotRestore(t *testing.T) {
+	t.Parallel()
+
 	m, _, _ := storeManager(t)
 	ctx := context.Background()
 	write(t, m, "docs/a.txt", "precious")
@@ -137,6 +143,8 @@ func TestStoreSnapshotRestore(t *testing.T) {
 // The weekly check reads a sample back and marks the snapshot verified;
 // damage is reported, not ignored.
 func TestStoreSnapshotVerify(t *testing.T) {
+	t.Parallel()
+
 	m, cs, _ := storeManager(t)
 	write(t, m, "a.txt", bigContent(2, 100<<10))
 	row, err := m.RunSnapshot(context.Background(), jobs.NewProgress())
@@ -168,6 +176,8 @@ func TestStoreSnapshotVerify(t *testing.T) {
 // Hardlink snapshots from before the store are brought into it and their
 // trees removed; history carries over.
 func TestImportClassicSnapshots(t *testing.T) {
+	t.Parallel()
+
 	m, cs, backups := storeManager(t)
 	ctx := context.Background()
 	// Two classic nights, the way the old code wrote them.
@@ -229,6 +239,8 @@ func mustRow(t *testing.T, m *Manager, id int64) *fogstore.FileSnapshot {
 // Importing an SMB mirror keeps what it had set aside as deleted, until it
 // is 30 days old.
 func TestMirrorImportKeepsDeletions(t *testing.T) {
+	t.Parallel()
+
 	m, _, backups := storeManager(t)
 	ctx := context.Background()
 	mirror := filepath.Join(backups, "files", "mirror")
@@ -250,5 +262,64 @@ func TestMirrorImportKeepsDeletions(t *testing.T) {
 	}
 	if _, err := os.Stat(mirror); err == nil {
 		t.Fatal("mirror tree not removed after import")
+	}
+}
+
+// A Drive snapshot that cannot fit is refused before it writes anything —
+// it used to fill the disk file by file until the floor stopped it, leaving
+// what it wrote for the next collection — and the notice says which folder
+// holds the bytes, two levels deep so it names the one to exclude.
+func TestStoreSnapshotThatCannotFitWritesNothing(t *testing.T) {
+	m, cs, _ := storeManager(t)
+	write(t, m, "Content/Models/blob", bigContent(2, 200<<10))
+	write(t, m, "Content/Docs/a.txt", "aaaa")
+	before, _ := cs.Stats()
+	// A disk with 100 KiB above its floor: the models do not fit.
+	stubDiskSpace(t, minFreeBytes+100<<10, 1<<30)
+	_, err := m.RunSnapshot(context.Background(), jobs.NewProgress())
+	if !errors.Is(err, ErrBackupDiskFull) {
+		t.Fatalf("err = %v", err)
+	}
+	if after, _ := cs.Stats(); after.Bytes != before.Bytes || after.Packs != before.Packs {
+		t.Fatalf("a refused run wrote into the store: %+v → %+v", before, after)
+	}
+	notices, _ := m.Store.ActiveNotices()
+	var body string
+	for _, n := range notices {
+		if n.Kind == NoticeFilesBackupNoSpace {
+			body = n.Body
+		}
+	}
+	if !strings.Contains(body, "Content/Models (") || !strings.Contains(body, "Nothing was written") {
+		t.Fatalf("the notice must name the folder holding the bytes: %q", body)
+	}
+
+	// Excluded, it fits, and the scheduler need not wait for room to try.
+	if m.excludesChanged() {
+		t.Fatal("nothing has changed since the refusal")
+	}
+	if err := m.SetExcluded("Content/Models", true); err != nil {
+		t.Fatal(err)
+	}
+	if !m.excludesChanged() {
+		t.Fatal("excluding a folder after a refusal is reason to try again")
+	}
+	if _, err := m.RunSnapshot(context.Background(), jobs.NewProgress()); err != nil {
+		t.Fatalf("with the models excluded: %v", err)
+	}
+}
+
+// Nothing new to read: a run is not refused for the disk's sake, however
+// full — it writes next to nothing.
+func TestStoreSnapshotWithNothingNewIsNotRefused(t *testing.T) {
+	m, _, _ := storeManager(t)
+	write(t, m, "docs/a.txt", "aaaa")
+	if _, err := m.RunSnapshot(context.Background(), jobs.NewProgress()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	stubDiskSpace(t, minFreeBytes/2, 1<<30)
+	if _, err := m.RunSnapshot(context.Background(), jobs.NewProgress()); err != nil {
+		t.Fatalf("an unchanged Drive under the floor: %v", err)
 	}
 }

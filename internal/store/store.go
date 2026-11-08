@@ -132,12 +132,28 @@ func (s *Store) migrate() error {
 	}
 	sort.Strings(names)
 
-	for _, name := range names {
-		var n int
-		if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, name).Scan(&n); err != nil {
+	// What has run, read once: a query per migration is most of what an
+	// already-migrated open costs.
+	applied := map[string]bool{}
+	rows, err := s.db.Query(`SELECT name FROM schema_migrations`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
 			return err
 		}
-		if n > 0 {
+		applied[name] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if applied[name] {
 			continue
 		}
 		body, err := fs.ReadFile(migrationsFS, "migrations/"+name)

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -16,7 +17,7 @@ import (
 // Caddy last loaded, or when Caddy isn't running.
 func TestApplySkipsUnchangedConfig(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "t.db"))
+	st, err := storetest.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestApplySkipsUnchangedConfig(t *testing.T) {
 // one refuses to write a Caddyfile that would route fog to nothing.
 func TestApplyUsesGivenFogUpstream(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "t.db"))
+	st, err := storetest.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

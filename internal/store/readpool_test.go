@@ -9,7 +9,9 @@ import (
 )
 
 func TestReadPoolRefusesWrites(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +24,9 @@ func TestReadPoolRefusesWrites(t *testing.T) {
 // A read routed to the pool right after a write returns must see it: the
 // writer has committed, and WAL readers see every committed transaction.
 func TestReadPoolSeesCommittedWrites(t *testing.T) {
-	s, err := Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	s, err := openTest(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +46,10 @@ func TestReadPoolSeesCommittedWrites(t *testing.T) {
 // The read pool keeps answering while the writer is held mid-transaction,
 // and a snapshot doesn't need the writer at all.
 func TestReadsAndSnapshotDontQueueBehindTheWriter(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
-	s, err := Open(filepath.Join(dir, "fog.db"))
+	s, err := openTest(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

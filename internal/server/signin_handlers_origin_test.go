@@ -18,6 +18,8 @@ import (
 // A plain fog_session now works only from the address it was signed in
 // from, and a web session is never accepted as a bearer token.
 func TestAnAppCantReplayTheOperatorsSession(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", goodSetup, fromPeer("192.168.1.20", ""))
 	if w.Code != http.StatusOK {
@@ -51,6 +53,8 @@ func TestAnAppCantReplayTheOperatorsSession(t *testing.T) {
 // or any cross-site page can make the browser send fog's cookie; a request
 // that says so, or that hides where it came from, changes nothing.
 func TestABrowserMutationMustComeFromFogsPage(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	op := setup(t, h)
 	put := func(opts ...func(*http.Request)) int {
@@ -78,6 +82,7 @@ func TestABrowserMutationMustComeFromFogsPage(t *testing.T) {
 // check passed it and it became the operator. Its Host names a domain that
 // isn't this box.
 func TestARebindingPageCantRunSetup(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	rebound := func(r *http.Request) {
 		r.Host = "rebind.evil.example:8080"
@@ -109,6 +114,8 @@ func TestARebindingPageCantRunSetup(t *testing.T) {
 // fog's own page; the client-authenticated endpoints need the client's
 // secret and are judged by it.
 func TestOAuthAndVisitStateChangesNeedFogsPage(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	h := f.srv.Handler()
 	cookie := withCookie(f.operator)

@@ -12,7 +12,7 @@ import (
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/livetest"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // fog-wire's own compose project, brought up by real docker compose through
@@ -33,7 +33,7 @@ func TestLiveWireComposeUp(t *testing.T) {
 		t.Skip("a fog-wire already runs here")
 	}
 	createdNet := exec.Command("docker", "network", "inspect", apps.NetworkName).Run() != nil
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

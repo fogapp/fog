@@ -6,6 +6,8 @@ import "testing"
 // one image are one place to go back to, not three rows crowding out the
 // version the operator is actually looking for.
 func TestListAppVersionsCollapsesRedeploys(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app, err := s.CreateApp("jellyfin")
 	if err != nil {
@@ -42,6 +44,8 @@ func TestListAppVersionsCollapsesRedeploys(t *testing.T) {
 
 // Current is the newest recorded version, and only this app's.
 func TestCurrentAppVersionIsPerApp(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	one, _ := s.CreateApp("one")
 	two, _ := s.CreateApp("two")
@@ -69,6 +73,8 @@ func TestCurrentAppVersionIsPerApp(t *testing.T) {
 // An app with no recorded deploy has no current version — and must say so
 // rather than answering with an empty ref that reads as a real one.
 func TestCurrentAppVersionUnknown(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app, _ := s.CreateApp("fresh")
 	if _, err := s.CurrentAppVersion(app.ID); err != ErrNotFound {
@@ -86,6 +92,8 @@ func TestCurrentAppVersionUnknown(t *testing.T) {
 
 // Versions belong to their app: deleting it takes them with it.
 func TestAppVersionsCascade(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app, _ := s.CreateApp("doomed")
 	if err := s.RecordAppVersion(app.ID, "image", "sha256:a", "img@sha256:a", 1, "matthew"); err != nil {

@@ -15,6 +15,8 @@ import (
 // another. The bytes travel, the old path is gone, and the index follows —
 // a listing of the destination shows what moved without waiting for a walk.
 func TestMoveVolumeWithinDrive(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, AppsDir+"/Jellyfin/media/film.mkv", "reel")
 	if _, err := m.List(AppsDir+"/Jellyfin", ListOpts{}); err != nil {
@@ -44,6 +46,8 @@ func TestMoveVolumeWithinDrive(t *testing.T) {
 // A volume whose data still lives in fog's private directory — every app
 // created before Drive held app data — moves in from outside the root.
 func TestMoveVolumeFromOutsideDrive(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "db.sqlite"), []byte("rows"), 0o644); err != nil {
@@ -62,6 +66,8 @@ func TestMoveVolumeFromOutsideDrive(t *testing.T) {
 // it is refused by name — the operator's other answer is to adopt what is
 // there, which moves nothing.
 func TestMoveVolumeRefusesNonEmptyDestination(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, AppsDir+"/Jellyfin/media/film.mkv", "reel")
 	write(t, m, ContentDir+"/Movies/other.mkv", "theirs")
@@ -82,6 +88,8 @@ func TestMoveVolumeRefusesNonEmptyDestination(t *testing.T) {
 // A volume that was never deployed has nothing to carry; the folder is
 // simply made, so the app finds it on its first deploy.
 func TestMoveVolumeWithNothingToMove(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	missing := filepath.Join(t.TempDir(), "never-deployed")
 	if err := m.MoveVolume(context.Background(), missing, ContentDir+"/Music", jobs.NewProgress()); err != nil {
@@ -95,6 +103,8 @@ func TestMoveVolumeWithNothingToMove(t *testing.T) {
 // A volume move relocates one folder; the Drive root stays where it is, so
 // the root handle other requests hold through it stays open.
 func TestMoveVolumeKeepsTheSharedRootOpen(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, AppsDir+"/Jellyfin/media/film.mkv", "reel")
 	root, err := m.openRoot()
@@ -153,6 +163,8 @@ func TestMoveVolumeIgnoresALinkSwappedInMidMove(t *testing.T) {
 
 // A destination that is itself a link is refused outright.
 func TestMoveVolumeRefusesALinkAsDestination(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, AppsDir+"/Jellyfin/media/film.mkv", "reel")
 	write(t, m, AppsDir+"/Victim/keep.db", "victim")

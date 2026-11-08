@@ -12,6 +12,8 @@ import (
 // A batch lands the same rows the one-at-a-time calls do, once Flushed:
 // folders, listed-only files and materialized bytes with their digests.
 func TestBatchPlacesThenIndexesOnFlush(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	b, err := m.NewBatch()
 	if err != nil {

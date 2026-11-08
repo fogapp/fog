@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func testBus(t *testing.T) *Bus {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,11 +24,11 @@ func testBus(t *testing.T) *Bus {
 func TestPublishForcesSourceAndDedupes(t *testing.T) {
 	b := testBus(t)
 	ev := Event{ID: "nzo_1", Source: "spoofed", Type: "sabnzbd.download.completed", Data: json.RawMessage(`{"name":"x"}`)}
-	if n, err := b.Publish("lucid", []Event{ev}); err != nil || n != 1 {
+	if n, err := b.Publish("glass", []Event{ev}); err != nil || n != 1 {
 		t.Fatalf("first publish = %d, %v", n, err)
 	}
 	// A retry of the same id is absorbed; the same id from another app is not.
-	if n, _ := b.Publish("lucid", []Event{ev}); n != 0 {
+	if n, _ := b.Publish("glass", []Event{ev}); n != 0 {
 		t.Fatalf("retry inserted %d", n)
 	}
 	if n, _ := b.Publish("hook", []Event{ev}); n != 1 {
@@ -38,7 +38,7 @@ func TestPublishForcesSourceAndDedupes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Events) != 2 || p.Events[0].Source != "lucid" || p.Events[1].Source != "hook" {
+	if len(p.Events) != 2 || p.Events[0].Source != "glass" || p.Events[1].Source != "hook" {
 		t.Fatalf("events = %+v", p.Events)
 	}
 	if p.Events[0].SpecVersion != "1.0" || p.Events[0].DataContentType != "application/json" || p.Cursor != p.Events[1].Seq {

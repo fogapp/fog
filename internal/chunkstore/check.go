@@ -151,6 +151,29 @@ func (s *Store) Missing(snap *Snapshot) ([]string, error) {
 	return out, err
 }
 
+// VerifySnapshot reads every file of a snapshot back — each chunk checked
+// against its name, each file against its recorded size and SHA-256 — and
+// writes nothing: Materialize's check without the room to hold the result.
+func (s *Store) VerifySnapshot(ctx context.Context, snap *Snapshot) error {
+	return s.Walk(snap, func(e Entry) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if e.Type != TypeFile {
+			return nil
+		}
+		r, err := s.Open(e)
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		if _, err := io.Copy(io.Discard, r); err != nil {
+			return fmt.Errorf("%s: %w", e.Path, err)
+		}
+		return nil
+	})
+}
+
 // Heal rewrites chunks from another copy: fetch returns a chunk's plaintext
 // by id (from the offsite locker, say). Each is checked against its name
 // before it is stored, and the index then points at the new copy; the

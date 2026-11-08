@@ -32,7 +32,7 @@ type Sampler struct {
 
 	cpu cpuState
 
-	// OnSample, when set, hears each sample as it is taken — Lucid's host
+	// OnSample, when set, hears each sample as it is taken — Glass's host
 	// gauges. It runs on the sampling goroutine and must not block.
 	OnSample func(Sample)
 }

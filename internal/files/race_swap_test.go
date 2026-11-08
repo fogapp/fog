@@ -15,6 +15,8 @@ import (
 // nothing ever crosses into or out of Private: its file is never moved,
 // renamed, trashed or replaced, and nothing lands beside it.
 func TestNoVerbCrossesIntoALinkFlippedMidOperation(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root := m.Root()
 	write(t, m, "Private/x", "secret")

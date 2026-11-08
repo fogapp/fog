@@ -1,0 +1,53 @@
+id: startpage
+title: Startpage
+description: A made-up first-party app for tests — a start page with every app one keystroke away.
+category: Utilities
+icon: '🧭'
+spec:
+  source:
+    type: git
+    branch: main
+    dockerfile: Dockerfile
+    buildArgs:
+      GIT_REV: '{{commit}}'
+  env:
+    STARTPAGE_HOST: '{{fqdn}}'
+  volumes:
+    - name: state
+      mount: /state
+      owner: 1000:1000
+    - name: config
+      mount: /config
+      owner: 1000:1000
+  routes:
+    - port: 8080
+      noBuffer: true
+      auth: true
+  health:
+    path: /up
+  deployStrategy: swap
+  updatePolicy: auto
+  backup:
+    enabled: true
+    beforeUpdate: true
+    mode: delegated
+  notes: 'A test fixture. Needs no setup: every app fog runs is already there.'
+  memoryLimit: 128m
+options:
+  - key: repo
+    label: Git repository
+    target: repo
+    required: true
+firstParty: startpage
+about: |-
+  Startpage is a made-up first-party app for fog's tests: a small app behind fog's gate, with no database.
+highlights:
+  - Every fog app, with no configuration
+logo: tile.svg
+developer: Built from your own repository
+license: Private
+footprint:
+  memory: 31457280
+  memoryPeak: 134217728
+  cpu: light
+  disk: 104857600

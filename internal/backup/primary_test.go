@@ -1,10 +1,13 @@
 package backup
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -119,10 +122,21 @@ func TestImportClassic(t *testing.T) {
 		dir := filepath.Join(m.baseDir(), "demo", stamp)
 		os.MkdirAll(dir, 0o700)
 		os.WriteFile(filepath.Join(dir, "meta.json"), []byte(`{"app":"demo","volumes":[]}`), 0o600)
-		os.WriteFile(filepath.Join(dir, "volume-data.tar.gz"), []byte("old gz "+stamp), 0o600)
+		var gz bytes.Buffer
+		zw := gzip.NewWriter(&gz)
+		zw.Write([]byte("old tar " + stamp))
+		zw.Close()
+		os.WriteFile(filepath.Join(dir, "volume-data.tar.gz"), gz.Bytes(), 0o600)
 		id, _ := st.CreateBackup(app.ID, "scheduled", dir, 1)
 		ids = append(ids, id)
 	}
+	// A third whose archive is not whole: refused, and its directory kept.
+	bad := filepath.Join(m.baseDir(), "demo", "20261103-030000")
+	os.MkdirAll(bad, 0o700)
+	os.WriteFile(filepath.Join(bad, "meta.json"), []byte(`{"app":"demo","volumes":[]}`), 0o600)
+	os.WriteFile(filepath.Join(bad, "volume-data.tar.gz"), []byte("not gzip"), 0o600)
+	badID, _ := st.CreateBackup(app.ID, "scheduled", bad, 1)
+
 	m.importClassic(context.Background(), time.Hour)
 	for _, id := range ids {
 		b, _ := st.BackupByID(id)
@@ -132,14 +146,20 @@ func TestImportClassic(t *testing.T) {
 		if hasClassic(b) {
 			t.Fatalf("backup %d kept its directory after import", id)
 		}
-		r, _, err := m.OpenBackupFile(b, "volume-data.tar.gz")
+		// Unpacked on the way in, as the store's own volume backups are,
+		// so one night's archive can share chunks with the next.
+		r, _, err := m.OpenBackupFile(b, "volume-data.tar")
 		if err != nil {
 			t.Fatal(err)
 		}
 		got, _ := io.ReadAll(r)
-		if !strings.HasPrefix(string(got), "old gz ") {
+		if !strings.HasPrefix(string(got), "old tar ") {
 			t.Fatalf("imported archive reads %q", got)
 		}
+	}
+	b, _ := st.BackupByID(badID)
+	if b.StoreError == "" || !hasClassic(b) {
+		t.Fatalf("a damaged archive must not be imported, nor its directory retired: %+v", b)
 	}
 }
 
@@ -315,8 +335,123 @@ func TestGuardSpaceKeepsBackupsItCannotHelpWith(t *testing.T) {
 	swapVar(t, &diskUseSeam, func(string) (uint64, uint64, bool) { return 95 << 16, 100 << 16, true })
 	os.WriteFile(filepath.Join(cs.Dir(), "snapshots", "0123456789abcdef0123456789abcdef.json"), []byte("{bad"), 0o600)
 	m.guardSpace(context.Background(), cs)
-	if left, _ := st.ListBackups(app.ID, 20); len(left) != 3 {
-		t.Fatalf("one round should have thinned five and then stopped: %d left", len(left))
+	if left, _ := st.ListBackups(app.ID, 20); len(left) != 8 {
+		t.Fatalf("a store that cannot collect frees nothing, so nothing is thinned: %d left", len(left))
+	}
+}
+
+// storeBackup records a backup of app held in the store as one file of n
+// random bytes, created at.
+func storeBackupOf(t *testing.T, m *Manager, st *store.Store, cs *chunkstore.Store, app *store.App, stamp string, at time.Time, n int) int64 {
+	t.Helper()
+	w, err := cs.Begin(Series(app.Name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.AddBytes("artifact.tar", 0o600, randomBytes(n))
+	snap, err := w.Commit(stamp, at, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := st.CreateArtifactBackupAt(app.ID, "scheduled", filepath.Join(m.baseDir(), app.Name, stamp), int64(n), "", "", "", at.Format(time.RFC3339))
+	st.SetBackupStore(id, snap.ID, "", "")
+	return id
+}
+
+// diskFollowingStore is a 100-unit disk whose use is what the store holds
+// plus other of everything else: thinning and collection show in it as
+// they would on a real disk.
+func diskFollowingStore(t *testing.T, cs *chunkstore.Store, other, total uint64) {
+	t.Helper()
+	swapVar(t, &diskUseSeam, func(string) (uint64, uint64, bool) {
+		st, err := cs.Stats()
+		if err != nil {
+			return 0, 0, false
+		}
+		return other + uint64(st.Bytes), total, true
+	})
+}
+
+// Backups deleted by hand leave their packs until a collection; a nearly
+// full disk collects them straight away, before any history is thinned.
+func TestGuardSpaceCollectsWhatIsAlreadyLetGo(t *testing.T) {
+	m, st := legacyBackupManager(t)
+	t.Cleanup(m.CloseChunkStore)
+	m.Notify = func(string, string, bool) {}
+	app, _ := st.AppByName("demo")
+	cs, _ := m.ChunkStore()
+	var ids []int64
+	for i := 0; i < 6; i++ {
+		ids = append(ids, storeBackupOf(t, m, st, cs, app, fmt.Sprintf("2026110%d-030000", i+1), s0.AddDate(0, 0, i), 256<<10))
+	}
+	// Five deleted by hand: rows and snapshots gone, packs still on disk.
+	for _, id := range ids[:5] {
+		b, _ := st.BackupByID(id)
+		m.dropFromStore(b)
+		st.DeleteBackup(id)
+	}
+	held, _ := cs.Stats()
+	// The store is most of a disk that is 95% full.
+	diskFollowingStore(t, cs, uint64(held.Bytes)/3, uint64(held.Bytes)*14/10)
+	m.guardSpace(context.Background(), cs)
+	if left, _ := st.ListBackups(app.ID, 10); len(left) != 1 {
+		t.Fatalf("the backup left must stay: %d", len(left))
+	}
+	after, _ := cs.Stats()
+	if after.Bytes*3 > held.Bytes {
+		t.Fatalf("the deleted backups' space must come back: %d of %d bytes still held", after.Bytes, held.Bytes)
+	}
+}
+
+// Thinning goes oldest first across apps, and the oldest may be small
+// apps' backups that free next to nothing. It keeps going to the backups
+// that hold the space instead of stopping after a round that freed little.
+func TestGuardSpaceThinsPastRoundsThatFreeLittle(t *testing.T) {
+	m, st := legacyBackupManager(t)
+	t.Cleanup(m.CloseChunkStore)
+	m.Notify = func(string, string, bool) {}
+	small, _ := st.AppByName("demo")
+	big, _ := st.CreateApp("signet")
+	st.CreateRevision(big.ID, `{"source":{"type":"image","image":"signet:latest"}}`, "", "test")
+	cs, _ := m.ChunkStore()
+	// Twelve tiny backups, oldest of all, then six large ones.
+	for i := 0; i < 12; i++ {
+		storeBackupOf(t, m, st, cs, small, fmt.Sprintf("s%02d", i), s0.Add(time.Duration(i)*time.Minute), 512)
+	}
+	for i := 0; i < 6; i++ {
+		storeBackupOf(t, m, st, cs, big, fmt.Sprintf("b%02d", i), s0.AddDate(0, 0, 1+i), 1<<20)
+	}
+	held, _ := cs.Stats()
+	diskFollowingStore(t, cs, 0, uint64(held.Bytes)*100/95)
+	m.guardSpace(context.Background(), cs)
+	left, _ := st.ListBackups(big.ID, 10)
+	if len(left) == 6 {
+		t.Fatal("the large backups behind rounds of small ones were never reached")
+	}
+	if len(left) < keepNewest {
+		t.Fatalf("an app's newest %d always stay: %d left", keepNewest, len(left))
+	}
+}
+
+// The nightly upkeep runs once a day, on the first look after the backup
+// hour — not whenever twenty hours have passed since it last ran, which let
+// an afternoon run (an app with its own hour) push it past the night.
+func TestMaintenanceDueAnchorsOnBackupHour(t *testing.T) {
+	_, st := legacyBackupManager(t)
+	at := func(s string) time.Time { v, _ := time.Parse(time.RFC3339, s); return v }
+	if !maintenanceDue(st, at("2026-11-06T01:20:00Z"), 1) {
+		t.Fatal("never run: due")
+	}
+	st.SetSetting(SettingStoreMaintainedAt, "2026-11-05T19:05:48Z")
+	if !maintenanceDue(st, at("2026-11-06T01:20:00Z"), 1) {
+		t.Fatal("ran yesterday afternoon: due after tonight's backups")
+	}
+	if maintenanceDue(st, at("2026-11-06T00:50:00Z"), 1) {
+		t.Fatal("ran since yesterday's backup hour: not due before tonight's")
+	}
+	st.SetSetting(SettingStoreMaintainedAt, "2026-11-06T01:21:00Z")
+	if maintenanceDue(st, at("2026-11-06T19:00:00Z"), 1) {
+		t.Fatal("ran after tonight's backups: not due again today")
 	}
 }
 
@@ -409,4 +544,49 @@ func randomBytes(n int) []byte {
 	b := make([]byte, n)
 	crand.Read(b)
 	return b
+}
+
+// A disk under the nearly-full line, with backups deleted by hand still
+// held by the store and a backup failing for want of room: the hourly look
+// collects them now instead of a day or two later, and thins nothing. With
+// nothing failing it leaves the store to the nightly collection.
+func TestGuardSpaceBetweenCollectsWhenABackupIsStarved(t *testing.T) {
+	m, st := legacyBackupManager(t)
+	t.Cleanup(m.CloseChunkStore)
+	m.Notify = func(string, string, bool) {}
+	app, _ := st.AppByName("demo")
+	cs, _ := m.ChunkStore()
+	var ids []int64
+	for i := 0; i < 6; i++ {
+		ids = append(ids, storeBackupOf(t, m, st, cs, app, fmt.Sprintf("2026110%d-030000", i+1), s0.AddDate(0, 0, i), 256<<10))
+	}
+	for _, id := range ids[:5] {
+		b, _ := st.BackupByID(id)
+		m.dropFromStore(b)
+		st.DeleteBackup(id)
+	}
+	held, _ := cs.Stats()
+	// 89%: under the line where guardSpace acts.
+	diskFollowingStore(t, cs, 0, uint64(held.Bytes)*100/89)
+	now := s0.AddDate(0, 0, 10)
+
+	starved := false
+	m.SpaceStarved = func() bool { return starved }
+	m.guardSpaceBetween(context.Background(), now)
+	if after, _ := cs.Stats(); after.Bytes != held.Bytes {
+		t.Fatal("nothing failing for room: the store is left to the nightly collection")
+	}
+
+	starved = true
+	m.guardSpaceBetween(context.Background(), now.Add(30*time.Minute))
+	if after, _ := cs.Stats(); after.Bytes != held.Bytes {
+		t.Fatal("the look is hourly")
+	}
+	m.guardSpaceBetween(context.Background(), now.Add(61*time.Minute))
+	if after, _ := cs.Stats(); after.Bytes*3 > held.Bytes {
+		t.Fatalf("a starved backup must get the deleted backups' space back: %d of %d bytes still held", after.Bytes, held.Bytes)
+	}
+	if left, _ := st.ListBackups(app.ID, 10); len(left) != 1 {
+		t.Fatalf("collecting thins nothing: %d left", len(left))
+	}
 }

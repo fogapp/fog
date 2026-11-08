@@ -12,6 +12,8 @@ import (
 // A listing that finds the folder as it left it writes nothing: no
 // transaction, no writer lock. Only a change on disk costs a write.
 func TestQuietListingWritesNothing(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/readme.md", "hello")
 	write(t, m, "docs/deep/notes.txt", "notes")
@@ -71,6 +73,8 @@ func TestQuietListingWritesNothing(t *testing.T) {
 // folders above it are resized by the difference, without the parent's
 // other entries being re-read.
 func TestStatRefreshesJustTheFile(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/a.txt", "aaaa")
 	write(t, m, "docs/b.txt", "bb")
@@ -131,6 +135,8 @@ func TestStatRefreshesJustTheFile(t *testing.T) {
 // about both folders, or a shared folder that gained or lost an entry is
 // never marked dirty.
 func TestRenameAndMoveFireOnChange(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "docs/a.txt", "aaaa")
 	write(t, m, "docs/b.txt", "bb")

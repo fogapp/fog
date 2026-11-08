@@ -100,11 +100,13 @@ func (f *publishFixture) run(t *testing.T, env []string, args ...string) (string
 	return string(out), string(log), err
 }
 
-func TestPublishGitHubReleaseNeedsTheFogappAccount(t *testing.T) {
+func TestPublishGitHubReleaseNeedsThePublishingAccount(t *testing.T) {
+	t.Parallel()
+
 	f := newPublishFixture(t)
-	for _, who := range []string{"", "someone-else"} {
+	for _, who := range []string{"", "someone-else", "fogapp"} {
 		out, log, err := f.run(t, []string{"STUB_GH_USER=" + who}, "v1.4.0", "--publish", "abc123")
-		if err == nil || !strings.Contains(out, "gh auth login --hostname github.com --git-protocol ssh --web") || !strings.Contains(out, "'fogapp'") {
+		if err == nil || !strings.Contains(out, "gh auth login --hostname github.com --git-protocol ssh --web") || !strings.Contains(out, "'fogapp-io'") {
 			t.Errorf("gh as %q: not refused with instructions (err %v):\n%s", who, err, out)
 		}
 		if strings.Contains(log, "release create") || strings.Contains(log, "release upload") {
@@ -114,8 +116,10 @@ func TestPublishGitHubReleaseNeedsTheFogappAccount(t *testing.T) {
 }
 
 func TestPublishGitHubReleaseCreatesThenUpdates(t *testing.T) {
+	t.Parallel()
+
 	f := newPublishFixture(t)
-	env := []string{"STUB_GH_USER=fogapp"}
+	env := []string{"STUB_GH_USER=fogapp-io"}
 	out, log, err := f.run(t, env, "v1.4.0", "--check")
 	if err != nil || strings.Contains(log, "release ") {
 		t.Fatalf("--check: %v (gh log %q)\n%s", err, log, out)
@@ -145,7 +149,9 @@ func TestPublishGitHubReleaseCreatesThenUpdates(t *testing.T) {
 }
 
 func TestPublishGitHubReleaseRefusesAWrongDirectory(t *testing.T) {
-	env := []string{"STUB_GH_USER=fogapp"}
+	t.Parallel()
+
+	env := []string{"STUB_GH_USER=fogapp-io"}
 	t.Run("another version", func(t *testing.T) {
 		f := newPublishFixture(t)
 		if out, _, err := f.run(t, env, "v1.5.0", "--check"); err == nil || !strings.Contains(out, "holds v1.4.0") {
@@ -212,6 +218,8 @@ func TestPublishGitHubReleaseRefusesAWrongDirectory(t *testing.T) {
 // latest; an older release re-run doesn't take latest from a newer one; a
 // newer or first release is latest.
 func TestPublishGitHubReleaseDecidesLatest(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name, version, ghLatest, want, notWant string
 	}{
@@ -224,7 +232,7 @@ func TestPublishGitHubReleaseDecidesLatest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newPublishFixtureAt(t, tc.version)
 			for _, exists := range []string{"0", "1"} { // create, then re-run (edit)
-				out, log, err := f.run(t, []string{"STUB_GH_USER=fogapp", "STUB_GH_LATEST=" + tc.ghLatest, "STUB_GH_EXISTS=" + exists},
+				out, log, err := f.run(t, []string{"STUB_GH_USER=fogapp-io", "STUB_GH_LATEST=" + tc.ghLatest, "STUB_GH_EXISTS=" + exists},
 					tc.version, "--publish", "abc123")
 				if err != nil {
 					t.Fatalf("publish: %v\n%s", err, out)
@@ -248,10 +256,12 @@ func TestPublishGitHubReleaseDecidesLatest(t *testing.T) {
 // The last gate before GitHub: a binary that names the private commit, or
 // the build machine, isn't uploaded.
 func TestPublishGitHubReleaseRefusesAStampedBinary(t *testing.T) {
+	t.Parallel()
+
 	_, build := goModule(t)
 	b, _ := os.ReadFile(build("-ldflags=-s -w"))
 	f := newPublishFixtureWith(t, "v1.4.0", string(b))
-	out, log, err := f.run(t, []string{"STUB_GH_USER=fogapp"}, "v1.4.0", "--publish", "abc123")
+	out, log, err := f.run(t, []string{"STUB_GH_USER=fogapp-io"}, "v1.4.0", "--publish", "abc123")
 	if err == nil || !strings.Contains(out, "version-control info or a local path") || strings.Contains(log, "release create") {
 		t.Fatalf("a vcs-stamped binary was published (err %v):\n%s\n%s", err, out, log)
 	}

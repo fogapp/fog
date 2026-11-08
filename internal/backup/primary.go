@@ -355,28 +355,44 @@ func diskUse(dir string) (used, total uint64, ok bool) {
 // diskUseSeam lets tests fill the disk.
 var diskUseSeam = diskUse
 
-// guardSpace thins the oldest history when the backup disk is nearly full,
-// so tonight's backups still land: the oldest backups first, across every
-// app, never an app's newest keepNewest nor its newest verified one, and
-// collected straight away. It says what it did in plain words.
+// guardSpace makes room when the backup disk is nearly full, so tonight's
+// backups still land. First it collects what is already unreferenced —
+// backups someone deleted, history retention let go — straight away rather
+// than after the grace period. If that is not enough it thins the oldest
+// history: the oldest backups first, across every app, never an app's
+// newest keepNewest nor its newest verified one, collecting after each
+// round. It says what it did in plain words.
 func (m *Manager) guardSpace(ctx context.Context, cs *chunkstore.Store) {
 	root := m.baseDir()
 	used, total, ok := diskUseSeam(root)
 	if !ok || float64(used) < spaceHigh*float64(total) {
 		return
 	}
-	// Thinning history only helps when history is what fills the disk: a
-	// backup folder sharing a disk with Drive or media must not give up its
-	// backups for space it never held.
+	// Collecting and thinning only help when the store is what fills the
+	// disk: a backup folder sharing a disk with Drive or media must not give
+	// up its backups for space it never held. (What is deleted but not yet
+	// collected still counts as the store's.)
 	if st, err := cs.Stats(); err == nil && float64(st.Bytes) < 0.1*float64(used) {
-		m.Notify("Backup disk is nearly full",
-			"The disk the backups are on is nearly full, but the backups take little of it, so fog is keeping them all. New backups may fail until there is more room — Settings → Storage → Drive.", false)
+		m.notifyNoRoom("The disk the backups are on is nearly full, but the backups take little of it, so fog is keeping them all. New backups may fail until there is more room — Settings → Storage → Drive.")
+		return
+	}
+	// A collection that cannot run frees nothing, so nothing is thinned
+	// for it.
+	collect := func() bool { return m.collectNow(ctx, cs) }
+	if !collect() {
+		m.notifyNoRoom("Fog could not clear space in the backup store, so it is keeping every backup. New backups may fail until there is more room — Settings → Storage → Drive.")
+		return
+	}
+	if used, total, ok = diskUseSeam(root); !ok || float64(used) < spaceTarget*float64(total) {
 		return
 	}
 	candidates := m.thinnable()
 	thinned := 0
 	drive := m.ThinDrive != nil
-	for round := 0; round < 20 && (len(candidates) > 0 || drive); round++ {
+	// Rounds go on while anything is left to thin: a round of small apps'
+	// backups frees next to nothing (their chunks are shared), and the
+	// backup that holds the space may be the next one in line.
+	for round := 0; round < 40 && (len(candidates) > 0 || drive); round++ {
 		if ctx.Err() != nil {
 			break
 		}
@@ -397,23 +413,10 @@ func (m *Manager) guardSpace(ctx context.Context, cs *chunkstore.Store) {
 			thinned++
 		}
 		candidates = candidates[n:]
-		// Two collections: the first finds the packs, the second removes
-		// them. Writers are kept out while each runs. A collection that
-		// cannot run frees nothing, so nothing more is thinned for it.
-		collected := true
-		for range 2 {
-			if _, err := cs.GC(ctx, chunkstore.GCOptions{Urgent: true}); err != nil {
-				m.Log.Warn("backup store: collecting to free space", "err", err)
-				collected = false
-				break
-			}
-		}
-		before := used
-		if used, total, ok = diskUseSeam(root); !ok || !collected || float64(used) < spaceTarget*float64(total) {
+		if !collect() {
 			break
 		}
-		// A round that freed (almost) nothing will not be helped by more.
-		if before-used < total/1000 {
+		if used, total, ok = diskUseSeam(root); !ok || float64(used) < spaceTarget*float64(total) {
 			break
 		}
 	}
@@ -422,8 +425,33 @@ func (m *Manager) guardSpace(ctx context.Context, cs *chunkstore.Store) {
 			fmt.Sprintf("Fog removed the %d oldest backups to make room for new ones. Your recent history is untouched; to keep more, give backups a bigger disk in Settings → Storage → Drive.", thinned), false)
 		m.Store.Audit("system", "backup.thin", "", fmt.Sprintf(`{"removed":%d}`, thinned))
 	} else {
-		m.Notify("Backup disk is nearly full",
-			"There is no older history left to remove. New backups may fail until the backup disk has more room — Settings → Storage → Drive.", false)
+		m.notifyNoRoom("There is no older history left to remove. New backups may fail until the backup disk has more room — Settings → Storage → Drive.")
+	}
+}
+
+// collectNow frees what nothing references any more, without the grace
+// period: two collections, the first finds the packs and the second
+// removes them. Writers are kept out while each runs. It reports whether
+// both ran.
+func (m *Manager) collectNow(ctx context.Context, cs *chunkstore.Store) bool {
+	for range 2 {
+		rep, err := cs.GC(ctx, chunkstore.GCOptions{Urgent: true})
+		if err != nil {
+			m.Log.Warn("backup store: collecting to free space", "err", err)
+			return false
+		}
+		if rep.Deleted > 0 || rep.Repacked > 0 {
+			m.Log.Info("backup store: collected to free space", "deleted", rep.Deleted, "freed", rep.FreedBytes, "repacked", rep.Repacked)
+		}
+	}
+	return true
+}
+
+// notifyNoRoom says the backup disk is nearly full and fog can do no more
+// about it — once a day: guardSpace looks again every hour.
+func (m *Manager) notifyNoRoom(msg string) {
+	if m.spaceAlerts.Allow("backup-disk", 24*time.Hour, time.Now()) {
+		m.Notify("Backup disk is nearly full", msg, false)
 	}
 }
 

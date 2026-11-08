@@ -170,6 +170,8 @@ func needCurlCA(t *testing.T, g *fakeGitHub) {
 }
 
 func TestGitHubDefaultSourceEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v0.0.1", "#!/bin/sh\nexit 0\n")
 	fogd := "#!/bin/sh\n# fogd v1.4.0 from github\nexit 0\n"
@@ -219,6 +221,8 @@ func TestGitHubDefaultSourceEndToEnd(t *testing.T) {
 // latest, both resolvers stop and say so — even where that host would
 // answer (here, with something else entirely).
 func TestGitHubSourceNeverUsesTheCommittedManifest(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v0.0.1", "#!/bin/sh\nexit 0\n")
 	dir := releaseDir(t, f.s, "v1.4.0", "#!/bin/sh\n# fogd v1.4.0\nexit 0\n", false)
@@ -250,6 +254,8 @@ func TestGitHubSourceNeverUsesTheCommittedManifest(t *testing.T) {
 // An upgrade never moves a server to the public default: re-run without
 // FOG_SOURCE, install.sh keeps the source the server was installed from.
 func TestInstallShUpgradeKeepsTheServersSource(t *testing.T) {
+	t.Parallel()
+
 	skipShell(t)
 	f := newInstallFixture(t, "v1.0.0", "#!/bin/sh\nexit 0\n# from the lan\n")
 	if out, err := f.run(t); err != nil { // installed from files.test/fog

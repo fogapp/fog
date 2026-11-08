@@ -26,6 +26,8 @@ func ingest(fp, release, eventID string) ErrorIngest {
 }
 
 func TestIngestErrorNewAndRepeat(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -53,6 +55,8 @@ func TestIngestErrorNewAndRepeat(t *testing.T) {
 }
 
 func TestIngestErrorDedupesByEventID(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -70,6 +74,8 @@ func TestIngestErrorDedupesByEventID(t *testing.T) {
 }
 
 func TestStaleRetryLeavesResolvedGroupUntouched(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -106,6 +112,8 @@ func TestStaleRetryLeavesResolvedGroupUntouched(t *testing.T) {
 }
 
 func TestResolveAndRegression(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -137,6 +145,8 @@ func TestResolveAndRegression(t *testing.T) {
 }
 
 func TestIgnoreUntilCount(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -156,6 +166,8 @@ func TestIgnoreUntilCount(t *testing.T) {
 }
 
 func TestIgnoreUntilTime(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -171,6 +183,8 @@ func TestIgnoreUntilTime(t *testing.T) {
 }
 
 func TestEventsPerGroupCap(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -200,6 +214,8 @@ func TestEventsPerGroupCap(t *testing.T) {
 }
 
 func TestPruneErrorEvents(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 
@@ -226,6 +242,8 @@ func TestPruneErrorEvents(t *testing.T) {
 }
 
 func TestErrorGroupsCascadeOnAppDelete(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 	s.IngestError(app.ID, app.Name, ingest("fp1", "abc", "e1"))
@@ -241,6 +259,8 @@ func TestErrorGroupsCascadeOnAppDelete(t *testing.T) {
 }
 
 func TestCountOpenErrorGroups(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 	s.IngestError(app.ID, app.Name, ingest("fp1", "abc", "e1"))
@@ -260,6 +280,8 @@ func TestCountOpenErrorGroups(t *testing.T) {
 // The "open" filter must list exactly what the badge counts, regressed
 // groups included, or the badge points at an empty page.
 func TestListOpenErrorGroupsMatchesBadge(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 	s.IngestError(app.ID, app.Name, ingest("fp1", "abc", "e1"))

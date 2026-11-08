@@ -19,6 +19,7 @@ import (
 // A room someone is added to while their stream is open is replayed in
 // full, not cut off after the first 500 events.
 func TestChatStreamReplaysAddedRoomPastOnePage(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")

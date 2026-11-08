@@ -20,6 +20,8 @@ func latestSpec(t *testing.T, s *Server, appID int64) *apps.AppSpec {
 // are already installed; installing the provider afterwards wires the
 // consumer that was waiting for it.
 func TestWiringOnInstall(t *testing.T) {
+	t.Parallel()
+
 	s, _ := newTestServer(t)
 	s.engine = &apps.Engine{Store: s.store, Vault: s.vault}
 	streamSpec := apps.AppSpec{

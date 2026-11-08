@@ -182,12 +182,7 @@ export default function AppDetail() {
           <div className={`grid min-h-0 flex-1 ${tab === "overview" ? "lg:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
             <div className={`min-w-0 ${GUTTER} py-[26px] pb-10 ${fill ? "flex min-h-0 flex-col" : ""}`}>
               {tab === "overview" && (
-                <Overview
-                  name={name} detail={detail.data} status={status}
-                  container={container.data} deployStatus={deployStatus.data}
-                  volumes={volumes} filesStatus={filesStatus.data} restorePending={status?.restorePending}
-                  onGoLogs={() => go("logs")} onGoDrive={() => go("drive")} onCancelRestore={cancelRestore}
-                />
+                <Overview name={name} detail={detail.data} deployStatus={deployStatus.data} />
               )}
               <Suspense fallback={<Loading label={`Loading ${APP_SECTION_LABELS[tab].toLowerCase()}…`} />}>
                 {tab === "logs" && <Logs key={name} name={name} />}
@@ -217,8 +212,9 @@ export default function AppDetail() {
             {tab === "overview" && (
               <StandingColumn
                 name={name} detail={detail.data} status={status} statusKnown={!!statuses.data} container={container.data}
-                containerError={container.isError} volumes={volumes} filesStatus={filesStatus.data} actions={actions} onOpen={setModal}
-                onGoDrive={() => go("drive")} onGoFed={() => go("connect")} onSaved={refresh}
+                containerError={container.isError} deployStatus={deployStatus.data} volumes={volumes} filesStatus={filesStatus.data}
+                actions={actions} onOpen={setModal} onGoDrive={() => go("drive")} onGoFed={() => go("connect")}
+                onGoLogs={() => go("logs")} onCancelRestore={cancelRestore} onSaved={refresh}
               />
             )}
           </div>

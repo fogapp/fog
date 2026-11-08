@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/appevents"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +68,7 @@ func TestSendStatusHandling(t *testing.T) {
 // would otherwise hold the request through two retry sleeps (5s, then
 // 25s), long after the person who pressed the button gave up.
 func TestSendNowStopsWithItsContext(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestSendNowStopsWithItsContext(t *testing.T) {
 // Every notification lands on the event stream, ntfy configured or not, so
 // a consumer can take over routing fog's own alerts.
 func TestSendPublishesNoticeEvent(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

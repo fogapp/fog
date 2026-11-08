@@ -5,13 +5,16 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The hot paths read subscriptions from memory, and every write through the
 // service drops that copy: a subscription added, changed or removed is seen
 // by the very next BackupSkip, Guard or lookup.
 func TestSubscriptionSnapshotFollowsWrites(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	t.Parallel()
+
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

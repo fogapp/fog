@@ -1,0 +1,114 @@
+id: bookorbit
+title: BookOrbit
+description: Library and reading platform — ebooks, PDFs, audiobooks, and comics, with progress sync to Kobo and KOReader.
+category: Media servers
+icon: '📖'
+spec:
+  source:
+    type: image
+    image: ghcr.io/bookorbit/bookorbit:latest
+  env:
+    APP_URL: https://{{fqdn}}
+    PGID: "1000"
+    PUID: "1000"
+    TZ: Etc/UTC
+  secrets:
+    - JWT_SECRET
+    - SETUP_BOOTSTRAP_TOKEN
+    - EMAIL_ENCRYPTION_KEY
+    - MIGRATION_ENCRYPTION_KEY
+  volumes:
+    - name: data
+      mount: /data
+      owner: 1000:1000
+    - name: books
+      mount: /books
+      files: Content/Books
+  routes:
+    - port: 3000
+      noBuffer: true
+  health:
+    path: /api/v1/health
+  deployStrategy: restart
+  needs:
+    postgres:
+      databases:
+        - bookorbit
+      extensions:
+        - uuid-ossp
+        - pg_trgm
+        - unaccent
+        - vector
+      inject:
+        POSTGRES_DB: dbname
+        POSTGRES_HOST: host
+        POSTGRES_PASSWORD: password
+        POSTGRES_PORT: port
+        POSTGRES_USER: user
+  backup:
+    enabled: true
+  notes: 'First visit: the setup wizard asks for the setup token — copy it from Config → Secrets (SETUP_BOOTSTRAP_TOKEN); it is only used once, to create your admin account. Your books live in Drive → Content → Books, which BookOrbit sees as /books — create a library pointing there and drop ebooks into the folder from the Drive page. Kobo sync and the KOReader plugin use this app''s address, so reach it over HTTPS at the hostname Fog serves it on. If you point the books folder at your own host path instead and it is owned by a user other than UID 1000, set PUID/PGID to match in Config → Environment.'
+  memoryLimit: 2g
+  connection:
+    port: 3000
+    shares:
+      - books
+options:
+  - key: books
+    label: Books folder
+    hint: Your ebook library — BookOrbit sees it as /books.
+    target: volume:books
+    required: false
+  - key: JWT_SECRET
+    label: JWT_SECRET
+    hint: Signs login tokens; unique per instance.
+    target: secret:JWT_SECRET
+    required: true
+    generate: hex128
+  - key: SETUP_BOOTSTRAP_TOKEN
+    label: SETUP_BOOTSTRAP_TOKEN
+    hint: One-time token the setup wizard asks for on first visit.
+    target: secret:SETUP_BOOTSTRAP_TOKEN
+    required: true
+    generate: hex32
+  - key: EMAIL_ENCRYPTION_KEY
+    label: EMAIL_ENCRYPTION_KEY
+    hint: Encrypts stored SMTP credentials at rest.
+    target: secret:EMAIL_ENCRYPTION_KEY
+    required: true
+    generate: hex64
+  - key: MIGRATION_ENCRYPTION_KEY
+    label: MIGRATION_ENCRYPTION_KEY
+    hint: Encrypts stored migration-source credentials at rest.
+    target: secret:MIGRATION_ENCRYPTION_KEY
+    required: true
+    generate: hex64
+  - key: tz
+    label: Timezone
+    target: env:TZ
+    required: false
+    default: Etc/UTC
+requires:
+  cpu: x86-64-v2
+projectUrl: https://github.com/bookorbit/bookorbit
+about: |-
+  BookOrbit is a library and reading platform for ebooks, PDFs, audiobooks, and comics. It organises what you own and lets you read it anywhere — the web, an iPhone, an Apple Watch, a Kobo, or KOReader — with progress, highlights, and status kept in sync between them.
+
+  Around that core sit metadata from a dozen providers, reading statistics, OPDS and send-to-Kindle delivery, and multi-user accounts, all on your own hardware.
+highlights:
+  - Built-in readers for EPUB, PDF, comics, and audiobooks — no plugins
+  - Three-way sync between Kobo, KOReader, and the web reader
+  - Native iPhone and Apple Watch apps with offline downloads
+  - Metadata from fourteen providers, reading stats, and achievements
+  - OPDS, send-to-Kindle, and sync out to Hardcover, Readwise, and StoryGraph
+  - Where Hook delivers the books it finds
+logo: logo.webp
+developer: neon and BookOrbit contributors
+license: AGPL-3.0
+website: https://bookorbit.app
+footprint:
+  memory: 314572800
+  memoryPeak: 838860800
+  cpu: light
+  disk: 838860800
+  diskGrows: with your books

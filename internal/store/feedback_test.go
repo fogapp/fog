@@ -6,6 +6,8 @@ import (
 )
 
 func TestFeedbackLifecycle(t *testing.T) {
+	t.Parallel()
+
 	st := testStore(t)
 	peer, err := st.CreatePairedPeer("inst-dave", "dave", "http://dave.example", "pk")
 	if err != nil {
@@ -90,6 +92,8 @@ func TestFeedbackLifecycle(t *testing.T) {
 // Withdrawing feedback.ingest/use drops what is still queued for the peer
 // and keeps what already went.
 func TestRevokingFeedbackCancelsQueuedKeepsReceipts(t *testing.T) {
+	t.Parallel()
+
 	st := testStore(t)
 	peer, _ := st.CreatePairedPeer("inst-dave", "dave", "http://dave.example", "pk")
 	a, _ := st.CreateFeedback(Feedback{UID: "a", Body: "one"}, map[int64]string{peer.ID: "note"})
@@ -111,6 +115,8 @@ func TestRevokingFeedbackCancelsQueuedKeepsReceipts(t *testing.T) {
 // A receiver's word about a report comes home through the heartbeat and is
 // mirrored once per stamp, on the row it is about and no other.
 func TestFeedbackStatusFollowsThePeer(t *testing.T) {
+	t.Parallel()
+
 	st := testStore(t)
 	dave, _ := st.CreatePairedPeer("inst-dave", "dave", "http://dave.example", "pk")
 	erin, _ := st.CreatePairedPeer("inst-erin", "erin", "", "pk2")
@@ -194,6 +200,8 @@ func TestFeedbackStatusFollowsThePeer(t *testing.T) {
 // would outrank every later status), a little ahead is taken as now, and
 // nothing applies once this side stops sending that peer its reports.
 func TestPeerFeedbackStampsAreHeldToThisClock(t *testing.T) {
+	t.Parallel()
+
 	st := testStore(t)
 	dave, _ := st.CreatePairedPeer("inst-dave", "dave", "http://dave.example", "pk")
 	st.SetFedCapability(dave.ID, CapFeedbackIngest, DirUse, `{"mode":"note"}`)

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // Apply swaps the running executable, so these tests point the updater's
@@ -46,7 +46,7 @@ func applyFixture(t *testing.T, oldBinary, newBinary string, artifact http.Handl
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +76,8 @@ func leftoverTemps(t *testing.T, exe string) []string {
 }
 
 func TestApplySwapsBinary(t *testing.T) {
+	t.Parallel()
+
 	u, exe := applyFixture(t, "old binary", "new binary", nil)
 
 	exited := make(chan int, 1)
@@ -116,6 +118,8 @@ func TestApplySwapsBinary(t *testing.T) {
 // The previous binary is linked aside, never renamed away: exe stays a
 // complete binary throughout, and an older .prev is replaced.
 func TestKeepPreviousLeavesExeInPlace(t *testing.T) {
+	t.Parallel()
+
 	exe := filepath.Join(t.TempDir(), "fogd")
 	if err := os.WriteFile(exe, []byte("running"), 0o755); err != nil {
 		t.Fatal(err)
@@ -134,6 +138,8 @@ func TestKeepPreviousLeavesExeInPlace(t *testing.T) {
 }
 
 func TestApplyChecksumMismatchLeavesBinaryAlone(t *testing.T) {
+	t.Parallel()
+
 	// The manifest's checksum is for "new binary"; the server serves
 	// something else, as a corrupted mirror would.
 	u, exe := applyFixture(t, "old binary", "new binary", func(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +164,8 @@ func TestApplyChecksumMismatchLeavesBinaryAlone(t *testing.T) {
 // before it replaces the running fogd. Before, only the checksum was
 // checked, and systemd was left restarting a binary that could never start.
 func TestApplyRefusesABinaryThatCannotRunHere(t *testing.T) {
+	t.Parallel()
+
 	u, exe := applyFixture(t, "old binary", "new binary", nil)
 	u.verify = func(path string) error { return checkBinary(path, "linux", "amd64") }
 
@@ -175,6 +183,8 @@ func TestApplyRefusesABinaryThatCannotRunHere(t *testing.T) {
 
 // The ELF check is Linux's: a dev machine's own binaries aren't ELF.
 func TestCheckBinaryOnlyChecksLinux(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "fogd")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -190,6 +200,8 @@ func TestCheckBinaryOnlyChecksLinux(t *testing.T) {
 // Two operators (or one double-click) must not race the swap: the second
 // Apply is refused while the first still holds the download.
 func TestApplyRefusesConcurrentApply(t *testing.T) {
+	t.Parallel()
+
 	started := make(chan struct{})
 	release := make(chan struct{})
 	u, exe := applyFixture(t, "old binary", "new binary", func(w http.ResponseWriter, r *http.Request) {
@@ -227,6 +239,8 @@ func TestApplyRefusesConcurrentApply(t *testing.T) {
 // reaches Gitea by IP: the binary lives at the same path on the configured
 // origin, not next to the manifest, so that path is tried.
 func TestDownloadArtifactRebasesOntoSourceOrigin(t *testing.T) {
+	t.Parallel()
+
 	const assetPath = "/matthew/fog/releases/download/v9.9.9/fogd-linux-amd64"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == assetPath {
@@ -257,6 +271,8 @@ func TestDownloadArtifactRebasesOntoSourceOrigin(t *testing.T) {
 // next, not taken as the end of the download; and if none has the release's
 // bytes, nothing unverified is left behind.
 func TestDownloadArtifactSkipsALocationWithTheWrongBytes(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/old-host/fogd": // where the manifest points: something else now
@@ -294,6 +310,8 @@ func TestDownloadArtifactSkipsALocationWithTheWrongBytes(t *testing.T) {
 // halfway. Checked up front, and again after the download in case a deploy
 // started while it ran.
 func TestApplyRefusesWhileAppsDeploy(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name     string
 		busyFrom int // Busy calls before this one report idle

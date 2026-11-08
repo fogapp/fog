@@ -2,9 +2,12 @@ package server
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 
 	"gitea.lan/matthew/fog/internal/appevents"
 	"gitea.lan/matthew/fog/internal/backup"
+	"gitea.lan/matthew/fog/internal/catalog"
 	"gitea.lan/matthew/fog/internal/chat"
 	"gitea.lan/matthew/fog/internal/config"
 	"gitea.lan/matthew/fog/internal/fed"
@@ -53,6 +56,10 @@ func newServerForTest(cfg config.Config, st *store.Store, deps Deps, log *slog.L
 		deps.Chat = NewChatService(cfg, st, deps.Fed, log)
 	}
 	srv := New(cfg, st, deps, log)
+	// The store reads fog's own catalogs from the catalog package's
+	// fixture, as a fog that has never fetched reads them from its seed.
+	srv.catalogs.Seed = os.DirFS(filepath.Join("..", "catalog", "testdata", "catalogs"))
+	srv.catalogs.SetRemotes(catalog.DefaultRemotes)
 	hooks := srv.Hooks()
 	deps.Fed.PeopleFor = deps.Chat.Fed.PeopleFor
 	deps.Fed.FeedbackFor = hooks.FeedbackFor

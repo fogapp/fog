@@ -63,22 +63,22 @@ func TestPinThroughSystemd(t *testing.T) {
 	if err != nil || !strings.Contains(string(out), "movie.mkv") {
 		t.Fatalf("docker binds %q (%v): the pin isn't visible in the host's namespace", out, err)
 	}
-	// The attack: a Drive folder literally named "Apps${X}", beside Lucid's
-	// own Apps/Lucid. systemd used to expand ${X} on the helper's command
-	// line and pin Apps/Lucid — Lucid's data — for the app that named the
+	// The attack: a Drive folder literally named "Apps${X}", beside Glass's
+	// own Apps/Glass. systemd used to expand ${X} on the helper's command
+	// line and pin Apps/Glass — Glass's data — for the app that named the
 	// other folder. The pin must be the folder named.
-	os.MkdirAll(filepath.Join(drive, "Apps", "Lucid"), 0o755)
-	os.WriteFile(filepath.Join(drive, "Apps", "Lucid", "lucid-secret"), []byte("s"), 0o600)
-	os.MkdirAll(filepath.Join(drive, "Apps${X}", "Lucid"), 0o755)
-	os.WriteFile(filepath.Join(drive, "Apps${X}", "Lucid", "own-file"), []byte("o"), 0o644)
+	os.MkdirAll(filepath.Join(drive, "Apps", "Glass"), 0o755)
+	os.WriteFile(filepath.Join(drive, "Apps", "Glass", "glass-secret"), []byte("s"), 0o600)
+	os.MkdirAll(filepath.Join(drive, "Apps${X}", "Glass"), 0o755)
+	os.WriteFile(filepath.Join(drive, "Apps${X}", "Glass", "own-file"), []byte("o"), 0o644)
 	evil := filepath.Join(binds, "evil", "data")
-	if err := pin(ctx, drive, "Apps${X}/Lucid", evil, ""); err != nil {
+	if err := pin(ctx, drive, "Apps${X}/Glass", evil, ""); err != nil {
 		t.Fatal(err)
 	}
 	out, err = exec.CommandContext(ctx, "docker", "run", "--rm", "--mount", "type=bind,source="+evil+",target=/data",
 		"caddy:2.10-alpine", "ls", "/data").CombinedOutput()
-	if err != nil || strings.Contains(string(out), "lucid-secret") || !strings.Contains(string(out), "own-file") {
-		t.Fatalf("pinned %q for Apps${X}/Lucid (%v)", out, err)
+	if err != nil || strings.Contains(string(out), "glass-secret") || !strings.Contains(string(out), "own-file") {
+		t.Fatalf("pinned %q for Apps${X}/Glass (%v)", out, err)
 	}
 	unpin(ctx, filepath.Join(binds, "evil"))
 

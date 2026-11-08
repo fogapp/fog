@@ -17,6 +17,8 @@ import (
 // locker as the row it was — same stamp, same creation time, same digest
 // — into the backup directory, where the ordinary restore door finds it.
 func TestFetchRecreatesALocalBackup(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, ids := plantBackups(t, h)
@@ -93,6 +95,8 @@ func TestFetchRecreatesALocalBackup(t *testing.T) {
 // until the final frame authenticates: an object whose last frame was
 // tampered with leaves no snapshot directory, no staging, and no row.
 func TestFetchOfATamperedLastFrameLeavesNothing(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, ids := plantBackups(t, h)
@@ -136,6 +140,8 @@ func TestFetchOfATamperedLastFrameLeavesNothing(t *testing.T) {
 }
 
 func TestFilesSnapshotsListAndRestoreJob(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, _ := plantBackups(t, h)
@@ -182,6 +188,8 @@ func TestFilesSnapshotsListAndRestoreJob(t *testing.T) {
 // normal restore, a delegated app's staged first boot, a volume app's
 // deploy-then-restore — and Files lands in the root.
 func TestRecoverEverything(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, ids := plantBackups(t, h)
@@ -257,6 +265,8 @@ func TestRecoverEverything(t *testing.T) {
 
 // The fresh-machine door: credentials and passphrase, nothing else.
 func TestOpenForRecoveryAndPreview(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	plantBackups(t, h)

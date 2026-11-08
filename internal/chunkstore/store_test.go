@@ -519,3 +519,25 @@ func TestRebuildPrefersHealedCopy(t *testing.T) {
 		t.Fatalf("after rebuild: %v", err)
 	}
 }
+
+// VerifySnapshot reads a snapshot through without writing it anywhere: a
+// clean one passes, and a flipped byte in any chunk fails it as corrupt.
+func TestVerifySnapshotReadsEverythingBack(t *testing.T) {
+	e := newEnv(t)
+	s := e.open()
+	snap := snapshot(t, s, "app/hub", "20261101-030000", map[string][]byte{"a": randBytes(21, 300<<10), "b": randBytes(22, 200<<10)})
+	if err := s.VerifySnapshot(context.Background(), snap); err != nil {
+		t.Fatalf("clean snapshot: %v", err)
+	}
+	ent, _ := s.Find(snap, "b")
+	loc, _, _ := s.ix.lookup(mustID(t, ent.Chunks[len(ent.Chunks)-1]))
+	f, _ := os.OpenFile(s.packPath(loc.Pack), os.O_RDWR, 0)
+	var one [1]byte
+	f.ReadAt(one[:], loc.Offset+5)
+	one[0] ^= 0xff
+	f.WriteAt(one[:], loc.Offset+5)
+	f.Close()
+	if err := s.VerifySnapshot(context.Background(), snap); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("damaged snapshot must fail as corrupt: %v", err)
+	}
+}

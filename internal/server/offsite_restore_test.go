@@ -125,6 +125,8 @@ func TestRestoreOffsiteDoor(t *testing.T) {
 // it is handed — SSRF. The handler must refuse an internal address, with no
 // rate-limit or setup state standing in the way of proving it.
 func TestRestoreOffsiteRefusesInternalEndpoint(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t) // real guard, not relaxed
 	for _, endpoint := range []string{
 		"http://127.0.0.1:1/",
@@ -163,6 +165,8 @@ func TestRestoreOffsiteDoesNotReflectDialErrors(t *testing.T) {
 // address — the backstop for a redirect or DNS rebinding the URL-level check
 // (first host only) misses.
 func TestRestoreDialGuard(t *testing.T) {
+	t.Parallel()
+
 	for _, bad := range []string{"127.0.0.1:443", "10.1.2.3:443", "169.254.169.254:80", "[::1]:443", "192.168.1.5:9000", "100.64.0.1:443", "198.18.0.1:443", "0.1.2.3:443", "[64:ff9b::a00:1]:443", "[2002:a00:1::1]:443"} {
 		if err := restoreDialGuard("tcp", bad); err == nil {
 			t.Errorf("dial guard allowed a non-public address %s", bad)
@@ -177,6 +181,8 @@ func TestRestoreDialGuard(t *testing.T) {
 
 // publicStorageEndpoint is the SSRF guard's logic, checked without DNS.
 func TestPublicStorageEndpoint(t *testing.T) {
+	t.Parallel()
+
 	for _, bad := range []string{
 		"http://127.0.0.1", "https://127.0.0.1:9000", "http://[::1]/",
 		"http://169.254.169.254/", "https://10.1.2.3/", "http://192.168.0.9/",
@@ -194,6 +200,8 @@ func TestPublicStorageEndpoint(t *testing.T) {
 }
 
 func TestOffsiteRestoreRoutesNeedAuth(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/api/apps/hub/offsite"}, {"POST", "/api/offsite/fetch"}, {"GET", "/api/offsite/files"},

@@ -17,6 +17,7 @@ import (
 // Pushes carry metadata only, go to the people who asked for them, and
 // honour the per-room setting, mention hints, and do-not-disturb.
 func TestChatNotificationsDispatch(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	daveS := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -137,6 +138,8 @@ func errGoneForTest() error { return chat.ErrSubscriptionGone }
 
 // Webhooks and assistants speak through the bot, and only where it sits.
 func TestChatWebhooksAndMCPThroughTheBot(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")

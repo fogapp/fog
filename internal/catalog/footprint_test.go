@@ -9,9 +9,7 @@ import (
 // Every entry says what it costs, and says it in the vocabulary the fit
 // understands.
 func TestFootprintsComplete(t *testing.T) {
-	ids := map[string]bool{}
-	for _, e := range Entries() {
-		ids[e.ID] = true
+	for _, e := range ownEntries(t) {
 		f := e.Footprint
 		if f == nil {
 			t.Errorf("%s: no footprint", e.ID)
@@ -29,15 +27,10 @@ func TestFootprintsComplete(t *testing.T) {
 			t.Errorf("%s: a heavy app says when it is heavy", e.ID)
 		}
 	}
-	for id := range footprints {
-		if !ids[id] {
-			t.Errorf("footprints names %q, which is not a catalog entry", id)
-		}
-	}
 }
 
 func TestEntryForSpec(t *testing.T) {
-	entries := Resolve(Entries(), exampleSources)
+	entries := Resolve(fixtureEntries(t), exampleSources)
 	if e := EntryForSpec(entries, "jellyfin", nil); e == nil || e.ID != "jellyfin" {
 		t.Errorf("by name: got %v", e)
 	}
@@ -46,8 +39,8 @@ func TestEntryForSpec(t *testing.T) {
 	if e := EntryForSpec(entries, "tv", spec); e == nil || e.ID != "jellyfin" {
 		t.Errorf("by image: got %v", e)
 	}
-	git := &apps.AppSpec{Source: apps.Source{Type: "git", Repo: "ssh://git@git.example.com/you/hub.git"}}
-	if e := EntryForSpec(entries, "home", git); e == nil || e.ID != "hub" {
+	git := &apps.AppSpec{Source: apps.Source{Type: "git", Repo: "ssh://git@git.example.com/you/planner.git"}}
+	if e := EntryForSpec(entries, "home", git); e == nil || e.ID != "planner" {
 		t.Errorf("by repo: got %v", e)
 	}
 	other := &apps.AppSpec{Source: apps.Source{Type: "image", Image: "nginx:latest"}}
@@ -56,17 +49,8 @@ func TestEntryForSpec(t *testing.T) {
 	}
 }
 
-func byID(id string) Entry {
-	for _, e := range Entries() {
-		if e.ID == id {
-			return e
-		}
-	}
-	panic("no entry " + id)
-}
-
 func TestAssessFitMemory(t *testing.T) {
-	jellyfin := byID("jellyfin") // 400 MB at rest, 2 GB busy
+	jellyfin := byID(t, "jellyfin") // 400 MB at rest, 2 GB busy
 	host := Host{MemTotal: 8 * gb, MemUsed: 2 * gb, Cores: 8, DiskTotal: 500 * gb, DiskFree: 400 * gb}
 
 	fit := AssessFit(host, nil, jellyfin)
@@ -91,7 +75,7 @@ func TestAssessFitMemory(t *testing.T) {
 	}
 	// The reported case: 4.9 GB of 7.8 in use, a 50 MB app.
 	small := Host{MemTotal: 7800 * mb, MemUsed: 4900 * mb, Cores: 4, DiskTotal: 60 * gb, DiskFree: 17 * gb}
-	if fit := AssessFit(small, nil, byID("vaultwarden")); fit.Tone != ToneOK {
+	if fit := AssessFit(small, nil, byID(t, "vaultwarden")); fit.Tone != ToneOK {
 		t.Errorf("vaultwarden on a 63%%-used box: expected ok, got %+v", fit)
 	}
 	// Unknown host: no verdict, not a wrong one.
@@ -102,7 +86,7 @@ func TestAssessFitMemory(t *testing.T) {
 
 func TestAssessFitCPU(t *testing.T) {
 	host := Host{MemTotal: 64 * gb, MemUsed: 4 * gb, Cores: 4, DiskTotal: 1000 * gb, DiskFree: 900 * gb}
-	immich, paperless, sab := byID("immich"), byID("paperless"), byID("sabnzbd")
+	immich, paperless, sab := byID(t, "immich"), byID(t, "paperless"), byID(t, "sabnzbd")
 	installed := []Installed{
 		NewInstalled("immich", &immich, true, gb),
 		NewInstalled("paperless", &paperless, false, 0), // stopped still counts: one start from busy
@@ -120,16 +104,16 @@ func TestAssessFitCPU(t *testing.T) {
 		t.Errorf("3 heavy on 2 cores: expected tight (never over), got %s", fit.CPU.Tone)
 	}
 	// A light app never trips the processor, however busy the box is.
-	if fit := AssessFit(host, installed, byID("vaultwarden")); fit.CPU.Tone != ToneOK {
+	if fit := AssessFit(host, installed, byID(t, "vaultwarden")); fit.CPU.Tone != ToneOK {
 		t.Errorf("light app on a crowded box: expected ok, got %s", fit.CPU.Tone)
 	}
-	if fit := AssessFit(host, nil, byID("ntfy")); fit.CPU.Tone != ToneOK {
+	if fit := AssessFit(host, nil, byID(t, "ntfy")); fit.CPU.Tone != ToneOK {
 		t.Errorf("one light app on an empty box: expected ok, got %s", fit.CPU.Tone)
 	}
 }
 
 func TestAssessFitDisk(t *testing.T) {
-	whisper := byID("whisper") // 6 GB of images
+	whisper := byID(t, "whisper") // 6 GB of images
 	host := Host{MemTotal: 64 * gb, MemUsed: 4 * gb, Cores: 16, DiskTotal: 100 * gb, DiskFree: 50 * gb}
 	if fit := AssessFit(host, nil, whisper); fit.Disk.Tone != ToneOK || fit.Disk.FreeAfter != 50*gb-6000*mb {
 		t.Errorf("50 GB free: expected ok with 44 GB after, got %+v", fit.Disk)

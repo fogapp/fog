@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { post, type GitInfo } from "../api";
 import CopyButton from "./CopyButton";
+import { isHTTPSRepo } from "../lib/gitUrl";
 import { appKey } from "../lib/useAppData";
 
 interface TestResult {
@@ -20,7 +21,9 @@ interface TestResult {
   sshHostKey?: string;
 }
 
-export function DeployKey({ name, git }: { name: string; git: GitInfo }) {
+// keyless: the app clones a public repository over https, so there is no
+// key to hand over — only the connection test is left.
+export function DeployKey({ name, git, keyless = false }: { name: string; git: GitInfo; keyless?: boolean }) {
   const qc = useQueryClient();
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -43,23 +46,27 @@ export function DeployKey({ name, git }: { name: string; git: GitInfo }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2">
-        <code className="block min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded border border-hair bg-code p-2 text-xs text-ink-muted">
-          {git.deployPublicKey}
-        </code>
-        <CopyButton text={git.deployPublicKey} />
-      </div>
+      {!keyless && (
+        <div className="flex items-start gap-2">
+          <code className="block min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded border border-hair bg-code p-2 text-xs text-ink-muted">
+            {git.deployPublicKey}
+          </code>
+          <CopyButton text={git.deployPublicKey} />
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <button onClick={() => test.mutate()} disabled={test.isPending}
           className="rounded-md border border-edge px-3 py-1.5 text-sm font-medium text-ink hover:bg-fog-800 disabled:opacity-50">
           {test.isPending ? "Testing…" : "Test connection"}
         </button>
-        <button onClick={() => { if (confirm("Generate a new deploy key? The current one stops working and the new one must be added to the repository.")) regen.mutate(); }}
-          disabled={regen.isPending}
-          className="rounded-md px-2 py-1.5 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
-          title="Mint a fresh keypair if the current one is rejected">
-          {regen.isPending ? "Regenerating…" : "Regenerate key"}
-        </button>
+        {!keyless && (
+          <button onClick={() => { if (confirm("Generate a new deploy key? The current one stops working and the new one must be added to the repository.")) regen.mutate(); }}
+            disabled={regen.isPending}
+            className="rounded-md px-2 py-1.5 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+            title="Mint a fresh keypair if the current one is rejected">
+            {regen.isPending ? "Regenerating…" : "Regenerate key"}
+          </button>
+        )}
       </div>
       {testResult && (
         <div className={`rounded-md p-3 text-sm ${testResult.ok ? "bg-accent/10 text-accent" : "bg-warn/10 text-warn"}`}>
@@ -114,12 +121,17 @@ export function WebhookURL({ git }: { git: GitInfo }) {
 
 // The compact form for the Config document: both credentials with their
 // one-line purpose, after the source rows.
-export default function GitAccess({ name, git }: { name: string; git: GitInfo }) {
+export default function GitAccess({ name, git, repo }: { name: string; git: GitInfo; repo?: string }) {
+  const keyless = isHTTPSRepo(repo);
   return (
     <div className="mt-3 space-y-4 rounded-lg border border-divider p-4">
       <div className="space-y-2">
-        <p className="subhead">Deploy key — add as a read-only key in your git host</p>
-        <DeployKey name={name} git={git} />
+        <p className="subhead">
+          {keyless
+            ? "Public repository — cloned over https, no deploy key needed"
+            : "Deploy key — add as a read-only key in your git host"}
+        </p>
+        <DeployKey name={name} git={git} keyless={keyless} />
       </div>
       <div className="space-y-2">
         <p className="subhead">Webhook — POST on push; deploys immediately (auto policy) or shows the Update button</p>

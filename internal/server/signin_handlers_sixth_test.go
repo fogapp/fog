@@ -119,6 +119,7 @@ func TestAValidPasswordLoopedCantHoldSignIn(t *testing.T) {
 // and lasts 30 days. Now only a browser's own freshly proven cookie session
 // may mint one, and the token reaches chat alone.
 func TestAPinnedSessionCantMintAnUnpinnedToken(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	register := func(opts ...func(*http.Request)) *httptest.ResponseRecorder {
@@ -160,6 +161,8 @@ func TestAPinnedSessionCantMintAnUnpinnedToken(t *testing.T) {
 // from another address — still signed its owner out. Logout resolves the
 // session as every request does, and refuses otherwise.
 func TestAnUnusableTokenCantSignAnyoneOut(t *testing.T) {
+	t.Parallel()
+
 	srv, h, plain := bareIPOperator(t)
 	if c := do(t, h, "POST", "/api/auth/logout", "", withCookie(plain), fromPeer("192.168.1.66", "")).Code; c != http.StatusUnauthorized {
 		t.Fatalf("a replayed token's logout: %d", c)
@@ -176,6 +179,8 @@ func TestAnUnusableTokenCantSignAnyoneOut(t *testing.T) {
 // :443 and fog recorded a tunnel on the old service — a false critical
 // alert. Only one of the host's own addresses is a tunnel's.
 func TestAnAppCantRaiseATunnelAlert(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	srv.signinLimitsState.containerNets = func() []netip.Prefix { return []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16")} }
@@ -199,6 +204,7 @@ func TestAnAppCantRaiseATunnelAlert(t *testing.T) {
 // Sixth review, minor: passkey finish refuses an app's network as begin
 // does; and a link-local address is its own pin, never all of fe80::/64.
 func TestPasskeyFinishAndLinkLocalPins(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	srv.signinLimitsState.containerNets = func() []netip.Prefix { return []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16")} }

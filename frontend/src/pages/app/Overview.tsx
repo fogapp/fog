@@ -1,9 +1,10 @@
-// The overview tab's left column: what needs you, and the app in its own
-// words — the fog.yaml notes and the markdown in its repo root. Every line
-// is a fact fog holds — the standing facts (version, container, Drive,
-// federation) live in the right column, and nothing here is a second
-// editor. Also the first-deploy panel, which only this tab shows. Fog's
-// own activity on the app is its own tab.
+// The overview tab's left column: the app in its own words — the fog.yaml
+// notes and the markdown in its repo root — under a deploy in progress.
+// What needs you heads the right column (useNeeds, NeedsGroup), above the
+// standing facts (version, container, Drive, federation), so the readme
+// opens the page and nothing here is a second editor. Also the
+// first-deploy panel, which only this tab shows. Fog's own activity on the
+// app is its own tab.
 
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -19,7 +20,7 @@ import Markdown from "../../components/Markdown";
 import { formatBytes } from "../../lib/format";
 import { paths } from "../../lib/paths";
 import type { AppVolume } from "../../lib/useAppData";
-import { useAppDoc, useAppDocs, useCatalogEntry } from "../../lib/useAppData";
+import { useAppDoc, useAppDocs } from "../../lib/useAppData";
 import type { FilesStatus } from "../../api";
 import { Dot, Group, whenShort } from "./cockpit";
 
@@ -101,13 +102,15 @@ export function FirstDeploy({ name, detail, deployStatus, deployError, onAction,
 }
 
 // One thing that needs a person, with the fix beside it.
-interface Need {
+export interface Need {
   key: string;
   text: ReactNode;
   actions?: ReactNode;
 }
 
-export function Overview({ name, detail, status, container, deployStatus, volumes, filesStatus, restorePending, onGoLogs, onGoDrive, onCancelRestore }: {
+// Needs you: each line is a finding fog has actually made. Nothing here is
+// inferred from a request not having answered yet.
+export function useNeeds({ name, detail, status, container, deployStatus, volumes, filesStatus, restorePending, onGoLogs, onGoDrive, onCancelRestore }: {
   name: string;
   detail: AppDetailT;
   status?: AppStatus;
@@ -119,18 +122,10 @@ export function Overview({ name, detail, status, container, deployStatus, volume
   onGoLogs: () => void;
   onGoDrive: () => void;
   onCancelRestore: () => void;
-}) {
+}): Need[] {
   const [showFailLog, setShowFailLog] = useState(false);
-  const { entry } = useCatalogEntry(name);
-  const notes = detail.app.repoNotes || detail.spec.notes;
-  // Only a git app has a checkout to read docs from; asking for an image
-  // app's would only ever answer "none".
-  const docs = useAppDocs(name, detail.spec.source.type === "git");
   const deploying = deployStatus?.current.running ?? false;
   const lastDeploy = deployStatus?.last;
-
-  // Needs you: each line is a finding fog has actually made. Nothing here
-  // is inferred from a request not having answered yet.
   const needs: Need[] = [];
   if (!deploying && lastDeploy?.status === "failed") {
     needs.push({
@@ -188,6 +183,40 @@ export function Overview({ name, detail, status, container, deployStatus, volume
       actions: <Link to={paths.app(name, "errors")} className="text-xs text-ink-muted hover:text-ink">Open errors</Link>,
     });
   }
+  return needs;
+}
+
+// The findings as the standing column's first group. The column is narrow,
+// so each finding stacks: its words, then its fixes under them.
+export function NeedsGroup({ needs, gap }: { needs: Need[]; gap: string }) {
+  if (needs.length === 0) return null;
+  return (
+    <Group title="Needs you" first gap={gap}>
+      <div className="flex flex-col gap-2">
+        {needs.map((n) => (
+          <div key={n.key} className="rounded-lg border border-warn/30 bg-warn/10 px-3.5 py-3">
+            <div className="flex gap-2.5">
+              <span className="mt-[7px] flex shrink-0"><Dot tone="warn" /></span>
+              <div className="min-w-0 flex-1 text-cell text-ink">{n.text}</div>
+            </div>
+            {n.actions && <div className="mt-2.5 flex flex-wrap items-center gap-3 pl-4">{n.actions}</div>}
+          </div>
+        ))}
+      </div>
+    </Group>
+  );
+}
+
+export function Overview({ name, detail, deployStatus }: {
+  name: string;
+  detail: AppDetailT;
+  deployStatus?: DeployStatusResponse;
+}) {
+  const notes = detail.app.repoNotes || detail.spec.notes;
+  // Only a git app has a checkout to read docs from; asking for an image
+  // app's would only ever answer "none".
+  const docs = useAppDocs(name, detail.spec.source.type === "git");
+  const deploying = deployStatus?.current.running ?? false;
 
   return (
     <div>
@@ -203,24 +232,11 @@ export function Overview({ name, detail, status, container, deployStatus, volume
         </Group>
       )}
 
-      {needs.length > 0 && (
-        <Group title="Needs you" first={!deploying}>
-          <div className="flex flex-col gap-2">
-            {needs.map((n) => (
-              <div key={n.key} className="flex flex-wrap items-center gap-3.5 rounded-lg border border-warn/30 bg-warn/10 px-4 py-[13px]">
-                <Dot tone="warn" />
-                <div className="min-w-[220px] flex-1 text-cell text-ink">{n.text}</div>
-                {n.actions}
-              </div>
-            ))}
-          </div>
-        </Group>
-      )}
-
+      {/* No heading: the readme pills are the top of the page. */}
       {(notes || (docs.data?.length ?? 0) > 0) && (
-        <Group title="About" first={needs.length === 0 && !deploying} right={entry ? <span className="text-hint text-ink-muted">{entry.category}</span> : undefined}>
+        <div className={deploying ? "mt-9" : ""}>
           <Docs name={name} notes={notes} fromRepo={!!detail.app.repoNotes} docs={docs.data ?? []} />
-        </Group>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,8 @@ import (
 // answer only to the minted token, and a visit must be recorded with the
 // address the visit came from — through the proxy, the forwarded one.
 func TestReachBeaconRequiresTokenAndRecordsVisitor(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	srv.store.SetSetting(store.SettingBaseDomain, "home.example.com")
@@ -67,6 +69,8 @@ func TestReachBeaconRequiresTokenAndRecordsVisitor(t *testing.T) {
 }
 
 func TestReachUpdateValidatesAndPersists(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	if w := do(t, h, "PUT", "/api/domain/reach", `{"target":"moon"}`, withCookie(c)); w.Code != http.StatusBadRequest {

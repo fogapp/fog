@@ -1,0 +1,71 @@
+id: journal-collector
+title: Journal Collector
+description: A made-up companion for tests — it fetches for Journal, and has no way to read it.
+category: Personal cloud
+icon: '📥'
+spec:
+  source:
+    type: git
+    branch: main
+    dockerfile: Dockerfile
+    buildArgs:
+      GIT_REV: '{{commit}}'
+  env:
+    COLLECTOR_DATA: /data
+    COLLECTOR_HOST: '{{fqdn}}'
+    RACK_ENV: production
+  secrets:
+    - COLLECTOR_KEY
+  volumes:
+    - name: data
+      mount: /data
+      owner: 1000:1000
+  routes:
+    - port: 80
+      lanOnly: true
+  health:
+    path: /up
+  command:
+    - ./bin/collector
+  updatePolicy: auto
+  backup:
+    enabled: true
+    beforeUpdate: false
+  notes: 'A test fixture. Keep this app named journal-collector: Journal asks for it by name.'
+  memoryLimit: 256m
+  connection:
+    port: 80
+    offers:
+      - id: pull
+        title: Collected data
+        blurb: Journal can collect what this has fetched. Nothing else can.
+        env:
+          JOURNAL_COLLECTOR_URL: '{{url}}'
+        secrets:
+          - JOURNAL_COLLECTOR_TOKEN
+  sealedPeer: true
+options:
+  - key: repo
+    label: Git repository
+    target: repo
+    required: true
+  - key: COLLECTOR_KEY
+    label: COLLECTOR_KEY
+    hint: Encrypts the tokens stored here; changing it makes them unreadable.
+    target: secret:COLLECTOR_KEY
+    required: true
+    generate: hex64
+firstParty: journal
+about: |-
+  Journal Collector is a made-up companion for fog's tests: the one part of Journal with internet access, built from Journal's repository.
+highlights:
+  - No database and no way to read Journal
+  - Offers its data to Journal alone
+logo: tile.svg
+developer: Built from your own repository
+license: Private
+footprint:
+  memory: 83886080
+  memoryPeak: 268435456
+  cpu: light
+  disk: 1258291200

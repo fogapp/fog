@@ -5,14 +5,14 @@ import (
 	"reflect"
 	"testing"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // LatestSpecs is LatestSpec in one query, and must answer identically per
 // app: the newest revision decoded, and no entry exactly where LatestSpec
 // errors (no revisions, unparseable JSON).
 func TestLatestSpecsMatchesLatestSpec(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

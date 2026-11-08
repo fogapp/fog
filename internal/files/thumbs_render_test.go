@@ -17,6 +17,8 @@ import (
 // An image without a digest yet is hashed in the same read that decodes
 // it: the thumbnail lands under the digest and the index learns it.
 func TestImageThumbnailHashesWhileDecoding(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	m.DataDir = t.TempDir()
 	var buf bytes.Buffer

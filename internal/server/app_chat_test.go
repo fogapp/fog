@@ -16,6 +16,8 @@ import (
 // land. An app that was never granted chat must not be able to post there
 // (or anywhere) as fog; one that was granted it posts as itself.
 func TestAppChatPostNeedsGrantAndNeverPassesForFog(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	op := registerDevice(t, h, admin, "admin")

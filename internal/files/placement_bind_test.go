@@ -17,6 +17,8 @@ import (
 //	  mkdir -p /mnt/fast /mnt/big && mount -t tmpfs tmpfs /mnt/fast && mount -t tmpfs tmpfs /mnt/big &&
 //	  FOG_TEST_BIND=1 go test ./internal/files -run Bind -v'
 func TestPlacementRealBind(t *testing.T) {
+	t.Parallel()
+
 	if os.Getenv("FOG_TEST_BIND") == "" {
 		t.Skip("set FOG_TEST_BIND=1 (root, Linux, /mnt/fast and /mnt/big on their own filesystems)")
 	}

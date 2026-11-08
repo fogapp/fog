@@ -13,6 +13,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"golang.org/x/crypto/scrypt"
@@ -76,8 +77,20 @@ const (
 
 // joinCost is the scrypt cost that stretches a pairing code into its key:
 // about a tenth of a second, once per side per pairing (per live code, for
-// the machine).
-const joinCost = 1 << 15
+// the machine). A variable only so a test binary can lower it
+// (CheapJoinKeyForTests).
+var joinCost = 1 << 15
+
+// CheapJoinKeyForTests makes stretching a pairing code cost ~1ms instead of
+// ~250ms under -race, for the rest of this test binary. Both sides of a
+// pairing must stretch alike, so it panics outside a test. Call it from a
+// test file's init.
+func CheapJoinKeyForTests() {
+	if !testing.Testing() {
+		panic("compute.CheapJoinKeyForTests called outside a test binary")
+	}
+	joinCost = 1 << 10
+}
 
 // NewSalt is a pairing code's own salt, made with the code and public: no
 // two codes stretch alike, so nothing computed against one recorded

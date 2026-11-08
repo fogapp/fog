@@ -122,27 +122,74 @@ func checkWireUnsupported(_ context.Context, sn *snapshot) report {
 	return rep
 }
 
-// checkSealedWireRefused: a sealed app whose spec names an app that is
-// neither sealed nor a sealed peer. fog doesn't wire them — the wire would
-// be the sealed app's way to something with a route out — so the sealed
-// app can't reach it.
-func checkSealedWireRefused(_ context.Context, sn *snapshot) report {
+// refusedWires splits the sealed wires fog refused into those the operator
+// connected as an integration and the rest. ok is false when connections
+// could not be read.
+func refusedWires(sn *snapshot) (connected, other []string, ids map[string]int64, ok bool) {
+	if !sn.connectedOK {
+		return nil, nil, nil, false
+	}
 	specs := map[string]*apps.AppSpec{}
-	ids := map[string]int64{}
+	ids = map[string]int64{}
 	for _, a := range sn.apps {
 		if a.spec != nil {
 			specs[a.app.Name] = a.spec
 			ids[a.app.Name] = a.app.ID
 		}
 	}
-	rep := report{evaluated: []int64{0}}
 	for _, w := range apps.RefusedWires(specs) {
+		consumer, provider, _ := strings.Cut(w, " → ")
+		if sn.connected[ids[consumer]][strings.ToLower(provider)] {
+			connected = append(connected, w)
+		} else {
+			other = append(other, w)
+		}
+	}
+	return connected, other, ids, true
+}
+
+// checkSealedWireRefused: a sealed app whose spec names an app that is
+// neither sealed nor a sealed peer. fog doesn't wire them — the wire would
+// be the sealed app's way to something with a route out — so the sealed
+// app can't reach it. A connected integration is checkSealedIntegrationRefused's.
+func checkSealedWireRefused(_ context.Context, sn *snapshot) report {
+	_, refused, ids, ok := refusedWires(sn)
+	if !ok {
+		return report{}
+	}
+	rep := report{evaluated: []int64{0}}
+	for _, w := range refused {
 		consumer, provider, _ := strings.Cut(w, " → ")
 		rep.findings = append(rep.findings, store.IssueFinding{
 			Kind: "sealed-wire-refused", AppID: ids[consumer], AppName: consumer, Subject: provider, Severity: "warning",
 			Title:  fmt.Sprintf("%s is sealed and can't reach %s", consumer, provider),
 			Detail: fmt.Sprintf("%s names %s, which has a route out of the machine and isn't a sealed peer, so fog doesn't wire them together.", consumer, provider),
 			Fix:    fmt.Sprintf("Make %s a sealed peer if %s may trust it, or remove the reference.", provider, consumer),
+			FixURL: "/apps/" + provider + "/config",
+		})
+	}
+	return rep
+}
+
+// checkSealedIntegrationRefused: a sealed app connected to an integration
+// whose provider isn't a sealed peer — a sealed app connected to Glass
+// before Glass declares sealedPeer. The connection holds a credential and
+// looks done on the Integrations tab, but fog never wires it, so nothing
+// the app sends arrives.
+func checkSealedIntegrationRefused(_ context.Context, sn *snapshot) report {
+	refused, _, ids, ok := refusedWires(sn)
+	if !ok {
+		return report{}
+	}
+	rep := report{evaluated: []int64{0}}
+	for _, w := range refused {
+		consumer, provider, _ := strings.Cut(w, " → ")
+		rep.findings = append(rep.findings, store.IssueFinding{
+			Kind: "sealed-integration-refused", AppID: ids[consumer], AppName: consumer, Subject: provider, Severity: "warning",
+			Title: fmt.Sprintf("%s is connected to %s but can't reach it", consumer, provider),
+			Detail: fmt.Sprintf("%s is sealed and connected to %s on the Integrations tab, but %s isn't a sealed peer, "+
+				"so fog doesn't wire them and nothing %s sends %s arrives.", consumer, provider, provider, consumer, provider),
+			Fix:    fmt.Sprintf("Set sealedPeer on %s (Config) if %s may trust it with what it sends, or disconnect them.", provider, consumer),
 			FixURL: "/apps/" + provider + "/config",
 		})
 	}

@@ -60,6 +60,8 @@ func plantFilesSnapshot(t *testing.T, h *harness, root, stamp string, files map[
 }
 
 func TestSyncFilesDedupsBlobsAndRestores(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, _ := plantBackups(t, h)
@@ -168,6 +170,8 @@ func TestSyncFilesDedupsBlobsAndRestores(t *testing.T) {
 // recorded in batches; the next run sends only the rest, and every blob
 // ends up written exactly once.
 func TestSyncFilesResumesAParallelSeed(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	root, _ := plantBackups(t, h)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func share(mutate func(*store.NasShare)) store.NasShare {
@@ -207,7 +208,7 @@ func TestDecodeMountEscapes(t *testing.T) {
 // re-reads the mount table under the lock instead of stacking a second mount
 // over the first.
 func TestEnsureForPathsMountsOnce(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +271,7 @@ func TestEnsureForPathsMountsOnce(t *testing.T) {
 // An app waiting for a share is woken however the share mounts: a deploy's
 // EnsureForPaths, the Mount button, not only the reconcile loop.
 func TestEveryMountFiresTheHook(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

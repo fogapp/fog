@@ -92,6 +92,8 @@ func (cp *connectPair) vouchFromB(t *testing.T, nonce string) fed.Vouch {
 // which flows back to feed@B with the handshake payload feed@A answered.
 // Nobody typed a URL or an API key anywhere.
 func TestConnectEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	reqID, token := appWithToken(t, cp.b, "feed")
 	cp.b.store.SetAppContracts(reqID, []string{ContractConnectV1})
@@ -161,6 +163,8 @@ func TestConnectEndToEnd(t *testing.T) {
 // apps.introduce grant → refused; a target app without the contract →
 // refused. The requesting app hears the reason.
 func TestConnectEnforcement(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[]`, false)
 	reqID, token := appWithToken(t, cp.b, "feed")
 	cp.b.store.SetAppContracts(reqID, []string{ContractConnectV1})
@@ -196,6 +200,8 @@ func TestConnectEnforcement(t *testing.T) {
 // not for this instance, not signed by the pinned key, expired, or without
 // a nonce — before the operator's policy is even consulted.
 func TestConnectVouchChecks(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	bID := mustIdentity(t, cp.b)
 	cases := []struct {
@@ -250,6 +256,8 @@ func TestConnectVouchChecks(t *testing.T) {
 // A grant answer without a credential is a refusal, not a connection: the
 // requesting app never receives an empty grant to store.
 func TestConnectRequiresACredential(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	cp.grantAnswer = `{"payload":{"only":"handshake"}}`
 	reqID, token := appWithToken(t, cp.b, "feed")
@@ -266,6 +274,8 @@ func TestConnectRequiresACredential(t *testing.T) {
 // refused by its own fogd before anything crosses to the peer, so the far
 // Feed never mints a credential the Hub would throw away.
 func TestConnectRefusesAnotherKindOfApp(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	reqID, token := appWithToken(t, cp.b, "hub")
 	cp.b.store.SetAppContracts(reqID, []string{ContractConnectV1})
@@ -286,6 +296,8 @@ func TestConnectRefusesAnotherKindOfApp(t *testing.T) {
 // Both sides record which fields the credential carried — the names that
 // tell a Hub's api_key from a Feed's token — and never the values.
 func TestConnectAuditsTheCredentialShape(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	reqID, token := appWithToken(t, cp.b, "feed")
 	cp.b.store.SetAppContracts(reqID, []string{ContractConnectV1})
@@ -316,6 +328,8 @@ func TestConnectAuditsTheCredentialShape(t *testing.T) {
 // the server's background context — so Shutdown stops it between apps
 // instead of waiting out ten seconds for each one in turn.
 func TestRevokeAppGrantsStopsWithItsContext(t *testing.T) {
+	t.Parallel()
+
 	s, _ := newTestServer(t)
 	for _, name := range []string{"feed", "hub"} {
 		a, err := s.store.CreateApp(name)
@@ -345,6 +359,8 @@ func TestRevokeAppGrantsStopsWithItsContext(t *testing.T) {
 // never declared fog-connect/1 — any app with a token, named like a peer's
 // connectable app — can't ask for a credential from it.
 func TestConnectRequesterMustDeclareTheContract(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce"}]`, true)
 	_, token := appWithToken(t, cp.b, "feed")
 	w := do(t, cp.bH, "POST", "/app/v1/connect/grants", fmt.Sprintf(`{"peer":%q}`, cp.aPeerOnB.Name), withBearer(token))

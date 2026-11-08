@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -59,7 +59,7 @@ func lifecycleManager(t *testing.T) *Manager {
 	routeWithdrawSettle = 10 * time.Millisecond
 	t.Cleanup(func() { routeWithdrawSettle = old })
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

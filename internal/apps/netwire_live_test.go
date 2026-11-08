@@ -15,7 +15,7 @@ import (
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/livetest"
 	"gitea.lan/matthew/fog/internal/randx"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // liveNetImage is any small image with a shell, wget and an HTTP server.
@@ -78,7 +78,7 @@ func TestLiveNetworkIsolation(t *testing.T) {
 			e.RemoveAppNetworks(context.Background(), n)
 		}
 	})
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestLiveImageLabelsCannotMakeAFogContainer(t *testing.T) {
 	t.Cleanup(func() { exec.Command("docker", "rmi", "-f", img).Run() })
 
 	evil, victim := "evil"+sfx, "victim"+sfx
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,6 +31,8 @@ func manifestJSON(version string) string {
 }
 
 func TestResolveManifestDirectURL(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	mux := http.NewServeMux()
 	s.serve(mux, "/release/latest.json", manifestJSON("v1.2.3"))
@@ -48,6 +50,8 @@ func TestResolveManifestDirectURL(t *testing.T) {
 
 // A plain directory URL gets latest.json appended.
 func TestResolveManifestDirectoryURL(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	mux := http.NewServeMux()
 	s.serve(mux, "/dl/latest.json", manifestJSON("v2.0.0"))
@@ -67,6 +71,8 @@ func TestResolveManifestDirectoryURL(t *testing.T) {
 // release API supplies the notes shown in the UI — only for the release the
 // manifest names.
 func TestResolveManifestGiteaRepoWithNotes(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	mux := http.NewServeMux()
 	s.serve(mux, "/matthew/fog/raw/branch/main/release/latest.json", manifestJSON("v3.1.0"))
@@ -111,6 +117,8 @@ func TestResolveManifestFollowsBranch(t *testing.T) {
 }
 
 func TestResolveManifestErrors(t *testing.T) {
+	t.Parallel()
+
 	u := &Updater{}
 	for _, tc := range []struct{ name, base, wantSubstr string }{
 		{"empty", "", "no update URL configured"},
@@ -135,6 +143,8 @@ func TestResolveManifestErrors(t *testing.T) {
 // Nothing anywhere: the error has to gather what was tried, or the operator
 // has no idea which URL shape was wrong.
 func TestResolveManifestReportsAttempts(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(http.NotFound))
 	defer srv.Close()
 
@@ -153,6 +163,8 @@ func TestResolveManifestReportsAttempts(t *testing.T) {
 // A 200 that isn't a manifest must not be mistaken for one — a proxy or a
 // login page returning HTML is the usual cause.
 func TestFetchManifestRejectsNonManifest(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"something":"else"}`))
 	}))
@@ -172,6 +184,8 @@ func TestFetchManifestRejectsNonManifest(t *testing.T) {
 // one with its bytes changed — is refused, and the resolver doesn't fall
 // through to treating it as valid.
 func TestFetchManifestRequiresTheReleaseSignature(t *testing.T) {
+	t.Parallel()
+
 	release := newSigner(t)
 	attacker := newSigner(t)
 	body := manifestJSON("v9.0.0")
@@ -218,6 +232,8 @@ func TestFetchManifestAllowUnsigned(t *testing.T) {
 
 // The pinned keys must parse: a typo here would refuse every release.
 func TestPinnedReleaseKeysParse(t *testing.T) {
+	t.Parallel()
+
 	keys, err := pinnedKeys()
 	if err != nil {
 		t.Fatal(err)
@@ -235,6 +251,8 @@ func TestPinnedReleaseKeysParse(t *testing.T) {
 // The access token goes to the source's own host, never to wherever a
 // manifest points its downloads.
 func TestTokenStaysOnTheSourceHost(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		source, host string
 		want         bool
@@ -254,6 +272,8 @@ func TestTokenStaysOnTheSourceHost(t *testing.T) {
 
 // Relative artifact names resolve against the manifest's own URL.
 func TestFetchManifestResolvesRelativeArtifacts(t *testing.T) {
+	t.Parallel()
+
 	s := newSigner(t)
 	mux := http.NewServeMux()
 	s.serve(mux, "/pub/fog/latest.json", fmt.Sprintf(`{"version":"v1.0.0","issued_at":%d,"artifacts":{"linux-amd64":{"url":"fogd-linux-amd64","sha256":"x"}}}`, time.Now().Unix()))
@@ -270,6 +290,8 @@ func TestFetchManifestResolvesRelativeArtifacts(t *testing.T) {
 }
 
 func TestVersionOrder(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		cand, cur string
 		want      bool
@@ -295,6 +317,8 @@ func TestVersionOrder(t *testing.T) {
 // Semver 2.0.0 precedence, section 11's own example chain, plus the cases
 // plain text order gets wrong (rc.9 < rc.10).
 func TestPreReleasePrecedence(t *testing.T) {
+	t.Parallel()
+
 	chain := []string{
 		"v1.0.0-alpha", "v1.0.0-alpha.1", "v1.0.0-alpha.beta", "v1.0.0-beta",
 		"v1.0.0-beta.2", "v1.0.0-beta.11", "v1.0.0-rc.1", "v1.0.0-rc.9", "v1.0.0-rc.10", "v1.0.0",
@@ -359,6 +383,8 @@ func TestUnversionedFogdNeedsAnExplicitOptIn(t *testing.T) {
 }
 
 func TestVersionsWithLeadingZerosAreRefused(t *testing.T) {
+	t.Parallel()
+
 	for _, bad := range []string{"v01.0.0", "v1.00.0", "v1.0.00", "v1.0.0-rc.01", "v1.0.0-.", "v1.0.0-rc..1"} {
 		if ValidVersion(bad) {
 			t.Errorf("%q accepted", bad)

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/lucid"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/randx"
 )
 
@@ -148,9 +148,9 @@ func (st *jobState) run(ctx context.Context, fn func(ctx context.Context, p *Pro
 				st.mu.Unlock()
 			}
 		}()
-		// The job as a Lucid transaction: a cancellation is not a failure,
+		// The job as a Glass transaction: a cancellation is not a failure,
 		// and a panic (recovered above) is.
-		ctx, txn := lucid.Start(ctx, "job", st.job.Kind)
+		ctx, txn := glass.Start(ctx, "job", st.job.Kind)
 		returned := false
 		defer func() {
 			switch {

@@ -23,6 +23,8 @@ func seedError(t *testing.T, srv *Server, h http.Handler, appID int64, key strin
 }
 
 func TestErrorsAPIRequiresAuth(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	if w := do(t, h, "GET", "/api/errors", ""); w.Code != http.StatusUnauthorized {
 		t.Fatalf("fleet without session: %d, want 401", w.Code)
@@ -33,6 +35,8 @@ func TestErrorsAPIRequiresAuth(t *testing.T) {
 }
 
 func TestErrorsFleetAndAppList(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	cookie := setup(t, h)
 	appID, key := flareApp(t, srv, "manor")
@@ -59,6 +63,8 @@ func TestErrorsFleetAndAppList(t *testing.T) {
 }
 
 func TestErrorGroupDetailAndEvent(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	cookie := setup(t, h)
 	appID, key := flareApp(t, srv, "manor")
@@ -92,6 +98,8 @@ func TestErrorGroupDetailAndEvent(t *testing.T) {
 }
 
 func TestErrorGroupOwnershipEnforced(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	cookie := setup(t, h)
 	appID, key := flareApp(t, srv, "manor")
@@ -106,6 +114,8 @@ func TestErrorGroupOwnershipEnforced(t *testing.T) {
 }
 
 func TestErrorLifecycleActions(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	cookie := setup(t, h)
 	appID, key := flareApp(t, srv, "manor")

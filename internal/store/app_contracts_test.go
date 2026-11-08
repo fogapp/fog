@@ -6,6 +6,8 @@ import (
 )
 
 func TestAppsWithContract(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	mk := func(name string, contracts ...string) *App {
 		t.Helper()

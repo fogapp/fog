@@ -24,14 +24,15 @@ import (
 // keeps its own in fog.yaml's gettingStarted), and a secret the entry offers
 // as an optional install option. The install pane leaves such a secret
 // undeclared when it is left blank, so it never fails a deploy; a manifest
-// can't do that, so it leaves the secret out.
+// can't do that, so it may list the secret (an import declares it, and its
+// operator deletes it in fog if unused) or leave it out.
 func TestFirstPartyEntriesMirrorTheirRepoManifests(t *testing.T) {
 	root := os.Getenv("FOG_APP_REPOS")
 	if root == "" {
 		root = filepath.Join("..", "..", "..") // the fog checkout's parent
 	}
 	checked := 0
-	for _, e := range Entries() {
+	for _, e := range ownEntries(t) {
 		if e.FirstParty == "" {
 			continue
 		}
@@ -55,6 +56,7 @@ func TestFirstPartyEntriesMirrorTheirRepoManifests(t *testing.T) {
 		// (apps.AppSpec.Reach); a repo's manifest doesn't approve its own.
 		got.Reach = nil
 		got.Secrets = withoutOptionalSecrets(got.Secrets, e.Options)
+		want.Secrets = withoutOptionalSecrets(want.Secrets, e.Options)
 		if g, w := specJSON(t, got), specJSON(t, want); g != w {
 			t.Errorf("%s: catalog entry differs from %s\ncatalog:  %s\nmanifest: %s", e.ID, path, g, w)
 		}

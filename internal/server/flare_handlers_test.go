@@ -52,6 +52,8 @@ func withSentryAuth(key string) func(*http.Request) {
 }
 
 func TestFlareIngestStoresEvent(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 
@@ -84,6 +86,8 @@ func TestFlareIngestStoresEvent(t *testing.T) {
 }
 
 func TestFlareIngestNoTrailingSlash(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 	w := do(t, h, "POST", fmt.Sprintf("/ingest/api/%d/envelope", appID), envelope(rubyEvent), withSentryAuth(key))
@@ -93,6 +97,8 @@ func TestFlareIngestNoTrailingSlash(t *testing.T) {
 }
 
 func TestFlareIngestGzip(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 
@@ -115,6 +121,8 @@ func TestFlareIngestGzip(t *testing.T) {
 }
 
 func TestFlareIngestAuth(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, _ := flareApp(t, srv, "manor")
 
@@ -140,6 +148,8 @@ func TestFlareIngestAuth(t *testing.T) {
 }
 
 func TestFlareIngestKeyInEnvelopeDSN(t *testing.T) {
+	t.Parallel()
+
 	// sentry-ruby can carry credentials in the envelope header's dsn field
 	// instead of the auth header.
 	srv, h := newTestServer(t)
@@ -153,6 +163,8 @@ func TestFlareIngestKeyInEnvelopeDSN(t *testing.T) {
 }
 
 func TestFlareIngestCrossOriginAllowed(t *testing.T) {
+	t.Parallel()
+
 	// The Origin guard protects /api/*; ingest lives outside it by design
 	// (a browser SDK later must be able to POST cross-origin).
 	srv, h := newTestServer(t)
@@ -168,6 +180,8 @@ func TestFlareIngestCrossOriginAllowed(t *testing.T) {
 }
 
 func TestFlareIngestRateLimit(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 	srv.flareLimiter = auth.NewRateLimiter(1, time.Minute)
@@ -185,6 +199,8 @@ func TestFlareIngestRateLimit(t *testing.T) {
 }
 
 func TestFlareIngestDedupesRetries(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 	path := fmt.Sprintf("/ingest/api/%d/envelope/", appID)
@@ -198,6 +214,8 @@ func TestFlareIngestDedupesRetries(t *testing.T) {
 }
 
 func TestFlareIngestIgnoresNonEventItems(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	appID, key := flareApp(t, srv, "manor")
 	report := `{"discarded_events":[]}`

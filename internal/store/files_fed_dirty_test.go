@@ -9,6 +9,8 @@ import (
 // or not (each needs its cached manifest dropped), and
 // TakeDirtyFileFedShares hands each dirty share over once.
 func TestFileFedSharesDirtyFlag(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	peer, err := s.CreatePairedPeer("inst-1", "peer", "", "pk")
 	if err != nil {

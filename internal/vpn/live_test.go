@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 	"gitea.lan/matthew/fog/internal/wan"
 )
@@ -120,7 +120,7 @@ func TestLiveDaemonStatus(t *testing.T) {
 func liveManager(t *testing.T) *Manager {
 	t.Helper()
 	tmp := t.TempDir()
-	st, err := store.Open(filepath.Join(tmp, "fog.db"))
+	st, err := storetest.Open(filepath.Join(tmp, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

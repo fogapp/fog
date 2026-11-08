@@ -126,7 +126,7 @@ export function Config({ name, detail, onSaved }: { name: string; detail: AppDet
           ))}
           {/* The credentials the repository needs from fog live with the
               source they unlock, not on a tab of their own. */}
-          {detail.git && <GitAccess name={name} git={detail.git} />}
+          {detail.git && <GitAccess name={name} git={detail.git} repo={detail.spec.source.repo} />}
         </>
       ) : (
         <Row label="Image">{val(draft.image)}</Row>

@@ -12,12 +12,13 @@ import (
 
 	"gitea.lan/matthew/fog/internal/files"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func manifestFixture(t *testing.T) (*Service, *store.FedPeer, string) {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +112,8 @@ func TestManifestShipsUnhashedEntriesWithoutADigest(t *testing.T) {
 // A change drops the cached manifests of the shares it touches, and only
 // those.
 func TestChangeInvalidatesOnlyAffectedManifests(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	for _, d := range []string{"A", "B"} {
 		os.MkdirAll(filepath.Join(root, d), 0o755)
@@ -140,6 +143,8 @@ func TestChangeInvalidatesOnlyAffectedManifests(t *testing.T) {
 // be rebuilt on every request in the meantime, and must still reflect the
 // changes that dirtied it.
 func TestManifestCachedWhileShareIsDirty(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	os.MkdirAll(filepath.Join(root, "A"), 0o755)
 	os.WriteFile(filepath.Join(root, "A", "one.txt"), []byte("1"), 0o644)
@@ -189,6 +194,8 @@ func TestManifestCachedWhileShareIsDirty(t *testing.T) {
 // re-read finds nothing new; otherwise peers would wait out the manifest
 // TTL to see it.
 func TestRenameInsideShareMarksItDirty(t *testing.T) {
+	t.Parallel()
+
 	s, peer, root := manifestFixture(t)
 	os.MkdirAll(filepath.Join(root, "A"), 0o755)
 	os.WriteFile(filepath.Join(root, "A", "one.txt"), []byte("1"), 0o644)

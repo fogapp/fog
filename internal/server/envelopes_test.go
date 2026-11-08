@@ -63,6 +63,8 @@ func TestEnvelopesEncodeAsTheirMapsDid(t *testing.T) {
 
 // Exact bodies where nothing in them varies from run to run.
 func TestEnvelopeBodies(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	srv.engine = &apps.Engine{Store: srv.store}
 	c := setup(t, h)
@@ -85,6 +87,8 @@ func TestEnvelopeBodies(t *testing.T) {
 // With an update checker, the fog release row sends every field even when
 // it is empty or false; only the no-checker row is the bare "available".
 func TestFogUpdateViewKeepsEmptyFields(t *testing.T) {
+	t.Parallel()
+
 	cur, latest, notes, ignored := "v1.0.0", "", "", false
 	got, _ := json.Marshal(fogUpdateView{CurrentVersion: &cur, Ignored: &ignored, LatestVersion: &latest, Notes: &notes})
 	want := `{"available":false,"currentVersion":"v1.0.0","ignored":false,"latestVersion":"","notes":""}`

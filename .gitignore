@@ -51,3 +51,8 @@ ds-bundle/
 .design-sync/node_modules/
 frontend/.ds-styles.css
 frontend/.ds-types/
+
+# the catalogs a release embeds (scripts/catalog-seed.sh); only the README
+# is tracked
+/internal/catalog/seed/*
+!/internal/catalog/seed/README.md

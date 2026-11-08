@@ -1,0 +1,49 @@
+id: whisper
+title: Whisper
+description: Speech-to-text server — a transcription API for Hub and anything else.
+category: Personal cloud
+icon: '🎙️'
+spec:
+  source:
+    type: image
+    image: onerahmet/openai-whisper-asr-webservice:latest
+  env:
+    ASR_ENGINE: faster_whisper
+    ASR_MODEL: base
+  volumes:
+    - name: cache
+      mount: /root/.cache
+  routes:
+    - port: 9000
+  health:
+    path: /docs
+  notes: The model downloads on first start — the first transcription takes a while. API docs live at /docs. This is the CPU image; bigger models are more accurate but slower. Point Hub's transcription settings at http://<this app's name>:9000.
+options:
+  - key: model
+    label: Whisper model
+    hint: tiny, base, small, medium, or large-v3 — bigger is more accurate but slower on CPU.
+    target: env:ASR_MODEL
+    required: false
+    default: base
+projectUrl: https://github.com/ahmetoner/whisper-asr-webservice
+about: |-
+  A speech-to-text server built on OpenAI's Whisper model, served as an HTTP API. It transcribes and translates audio on this machine, so nothing recorded here leaves it.
+
+  There is no interface to speak of — it is a service other apps call. Hub uses it to transcribe podcasts; anything that can POST an audio file can use it too.
+highlights:
+  - Transcription and translation from any common audio format
+  - 'Model size is your choice: tiny for speed, large for accuracy'
+  - Word-level timestamps and SRT, VTT, or JSON output
+  - Language detection
+  - A plain HTTP API with interactive docs at /docs
+logo: tile.svg
+developer: Ahmet Öner
+license: MIT
+docs: https://ahmetoner.com/whisper-asr-webservice/
+footprint:
+  memory: 1572864000
+  memoryPeak: 6291456000
+  cpu: heavy
+  cpuWhen: transcribing
+  disk: 6291456000
+  diskGrows: with the model you choose — large-v3 is several GB

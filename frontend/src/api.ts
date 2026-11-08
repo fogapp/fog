@@ -6,7 +6,6 @@ import type {
   AppSpec,
   CapacityApp,
   CapacityHost,
-  CatalogEntry,
   ContainerFactsT,
   DeployRecord,
   Disk,
@@ -286,14 +285,6 @@ export interface Capacity {
   measuredAt: number; // unix seconds of the memory reading; 0 = none yet
   apps: CapacityApp[];
   fits: Record<string, Fit>;
-}
-
-export interface CatalogResponse {
-  entries: CatalogEntry[];
-  enabled: string[];
-  // First-party apps left out because this fog has no source for them
-  // (catalog_source_base / catalog_source_overrides).
-  unsourced: number;
 }
 
 export interface NasResponse {

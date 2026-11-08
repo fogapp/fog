@@ -56,6 +56,8 @@ func openAtMigration(t *testing.T, path, stop string) *sql.DB {
 // outbox rows, stray peer-owned groups) upgrades cleanly: the legacy pieces
 // are dropped wholesale, and local error history survives the rebuild.
 func TestPreFederationStateIsDroppedCleanly(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "fog.db")
 	db := openAtMigration(t, path, "0013")
 	seed := func(q string, args ...any) {
@@ -145,6 +147,8 @@ func TestPreFederationStateIsDroppedCleanly(t *testing.T) {
 // groups with foreign keys off and left their events behind — gets the
 // orphans swept by 0021.
 func TestOrphanedErrorEventsAreSwept(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "fog.db")
 	db := openAtMigration(t, path, "0021")
 	seed := func(q string, args ...any) {

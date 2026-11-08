@@ -14,6 +14,8 @@ import (
 // tagged with the app and in fog's vocabulary — and an app that never
 // implemented the optional endpoint costs the page nothing.
 func TestFederationLedgerAggregatesAppLedgers(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	cookie := setup(t, h)
 
@@ -108,6 +110,8 @@ func TestFederationLedgerAggregatesAppLedgers(t *testing.T) {
 }
 
 func TestMergeLedgerKeepsLimitAndOrder(t *testing.T) {
+	t.Parallel()
+
 	fog := []ledgerEntry{{AuditEntry: store.AuditEntry{ID: 7, At: "2026-01-02T00:00:00Z"}}}
 	apps := []ledgerEntry{
 		{AuditEntry: store.AuditEntry{At: "2026-01-03T00:00:00Z"}, Source: "feed"},

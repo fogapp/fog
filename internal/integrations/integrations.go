@@ -43,7 +43,7 @@ const Path = "/fog/integrations"
 const ReturnPath = "/api/integrations/return"
 
 // consentTTL is how long a connection waits for a person to approve it at
-// the provider: Lucid's ticket lasts as long.
+// the provider: Glass's ticket lasts as long.
 const consentTTL = 30 * time.Minute
 
 const (

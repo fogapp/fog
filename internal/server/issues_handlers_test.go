@@ -20,6 +20,8 @@ func seedIssue(t *testing.T, s *Server, severity string) store.Issue {
 }
 
 func TestIssuesEndpoints(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	issue := seedIssue(t, srv, "critical")

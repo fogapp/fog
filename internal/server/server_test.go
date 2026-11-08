@@ -29,13 +29,14 @@ import (
 	"gitea.lan/matthew/fog/internal/config"
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
 func newTestServer(t *testing.T) (*Server, http.Handler) {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +99,7 @@ func setup(t *testing.T, h http.Handler) *http.Cookie {
 }
 
 func TestSetupClosesAfterFirstAdmin(t *testing.T) {
+
 	_, h := newTestServer(t)
 
 	if w := do(t, h, "GET", "/api/setup/status", ""); w.Code != http.StatusOK {
@@ -121,6 +123,7 @@ func TestSetupClosesAfterFirstAdmin(t *testing.T) {
 }
 
 func TestSetupRejectsWeakPassword(t *testing.T) {
+
 	_, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", `{"username":"admin","password":"short"}`)
 	if w.Code != http.StatusBadRequest {
@@ -132,6 +135,7 @@ func TestSetupRejectsWeakPassword(t *testing.T) {
 }
 
 func TestSetupRejectsBadBaseDomain(t *testing.T) {
+
 	_, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup",
 		`{"username":"admin","password":"correct horse battery","baseDomain":"https://example.com/x"}`)
@@ -144,6 +148,7 @@ func TestSetupRejectsBadBaseDomain(t *testing.T) {
 // "already completed" guard turns one domain typo into a 403 on every retry,
 // bricking first-run setup with SettingSetupDone unset and no session.
 func TestSetupRetryableAfterBadBaseDomain(t *testing.T) {
+
 	srv, h := newTestServer(t)
 
 	w := do(t, h, "POST", "/api/setup",
@@ -170,6 +175,7 @@ func TestSetupRetryableAfterBadBaseDomain(t *testing.T) {
 }
 
 func TestLoginAndSession(t *testing.T) {
+
 	_, h := newTestServer(t)
 	setup(t, h)
 
@@ -216,6 +222,7 @@ func TestLoginAndSession(t *testing.T) {
 // domain-wide cookie, which a host-only clear would leave in place, and the
 // legacy member cookie goes too.
 func TestLogoutClearsTheCookiesLoginSets(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	srv.store.SetSetting(store.SettingBaseDomain, "home.example.com")
@@ -259,6 +266,8 @@ func TestLogoutClearsTheCookiesLoginSets(t *testing.T) {
 }
 
 func TestRequireAuthRejectsBadCredentials(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	setup(t, h)
 
@@ -281,6 +290,8 @@ func TestRequireAuthRejectsBadCredentials(t *testing.T) {
 }
 
 func TestExpiredSessionIsRejected(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 
@@ -302,6 +313,8 @@ func TestExpiredSessionIsRejected(t *testing.T) {
 // Session cookies are SameSite=Lax, which still permits some cross-site
 // requests to carry them; the Origin check is what closes that gap.
 func TestCrossOriginMutationRejected(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -325,6 +338,8 @@ func TestCrossOriginMutationRejected(t *testing.T) {
 }
 
 func TestRecoveryKitPassphraseRetractsNotice(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -357,6 +372,8 @@ func TestRecoveryKitPassphraseRetractsNotice(t *testing.T) {
 // The passphrase opens the recovery kit; GET /api/settings, which every page
 // fetches, says whether one is stored but never what it is.
 func TestSettingsMaskRecoveryKitPassphrase(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -409,6 +426,8 @@ func TestSettingsMaskRecoveryKitPassphrase(t *testing.T) {
 // files_backup is the Backups page's "back up Files" toggle; it has to be a
 // setting GET reports and PUT accepts, or that switch can never save.
 func TestFilesBackupSettingRoundTrips(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -429,6 +448,8 @@ func TestFilesBackupSettingRoundTrips(t *testing.T) {
 }
 
 func TestSettingsValidation(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -473,6 +494,8 @@ func TestSettingsValidation(t *testing.T) {
 // A missing app is a 404 with a JSON error, not a 500 — the UI distinguishes
 // "no such app" from "we couldn't tell", and says different things for each.
 func TestUnknownAppIsNotFound(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -490,6 +513,7 @@ func TestUnknownAppIsNotFound(t *testing.T) {
 }
 
 func TestLoginRateLimited(t *testing.T) {
+
 	_, h := newTestServer(t)
 	setup(t, h)
 
@@ -509,6 +533,8 @@ func TestLoginRateLimited(t *testing.T) {
 // A panicking handler must produce a JSON 500 rather than a dropped
 // connection, and must not take the process with it.
 func TestPanicRecovery(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	h := srv.protect(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
@@ -529,6 +555,8 @@ func TestPanicRecovery(t *testing.T) {
 // Recovery must not staple a second set of headers onto a response that has
 // already started — the client would see a corrupt body.
 func TestPanicAfterPartialWrite(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	h := srv.protect(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -547,6 +575,8 @@ func TestPanicAfterPartialWrite(t *testing.T) {
 // The streaming endpoints type-assert on the ResponseWriter, so the wrapper
 // has to keep those assertions working.
 func TestResponseWrapperPreservesFlusher(t *testing.T) {
+	t.Parallel()
+
 	srv, _ := newTestServer(t)
 	var flushable bool
 	h := srv.protect(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -562,6 +592,8 @@ func TestResponseWrapperPreservesFlusher(t *testing.T) {
 // them into a tar rather than turning the operator away — the whole point of
 // the endpoint is getting a copy off-box.
 func TestDownloadLegacySnapshotBundlesDirectory(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -620,6 +652,8 @@ func TestDownloadLegacySnapshotBundlesDirectory(t *testing.T) {
 // sealed with the stored passphrase, never a plaintext tar.gz of the vault
 // master key.
 func TestRecoveryKitDownloadRoundTripsThroughDecryptKit(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	srv.backup = &backup.Manager{DataDir: srv.cfg.DataDir, Store: srv.store, Log: srv.log, Vault: srv.vault}
 	c := setup(t, h)
@@ -669,6 +703,8 @@ func TestRecoveryKitDownloadRoundTripsThroughDecryptKit(t *testing.T) {
 // Changing the passphrase writes a fresh kit under it straight away, so the
 // newest kit — the one a new machine reaches for — never needs the old one.
 func TestPassphraseChangeWritesAFreshKit(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	srv.backup = &backup.Manager{DataDir: srv.cfg.DataDir, Store: srv.store, Log: srv.log, Vault: srv.vault}
 	c := setup(t, h)
@@ -741,7 +777,7 @@ func TestDockerStatusDoesNotBlockConcurrentCallers(t *testing.T) {
 
 	t.Setenv("DOCKER_SOCK", sock)
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -802,6 +838,8 @@ func TestDockerStatusDoesNotBlockConcurrentCallers(t *testing.T) {
 // A backup row whose directory has vanished (NAS unmounted, manual cleanup)
 // must answer 404, not stream an empty bundle that looks like a backup.
 func TestDownloadMissingSnapshotIs404(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	app, err := srv.store.CreateApp("blog")

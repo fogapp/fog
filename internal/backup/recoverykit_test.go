@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/crypto/scrypt"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -91,7 +91,7 @@ func TestCheckKitPassphrase(t *testing.T) {
 // settings alone must not hand over the key to every kit and locker.
 func TestKitPassphraseSealedAtRest(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestVerifyKitCatchesReplay(t *testing.T) {
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(data, "fog.db"))
+	st, err := storetest.Open(filepath.Join(data, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func legacyKitPlain(t *testing.T) []byte {
 // WriteRecoveryKit runs on the schedule loop's ctx; a fogd shutdown must
 // abort it rather than leave it grinding through VACUUM and scrypt.
 func TestWriteRecoveryKitHonorsCancel(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestWriteRecoveryKitRoundTripLeavesNoPlaintext(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	data := t.TempDir()
-	st, err := store.Open(filepath.Join(data, "fog.db"))
+	st, err := storetest.Open(filepath.Join(data, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,6 +30,8 @@ func kept(keep map[string]bool) []string {
 // first night of each of the last six months, the first night of this
 // year and the previous two.
 func TestRetainTiers(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
 	items := nightly(now, 2*365)
 	keep := (Policy{Recent: 30, Monthly: 6, Yearly: 3}).Retain(items, now)
@@ -69,6 +71,8 @@ func TestRetainTiers(t *testing.T) {
 
 // Counts, not days: the same policy on weekly backups keeps thirty weeks.
 func TestRetainScalesWithCadence(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
 	var items []Item
 	for i := 0; i < 60; i++ {
@@ -82,6 +86,8 @@ func TestRetainScalesWithCadence(t *testing.T) {
 }
 
 func TestRetainNeverEmptiesASeries(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	one := []Item{{Name: "only", At: now.AddDate(-5, 0, 0)}}
 	if keep := (Policy{Recent: 0, Monthly: 0, Yearly: 0}).Retain(one, now); !keep["only"] {
@@ -101,6 +107,8 @@ func TestRetainNeverEmptiesASeries(t *testing.T) {
 }
 
 func TestPolicyValidationAndLockDays(t *testing.T) {
+	t.Parallel()
+
 	if !ValidPolicySetting(SettingKeepRecent)("") || !ValidPolicySetting(SettingKeepRecent)("30") || ValidPolicySetting(SettingKeepRecent)("0") || ValidPolicySetting(SettingKeepRecent)("x") {
 		t.Fatal("recent validation")
 	}

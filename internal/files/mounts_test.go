@@ -10,6 +10,8 @@ import (
 // The app volumes are read once per operation, not once per item: reading
 // them lists every app and parses every spec. Creating never reads them.
 func TestMountsReadOncePerOperation(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for _, rel := range []string{"a/1.txt", "a/2.txt", "a/3.txt", "b/x.txt", "media/movies/m.mkv"} {
 		write(t, m, rel, "x")
@@ -47,6 +49,8 @@ func TestMountsReadOncePerOperation(t *testing.T) {
 // app and sidecar alike, resolved against the live root; managed volumes
 // and apps with no readable spec contribute nothing.
 func TestAppMounts(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	mk := func(name, spec string) {
 		t.Helper()
@@ -78,6 +82,8 @@ func TestAppMounts(t *testing.T) {
 // Creating the folder a volume points at, before it exists, is allowed:
 // it takes nothing from the app. Taking it away again is refused.
 func TestCreatingAMountedFolderIsAllowed(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	m.MountedPaths = func() []MountedPath {
 		return []MountedPath{{Path: filepath.Join(m.Root(), "media", "movies"), App: "jellyfin"}}

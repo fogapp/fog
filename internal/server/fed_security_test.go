@@ -30,6 +30,8 @@ import (
 // refused, B's row is untouched, Mallory's key opens nothing, and A's
 // operator is told.
 func TestInviteCannotRekeyAPairedHousehold(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"apps.introduce"}]`)
 	bID := mustIdentity(t, p.b)
 	mallory := mustIdentity(t, mustServer(t))
@@ -127,6 +129,8 @@ func TestInviteCannotRekeyAPairedHousehold(t *testing.T) {
 // pair answer claims A's instance ID under her key. B refuses, keeps A as
 // it was, and says why.
 func TestJoinCannotRekeyAPairedHousehold(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	aID := mustIdentity(t, p.a)
 	mallory := mustIdentity(t, mustServer(t))
@@ -170,6 +174,8 @@ func TestJoinCannotRekeyAPairedHousehold(t *testing.T) {
 // accepted; anything else is refused rather than stored for a reader to
 // guess at. Invites meet the same rules.
 func TestCapabilityConfigShapesAreChecked(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	put := func(c, dir, config string) int {
 		body := fmt.Sprintf(`{"capabilities":[{"capability":%q,"direction":%q,"enabled":true,"config":%s}]}`, c, dir, config)
@@ -222,6 +228,8 @@ func TestCapabilityConfigShapesAreChecked(t *testing.T) {
 // to mean every contracted app). And withdrawing or narrowing the grant
 // reaches the credentials already minted, as unpairing does.
 func TestConnectGrantIsExactAndWithdrawalRevokes(t *testing.T) {
+	t.Parallel()
+
 	cp := newConnectPair(t, `[{"capability":"apps.introduce","config":{"apps":[]}}]`, true)
 	var mu sync.Mutex
 	var revoked []string
@@ -267,6 +275,8 @@ func TestConnectGrantIsExactAndWithdrawalRevokes(t *testing.T) {
 // rows gone — so a later share can't silently bring the old ones back by
 // re-writing the grant.
 func TestWithdrawingFilesGrantStopsEveryShare(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	root := p.a.files.Root()
 	os.MkdirAll(filepath.Join(root, "Old"), 0o755)
@@ -297,6 +307,8 @@ func TestWithdrawingFilesGrantStopsEveryShare(t *testing.T) {
 // Every refusal on /fed/v1 is signed for the request it refuses, so the
 // dialing side can tell the peer's "no" from anybody else's.
 func TestFedRefusalsAreSignedForTheRequest(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	aID := mustIdentity(t, p.a)
 	stranger := mustIdentity(t, mustServer(t))
@@ -331,6 +343,8 @@ func TestFedRefusalsAreSignedForTheRequest(t *testing.T) {
 // and is refused, because its signature is already in the replay record.
 // The record lives in the database, so a restart doesn't forget it.
 func TestReplayedRequestIsRefused(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	body := []byte(`{"fogVersion":"x","grants":[],"directory":[],"url":"https://moved.example"}`)
 	req, _ := http.NewRequest("POST", p.aHTTP.URL+"/fed/v1/heartbeat", nil)

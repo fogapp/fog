@@ -284,23 +284,23 @@ func TestStartToleratesASecretTakenAway(t *testing.T) {
 	}
 	e.Vault, e.Docker = vlt, dockerx.New()
 	ctx := context.Background()
-	if err := e.Create(ctx, "app", &AppSpec{Source: Source{Type: "image", Image: "app:1"}, Secrets: []string{"LUCID_API_KEY"}},
-		map[string]string{"LUCID_API_KEY": "k"}, "admin"); err != nil {
+	if err := e.Create(ctx, "app", &AppSpec{Source: Source{Type: "image", Image: "app:1"}, Secrets: []string{"GLASS_API_KEY"}},
+		map[string]string{"GLASS_API_KEY": "k"}, "admin"); err != nil {
 		t.Fatal(err)
 	}
 	app, _ := e.Store.AppByName("app")
 	e.Store.SetAppCurrentRev(app.ID, 1)
-	e.Store.DeleteSecret(app.ID, "LUCID_API_KEY")
+	e.Store.DeleteSecret(app.ID, "GLASS_API_KEY")
 
 	err = e.Start(ctx, "app", "system")
-	if err != nil && strings.Contains(err.Error(), "LUCID_API_KEY") {
+	if err != nil && strings.Contains(err.Error(), "GLASS_API_KEY") {
 		t.Fatalf("the start failed on the missing secret: %v", err)
 	}
-	if got := e.SecretsMissing()["app"]; len(got) != 1 || got[0] != "LUCID_API_KEY" {
+	if got := e.SecretsMissing()["app"]; len(got) != 1 || got[0] != "GLASS_API_KEY" {
 		t.Fatalf("missing secrets not recorded: %v", got)
 	}
 	// A deploy still insists: it renders the revision as saved.
-	if _, err := e.mergedEnv(app.ID, &AppSpec{Secrets: []string{"LUCID_API_KEY"}}); err == nil {
+	if _, err := e.mergedEnv(app.ID, &AppSpec{Secrets: []string{"GLASS_API_KEY"}}); err == nil {
 		t.Fatal("a deploy's environment passed without its secret")
 	}
 }

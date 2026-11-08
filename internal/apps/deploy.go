@@ -14,7 +14,7 @@ import (
 	"gitea.lan/matthew/fog/internal/build"
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/execx"
-	"gitea.lan/matthew/fog/internal/lucid"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/store"
 )
 
@@ -247,7 +247,7 @@ func (e *Engine) deploy(ctx context.Context, name string, revNum int64, pin, act
 	// Even a failed deploy may have changed what serves, so the proxy
 	// re-reads routes either way.
 	changed = true
-	ctx, txn := lucid.Start(ctx, "job", "deploy")
+	ctx, txn := glass.Start(ctx, "job", "deploy")
 	txn.Attr("app", app.Name)
 	txn.Attr("actor", actor)
 	txn.Attr("rev", rev.Rev)

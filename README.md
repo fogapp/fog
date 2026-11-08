@@ -131,6 +131,7 @@ a problem — [SECURITY.md](SECURITY.md).
 - [fog-integration/1](docs/integrations-contract.md): apps on the same box
 - [fog-compute/1](docs/compute-contract.md): borrowed hardware
 - [fog-widgets/1](docs/widgets-contract.md): start page widgets and search
+- [fog-catalog/1](docs/catalog-contract.md): publishing apps to the store
 - [The event stream](docs/events-contract.md) and
   [the home view](docs/home-view.md)
 - [Sealed apps and LAN-only routes](docs/sealed-network.md)
@@ -144,3 +145,11 @@ a problem — [SECURITY.md](SECURITY.md).
 - [Fog identity](docs/design/fog-identity.md): the visual design spec
 
 Earlier design proposals are in the git history.
+
+## License
+
+Copyright (C) 2026 Matthew Werner
+
+Fog is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3. See [LICENSE](LICENSE) for the full text.

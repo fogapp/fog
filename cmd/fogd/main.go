@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gitea.lan/matthew/fog/internal/appevents"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,11 +29,11 @@ import (
 	"gitea.lan/matthew/fog/internal/filesfed"
 	"gitea.lan/matthew/fog/internal/firstboot"
 	"gitea.lan/matthew/fog/internal/flare"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/issues"
 	"gitea.lan/matthew/fog/internal/janitor"
 	"gitea.lan/matthew/fog/internal/logring"
 	"gitea.lan/matthew/fog/internal/loop"
-	"gitea.lan/matthew/fog/internal/lucid"
 	"gitea.lan/matthew/fog/internal/metrics"
 	"gitea.lan/matthew/fog/internal/nas"
 	"gitea.lan/matthew/fog/internal/notify"
@@ -106,43 +108,70 @@ type daemon struct {
 	api *server.Server
 	srv *http.Server
 
-	// telemetry reports fogd to Lucid (lucid.go); inert until Lucid is
+	// telemetry reports fogd to Glass (glass.go); inert until Glass is
 	// installed and has minted fogd a key.
-	telemetry *lucid.Client
-	// lucidChecked: the refused key's integration was already asked about.
-	lucidChecked bool
+	telemetry *glass.Client
+	// glassChecked: the refused key's integration was already asked about.
+	glassChecked bool
 }
 
 func main() {
-	// `fogd pin-bind`: fogd itself, run in the host's mount namespace to pin
-	// one bind source (internal/apps/pin.go).
-	if len(os.Args) > 1 && os.Args[1] == "pin-bind" {
-		os.Exit(apps.PinMain(os.Args[2:]))
+	if code, done := command(os.Args[1:], os.Stdout, os.Stderr); done {
+		os.Exit(code)
 	}
 	if code := run(); code != 0 {
 		os.Exit(code)
 	}
 }
 
+// command handles fogd's arguments. With none, done is false and fogd
+// starts as the daemon. Anything else is answered and fogd exits — above
+// all an argument it does not know, which must never fall through to
+// starting a second daemon beside the running one.
+func command(args []string, stdout, stderr io.Writer) (code int, done bool) {
+	if len(args) == 0 {
+		return 0, false
+	}
+	switch args[0] {
+	case "pin-bind":
+		// fogd itself, run in the host's mount namespace to pin one bind
+		// source (internal/apps/pin.go).
+		return apps.PinMain(args[1:]), true
+	case "--version", "-version", "-v", "version":
+		fmt.Fprintln(stdout, "fogd", config.Version)
+		return 0, true
+	case "--help", "-help", "-h", "help":
+		fmt.Fprint(stdout, usage)
+		return 0, true
+	}
+	fmt.Fprintf(stderr, "fogd: unknown argument %q\n%s", args[0], usage)
+	return 2, true
+}
+
+const usage = `usage:
+  fogd              run the server (systemd starts it as fogd.service)
+  fogd --version    print the version and exit
+`
+
 // run is fogd from boot to exit; it returns the process exit code. Its own
 // defers run before main exits, whatever the code.
 func run() int {
 	// Stdout stays the record (journald keeps it); the ring beside it is the
-	// short tail a feedback report attaches, and Lucid, once connected, gets
+	// short tail a feedback report attaches, and Glass, once connected, gets
 	// the lines at its log_level.
 	logRing := logring.New(1000)
-	telemetry := lucid.New(config.Version)
-	lucid.SetDefault(telemetry)
+	telemetry := glass.New(config.Version)
+	glass.SetDefault(telemetry)
 	d := &daemon{
 		cfg:       config.FromEnv(),
-		log:       slog.New(lucid.LogHandler(logRing.Handler(slog.NewTextHandler(os.Stdout, nil)))),
+		log:       slog.New(glass.LogHandler(logRing.Handler(slog.NewTextHandler(os.Stdout, nil)))),
 		logRing:   logRing,
 		telemetry: telemetry,
 	}
 	// Outbound calls made through http.DefaultClient inside a request or a
 	// job become spans of it. DefaultTransport itself stays the stock
 	// *http.Transport: fed and backup clone it by type.
-	http.DefaultClient.Transport = lucid.Transport{}
+	http.DefaultClient.Transport = glass.Transport{}
 	d.tasks.log = d.log
 
 	restoredFromKit, ok := d.prepareDataDir()

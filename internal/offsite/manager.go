@@ -63,6 +63,9 @@ type Manager struct {
 	Jobs *jobs.Jobs
 	// Now is the clock (tests).
 	Now func() time.Time
+	// DiskSpace reports a directory's free and total bytes, ok false when
+	// it cannot tell; nil asks the filesystem (tests decide how full).
+	DiskSpace func(dir string) (avail, total int64, ok bool)
 	// The restore doors, injected from main (the backup manager and the
 	// engine own them): RestoreApp restores a recorded backup through its
 	// normal door; Deployed says whether an app has been deployed here;

@@ -12,19 +12,42 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"golang.org/x/crypto/argon2"
 )
 
 // argon2id parameters per OWASP recommendation (19 MiB, t=2, p=1).
+// Memory and time are variables only so a test binary can lower them
+// (CheapPasswordHashForTests); each hash records its own, so lowering them
+// changes only what new hashes cost.
+var (
+	argonMemory uint32 = owaspMemory
+	argonTime   uint32 = owaspTime
+)
+
 const (
-	argonMemory  = 19 * 1024
-	argonTime    = 2
+	owaspMemory = 19 * 1024
+	owaspTime   = 2
+)
+
+const (
 	argonThreads = 1
 	argonKeyLen  = 32
 	argonSaltLen = 16
 )
+
+// CheapPasswordHashForTests makes hashing a new password cost ~1ms instead
+// of ~140ms under -race, for the rest of this test binary. It panics
+// outside a test: a real fog's hashes must cost what OWASP says. Call it
+// from a test file's init.
+func CheapPasswordHashForTests() {
+	if !testing.Testing() {
+		panic("auth.CheapPasswordHashForTests called outside a test binary")
+	}
+	argonMemory, argonTime = 64, 1
+}
 
 // hashSlots caps how many argon2id computations run at once: each takes
 // argonMemory (19 MiB), so an unbounded burst of sign-ins could run the box

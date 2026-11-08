@@ -79,6 +79,8 @@ func legacyKit(t *testing.T, plain []byte, pass string) []byte {
 // the real kit still opens. (Before, the first ten of anything sorting
 // newest exhausted maxKitAttempts and recovery failed.)
 func TestJunkKitsCannotExhaustAttempts(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	real := putKit(t, r, "20260827-010000", realKitBytes(t, "20260827-010000", kitPass))
@@ -140,6 +142,8 @@ func TestRecordedKitsComeFirst(t *testing.T) {
 // used to be what recovery chose, hiding every current kit. Every current
 // kit is now tried before any legacy one.
 func TestRenamedLegacyKitCannotHideCurrentKits(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	current := putKit(t, r, "20260827-010000", realKitBytes(t, "20260827-010000", kitPass))
@@ -163,6 +167,8 @@ func TestRenamedLegacyKitCannotHideCurrentKits(t *testing.T) {
 // Swapping that kit's bytes after the preview, or adding a newer one, does
 // not change what is restored.
 func TestPinnedKitOpensOnlyThatKit(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	sealed := realKitBytes(t, "20260827-010000", kitPass)
@@ -183,6 +189,8 @@ func TestPinnedKitOpensOnlyThatKit(t *testing.T) {
 // the bucket does not displace it, and deleting it is noticed (FellBack).
 // Objects too small to be sealed cost nothing; real tries are capped.
 func TestIndexPrefersRecordedAndCapsTries(t *testing.T) {
+	t.Parallel()
+
 	r, client, _ := testBucket(t)
 	ctx := context.Background()
 	older := plantIndex(t, r, "20260826-010000", Index{WrittenAt: "older"})
@@ -216,6 +224,8 @@ func TestIndexPrefersRecordedAndCapsTries(t *testing.T) {
 // newest kit fog recorded uploading. Deleting that kit from the bucket —
 // so a recovery would quietly restore an older one — raises an alert.
 func TestVerifyCatchesKitRollback(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	ctx := context.Background()
 	target, _, err := h.m.AddTarget(ctx, h.spec("cloud"), "key-1", "secret")
@@ -254,6 +264,8 @@ func init() {
 // Fog now deletes only its own older indexes, keeps the one it just wrote,
 // and says the junk is there.
 func TestJunkIndexObjectsCannotMakeFogDeleteItsIndexes(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	ctx := context.Background()
 	target, _, err := h.m.AddTarget(ctx, h.spec("cloud"), "key-1", "secret")
@@ -322,6 +334,8 @@ func activeNoticeKind(t *testing.T, h *harness, kind string) string {
 // a newer valid index (the night after) is preferred, without a fall-back
 // reported. Older than the record is a fall-back.
 func TestRecordedIndexIsAFloor(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	recorded := plantIndex(t, r, "20260827-010000", Index{WrittenAt: "recorded"})
@@ -337,6 +351,8 @@ func TestRecordedIndexIsAFloor(t *testing.T) {
 // vouch for it: the oldest unrecorded kit is tried within the first
 // decryptions, so the real one is reached however many decoys there are.
 func TestOldestUnrecordedKitIsReached(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	real := putKit(t, r, "20260801-010000", realKitBytes(t, "20260801-010000", kitPass))
@@ -356,6 +372,8 @@ func TestOldestUnrecordedKitIsReached(t *testing.T) {
 // the clock years behind, and a decoy named for the future is refused with
 // the clock years ahead.
 func TestKitDatesJudgedByTheBucketsClock(t *testing.T) {
+	t.Parallel()
+
 	r, _, _ := testBucket(t)
 	ctx := context.Background()
 	stamp := fsx.Stamp(time.Now().Add(-time.Hour))
@@ -414,6 +432,8 @@ func TestConcurrentRecoveriesOpenOneKitAtATime(t *testing.T) {
 // the operator says go ahead. And the listing read is bounded however many
 // rows a bucket writer plants.
 func TestRecoveryFromListingNeedsConsentAndIsBounded(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	ctx := context.Background()
 	target, _, err := h.m.AddTarget(ctx, h.spec("cloud"), "key-1", "secret")

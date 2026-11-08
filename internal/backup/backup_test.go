@@ -13,6 +13,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func TestBackupHour(t *testing.T) {
@@ -91,7 +92,7 @@ func TestReadManifest(t *testing.T) {
 // prune must give pre-update snapshots their own clock and never delete the
 // final remaining backup.
 func TestPrune(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +205,7 @@ func TestKeepByHistory(t *testing.T) {
 // (backups would otherwise land silently on the local disk), and prune must
 // not forget snapshots whose share is currently away.
 func TestUnmountedShareGuards(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +260,7 @@ func swapVar[T any](t *testing.T, v *T, val T) {
 // Passing it through would not just misplace data: the first tar or hash
 // against it blocks in uninterruptible sleep and wedges the calling loop.
 func TestStaleMountedShareRefused(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +312,7 @@ func TestStaleMountedShareRefused(t *testing.T) {
 // RemoveAll would delete nothing while dropping the row erases fog's only
 // memory that the files exist — leaked on the NAS with no record.
 func TestDeleteBackupRefusesUnavailableShare(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +426,7 @@ func fakeDockerRunning(t *testing.T) string {
 // the spec, so PG stays nil and untouched.
 func legacyBackupManager(t *testing.T) (*Manager, *store.Store) {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

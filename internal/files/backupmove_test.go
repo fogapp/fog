@@ -37,6 +37,8 @@ func put(t *testing.T, path, content string) {
 // and a kit there, re-points every record at the new place, and leaves
 // the setting naming it; moving back to the default clears the setting.
 func TestBackupMove(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	bk := withBackups(t, m)
 	cur := m.DefaultBackupDir()
@@ -110,6 +112,8 @@ func TestBackupMove(t *testing.T) {
 // Adopting re-points only the records whose snapshot is at the new place
 // and leaves the old directory alone.
 func TestBackupAdopt(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	withBackups(t, m)
 	cur := m.DefaultBackupDir()
@@ -148,6 +152,8 @@ func TestBackupAdopt(t *testing.T) {
 // The new place may not overlap the current one, Drive, or fog's own
 // trees.
 func TestBackupMoveRefusals(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	withBackups(t, m)
 	for name, to := range map[string]string{
@@ -169,6 +175,8 @@ func TestBackupMoveRefusals(t *testing.T) {
 // A move waits for work holding the directory, and work that comes while
 // it waits or runs is turned away rather than queued behind it.
 func TestBackupMoveWaitsForHolders(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	bk := withBackups(t, m)
 	release, err := bk.HoldDir()
@@ -216,6 +224,8 @@ func TestBackupMoveWaitsForHolders(t *testing.T) {
 // files are links to the one before, and a copy that broke them would
 // cost the whole Drive once per night kept.
 func TestCopyTreeKeepsHardLinks(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	from := filepath.Join(t.TempDir(), "from")
 	put(t, filepath.Join(from, "s1", "big.bin"), "same bytes")

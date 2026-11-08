@@ -39,6 +39,8 @@ func browserCookies(w *httptest.ResponseRecorder) func(*http.Request) {
 // was taken as unpinned. Which cookie fog set is recorded with the
 // credential, and the pin follows the record, never the presented name.
 func TestARenamedChatCredentialIsStillPinned(t *testing.T) {
+	t.Parallel()
+
 	_, h, op := bareIPOperator(t)
 	cred := chatCredOf(t, registerChatDevice(t, h, "web", withCookie(op), fromPeer("192.168.1.20", "")))
 	if cred.Name != "fog_chat" {
@@ -59,6 +61,8 @@ func TestARenamedChatCredentialIsStillPinned(t *testing.T) {
 // chat credential or a device's token sees and ends only devices'
 // sessions; where alerts go is the browser's own, freshly proven.
 func TestAChatCredentialStaysInChat(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", goodSetup)
 	if w.Code != http.StatusOK {
@@ -121,6 +125,8 @@ func TestAChatCredentialStaysInChat(t *testing.T) {
 // couldn't mint a native token — the chat credential was taken for the
 // minting session. The minter is the browser's own session, always.
 func TestABrowserWithChatOpenCanAddAPhone(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", goodSetup)
 	browser := browserCookies(w)
@@ -135,6 +141,8 @@ func TestABrowserWithChatOpenCanAddAPhone(t *testing.T) {
 // credential counts only when bound to this browser and the browser's own
 // person; a plant is expired wherever it could have been set.
 func TestAPlantedChatCredentialDoesNotWin(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	w := do(t, h, "POST", "/api/setup", goodSetup, fromPeer("192.168.1.20", ""))
 	browser := browserCookies(w)
@@ -173,6 +181,7 @@ func TestAPlantedChatCredentialDoesNotWin(t *testing.T) {
 // then no link got one. Each link holds at most its own share, its oldest
 // replaced.
 func TestShareGrantsAreBoundedPerLink(t *testing.T) {
+
 	srv, _ := newTestServer(t)
 	a, _ := srv.store.CreateFileShare(auth.DigestToken("a"), "A", "", mustHash(t, "the real share password"), 0)
 	b, _ := srv.store.CreateFileShare(auth.DigestToken("b"), "B", "", mustHash(t, "the real share password"), 0)

@@ -649,7 +649,7 @@ func BuildReview(app string, s *AppSpec, dataDirs ...string) Review {
 }
 
 // otherAppFolder names the app whose own Drive folder rel is in, when that
-// is not app itself: "Apps/Lucid/config" → "Lucid".
+// is not app itself: "Apps/Glass/config" → "Glass".
 func otherAppFolder(app, rel string) string {
 	segs := strings.Split(rel, "/")
 	if len(segs) < 2 || !strings.EqualFold(segs[0], FilesAppsDir) {

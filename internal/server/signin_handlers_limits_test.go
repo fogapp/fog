@@ -71,6 +71,7 @@ func withCookies(w *httptest.ResponseRecorder) func(*http.Request) {
 // operator told where it belongs, and a container is a container whatever
 // Cf-Connecting-Ip it sends.
 func TestTunnelVisitorsAreEachTheirOwn(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	srv.signinLimitsState.containerNets = func() []netip.Prefix { return []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16")} }
@@ -169,6 +170,7 @@ func TestTunnelVisitorsAreEachTheirOwn(t *testing.T) {
 // Now only a browser's own session may change how its person signs in, and
 // only within minutes of proving itself.
 func TestCredentialsChangeOnlyWithAFreshProof(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	op := setup(t, h)
 	stale := func(c *http.Cookie) {
@@ -238,6 +240,7 @@ func TestCredentialsChangeOnlyWithAFreshProof(t *testing.T) {
 // tunnel, could flush a victim's challenge mid-sign-in. Now a ceremony lives
 // in the id the victim's browser holds, and both floods hit their limits.
 func TestAPasskeyCeremonyCantBeEvicted(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	if err := srv.store.SetSetting(store.SettingBaseDomain, gateDomain); err != nil {
@@ -282,6 +285,7 @@ func TestAPasskeyCeremonyCantBeEvicted(t *testing.T) {
 // never makes a key (they share one bucket), an address out of budget never
 // reaches the account limiter, and a live bucket is never forgotten.
 func TestMadeUpHandlesCantResetAnAccountsBudget(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	login := func(handle, password, addr string) int {
@@ -328,6 +332,7 @@ func TestMadeUpHandlesCantResetAnAccountsBudget(t *testing.T) {
 // here, a busy refusal keeps the address's charge and gives back only the
 // account's, whose owner's password was never checked.
 func TestABusyRefusalStillCostsTheAddress(t *testing.T) {
+
 	srv, _ := newTestServer(t)
 	r := httptest.NewRequest("POST", "/api/auth/login", nil)
 	r.RemoteAddr = "203.0.113.9:1"
@@ -368,6 +373,8 @@ func TestABusyRefusalStillCostsTheAddress(t *testing.T) {
 // a marker without the proxy secret, or a LAN client's own
 // Cf-Connecting-Ip, records nothing.
 func TestFogNotesWhichWayTunnelVisitorsCome(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	setup(t, h)
 	srv.signinLimitsState.containerNets = func() []netip.Prefix { return []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16")} }
@@ -409,6 +416,8 @@ func TestFogNotesWhichWayTunnelVisitorsCome(t *testing.T) {
 // signed-in person never touches that limiter; and a household address
 // keeps a budget of its own when strangers have filled theirs.
 func TestStrangersCantLockOutAppsOrTheHousehold(t *testing.T) {
+	t.Parallel()
+
 	f := newIdP(t, signin.Manifest{})
 	tok := f.signInRP(t)
 	h := f.srv.Handler() // each request from the address it names, not the fixture's one client

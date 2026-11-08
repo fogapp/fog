@@ -48,6 +48,7 @@ func (sc *Scanner) checks() []check {
 		{kind: "route-host-collision", category: "network", run: checkRouteHostCollision},
 		{kind: "spec-unreadable", category: "runtime", run: checkSpecUnreadable},
 		{kind: "sealed-wire-refused", category: "network", run: checkSealedWireRefused},
+		{kind: "sealed-integration-refused", category: "network", run: checkSealedIntegrationRefused},
 		{kind: "wire-unsupported", category: "network", run: checkWireUnsupported},
 		{kind: "wire-unapproved", category: "network", run: checkWireUnapproved},
 		{kind: "host-port-collision", category: "network", run: checkHostPortCollision},

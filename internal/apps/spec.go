@@ -1011,8 +1011,11 @@ var scpStyleRe = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._-]*@[A-Za-z0-9._\
 // catalog's source settings).
 func ValidateGitRepo(repo string) error { return validateGitRepo(repo) }
 
-// validateGitRepo checks a repository URL is a shape Fog can actually clone
-// with a deploy key, with a specific message per common mistake.
+// validateGitRepo checks a repository URL is a shape Fog can actually clone,
+// with a specific message per common mistake. A private repository is
+// cloned over SSH with the app's deploy key; a public one may instead be
+// cloned over https://, which needs no key at all — that is how a
+// published app installs on a fog whose key no git host has heard of.
 func validateGitRepo(repo string) error {
 	repo = strings.TrimSpace(repo)
 	if repo == "" {
@@ -1021,8 +1024,26 @@ func validateGitRepo(repo string) error {
 	if strings.ContainsAny(repo, " \t\n") {
 		return fmt.Errorf("the repository URL contains whitespace — check for a stray space")
 	}
-	if strings.HasPrefix(repo, "http://") || strings.HasPrefix(repo, "https://") {
-		return fmt.Errorf("that's an HTTP clone URL — deploy keys work over SSH only; use the SSH form, e.g. ssh://gitea@host/owner/repo.git")
+	if strings.HasPrefix(repo, "http://") {
+		return fmt.Errorf("plain http:// is unencrypted — use https:// for a public repository, or the SSH form with a deploy key for a private one, e.g. ssh://gitea@host/owner/repo.git")
+	}
+	if strings.HasPrefix(repo, "https://") {
+		u, err := url.Parse(repo)
+		if err != nil || u.Host == "" || strings.HasPrefix(u.Host, "-") {
+			return fmt.Errorf("not a valid https:// URL — expected https://host/owner/repo.git")
+		}
+		// A token in the URL would be written into the clone's .git/config,
+		// inside the build context. Private repositories use a deploy key.
+		if u.User != nil {
+			return fmt.Errorf("no credentials in the URL — https:// is for public repositories; clone a private one over SSH with the deploy key")
+		}
+		if u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("the https:// URL has a query or fragment — use the plain clone URL, e.g. https://%s/owner/repo.git", u.Host)
+		}
+		if strings.Trim(u.Path, "/") == "" {
+			return fmt.Errorf("the https:// URL is missing the repository path — e.g. https://%s/owner/repo.git", u.Host)
+		}
+		return nil
 	}
 	if strings.HasPrefix(repo, "git://") {
 		return fmt.Errorf("git:// URLs are unauthenticated and unsupported — use the SSH form, e.g. ssh://gitea@host/owner/repo.git")
@@ -1051,7 +1072,7 @@ func validateGitRepo(repo string) error {
 	if scpStyleRe.MatchString(repo) {
 		return nil
 	}
-	return fmt.Errorf("unrecognized repository URL — use ssh://user@host/owner/repo.git (or scp-style user@host:owner/repo.git)")
+	return fmt.Errorf("unrecognized repository URL — use ssh://user@host/owner/repo.git (or scp-style user@host:owner/repo.git), or https://host/owner/repo.git for a public repository")
 }
 
 // RouteHost resolves a route's hostname, applying the <app>.<domain> default.
@@ -1094,7 +1115,7 @@ func validateWants(wants []Want) error {
 		default:
 			provider, offer, ok := strings.Cut(w.Offer, "/")
 			if !ok || !nameRe.MatchString(provider) || !nameRe.MatchString(offer) {
-				return fmt.Errorf("invalid wants offer %q (provider/offer, like lucid/monitoring)", w.Offer)
+				return fmt.Errorf("invalid wants offer %q (provider/offer, like glass/monitoring)", w.Offer)
 			}
 		}
 		if seen[w.key()] {

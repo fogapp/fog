@@ -5,7 +5,7 @@
 fog-backup/1 (docs/backup-contract.md).*
 
 Several apps on a household server each grew their own way of saying
-"something happened": Lucid pushes to ntfy when a monitor trips, Hook when
+"something happened": Glass pushes to ntfy when a monitor trips, Hook when
 a grab needs review, fogd itself when a deploy fails. Each one is set up
 separately, and none of them can be told apart, filtered or routed
 differently once it is on the phone.
@@ -34,10 +34,10 @@ in structured JSON, or a JSON array of up to 100 of them:
 ```json
 {
   "id": "incident-4812-opened",
-  "type": "lucid.incident.opened",
+  "type": "glass.incident.opened",
   "subject": "hub: p95 latency",
   "time": "2026-10-06T14:03:11Z",
-  "data": { "key": "incident-4812", "title": "hub p95 over 800ms", "body": "…", "link": "https://lucid.example/monitors/17" }
+  "data": { "key": "incident-4812", "title": "hub p95 over 800ms", "body": "…", "link": "https://glass.example/monitors/17" }
 }
 ```
 
@@ -73,7 +73,7 @@ Reading needs `events` in the app's `uses` (below).
 
 ```json
 {
-  "events": [ { "specversion": "1.0", "seq": 913, "source": "lucid", "type": "lucid.incident.opened", "id": "…", "time": "…", "data": { … } } ],
+  "events": [ { "specversion": "1.0", "seq": 913, "source": "glass", "type": "glass.incident.opened", "id": "…", "time": "…", "data": { … } } ],
   "cursor": 913,
   "gap": false
 }

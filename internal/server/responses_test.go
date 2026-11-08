@@ -15,6 +15,8 @@ import (
 )
 
 func TestWriteErrorStatus(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		err  error
 		want int
@@ -42,6 +44,8 @@ func TestWriteErrorStatus(t *testing.T) {
 // own window, so a 15-minute sign-in limit doesn't tell clients to retry in
 // a minute.
 func TestLimitAnswersOneShape(t *testing.T) {
+	t.Parallel()
+
 	lim := auth.NewRateLimiter(1, 15*time.Minute)
 	if !limit(httptest.NewRecorder(), lim, "k", "slow down") {
 		t.Fatal("first attempt refused")
@@ -60,6 +64,8 @@ func TestLimitAnswersOneShape(t *testing.T) {
 }
 
 func TestReadOptionalJSON(t *testing.T) {
+	t.Parallel()
+
 	var v struct{ Reauth bool }
 	rec := httptest.NewRecorder()
 	if !readOptionalJSON(rec, httptest.NewRequest("POST", "/", nil), &v) || v.Reauth {
@@ -77,6 +83,8 @@ func TestReadOptionalJSON(t *testing.T) {
 // An unknown share is a JSON 404 the frontend's ApiError can read, not
 // net/http's plain-text page.
 func TestNasUnknownShareIsJSON404(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 	w := do(t, h, "POST", "/api/nas/nope/mount", "", withCookie(c))

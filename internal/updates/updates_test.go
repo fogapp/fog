@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/apps"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func TestCommitOutdated(t *testing.T) {
@@ -70,7 +70,7 @@ func TestUpdateAvailable(t *testing.T) {
 // bookkeeping (BeginOp/Deploying) without any Docker underneath.
 func testChecker(t *testing.T) (*Checker, *[]string) {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

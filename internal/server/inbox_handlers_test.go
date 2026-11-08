@@ -8,6 +8,8 @@ import (
 )
 
 func TestInboxSummary(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	seedIssue(t, srv, "warning")

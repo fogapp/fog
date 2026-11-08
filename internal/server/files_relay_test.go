@@ -55,6 +55,8 @@ func pairNodes(t *testing.T, inviter, joiner *fogNode, grants string) (joinerOnI
 // that file, while the subscriber's own share carries it with its bytes.
 // The author's grant to the subscriber is not enough on its own.
 func TestContributionRelayIsGatedByTheOrigin(t *testing.T) {
+	t.Parallel()
+
 	origin, author, holder := newFogNode(t), newFogNode(t), newFogNode(t)
 	authorOnOrigin, originOnAuthor := pairNodes(t, origin, author, `[{"capability":"files.share"}]`)
 	holderOnOrigin, originOnHolder := pairNodes(t, origin, holder, `[{"capability":"files.share"}]`)

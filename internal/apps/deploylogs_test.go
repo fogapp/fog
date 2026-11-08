@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack: a deploy log written before fog redacted at the source holds
@@ -15,7 +16,7 @@ import (
 // engine comes back redacted — with values from any revision, not just the
 // newest (the token was rotated out of the spec since).
 func TestStoredDeployLogsAreRedactedWhenRead(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

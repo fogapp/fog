@@ -36,6 +36,8 @@ func mintInvite(t *testing.T, h http.Handler, cookie *http.Cookie, grants string
 // joins with the code over a real HTTP hop, and both sides end up mutually
 // peered with keys exchanged — no human-visible token anywhere.
 func TestFederationPairingEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	// Instance A (the inviter), reachable over real HTTP.
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
@@ -150,6 +152,8 @@ func TestFederationPairingEndToEnd(t *testing.T) {
 }
 
 func TestFedPairRejectsBadSecrets(t *testing.T) {
+	t.Parallel()
+
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -173,6 +177,8 @@ func TestFedPairRejectsBadSecrets(t *testing.T) {
 }
 
 func TestFedHeartbeatRejectsUnknownAndTampered(t *testing.T) {
+	t.Parallel()
+
 	_, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -226,6 +232,8 @@ func mustIdentity(t *testing.T, s *Server) *fed.Identity {
 // The disconnect story end to end: A unpairs B, nothing is sent to B, and B
 // nonetheless learns — from the refusals its own heartbeats come back with.
 func TestUnpairedPeerLearnsFromRefusedHeartbeats(t *testing.T) {
+	t.Parallel()
+
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -324,6 +332,8 @@ func TestUnpairedPeerLearnsFromRefusedHeartbeats(t *testing.T) {
 // rotated, the stale row kept working and a heartbeat silently reconnected
 // them minutes after the join had reported failure.
 func TestRepairLeavesBothSidesPaired(t *testing.T) {
+	t.Parallel()
+
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -372,6 +382,8 @@ func TestRepairLeavesBothSidesPaired(t *testing.T) {
 // Only "we have no row for you" means unpaired. Every other refusal is about
 // the request, and must never be read as the end of a relationship.
 func TestFedRejectionCodesDistinguishUnpairingFromBadRequests(t *testing.T) {
+	t.Parallel()
+
 	a, aHandler := newTestServer(t)
 	aCookie := setup(t, aHandler)
 	aHTTP := httptest.NewServer(aHandler)
@@ -455,6 +467,8 @@ func mustServer(t *testing.T) *Server {
 // an advertised URL flips it reachable with no advice. This is the Federation
 // page's reachability story (Project L).
 func TestFederationReachabilityStory(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	cookie := setup(t, h)
 
@@ -492,6 +506,8 @@ func TestFederationReachabilityStory(t *testing.T) {
 // The join preview decodes a pasted invite — showing who and where — without
 // pairing or spending the secret (Project L rich invites).
 func TestFedJoinPreview(t *testing.T) {
+	t.Parallel()
+
 	inviter, ih := newTestServer(t)
 	iCookie := setup(t, ih)
 	if w := do(t, ih, "PUT", "/api/federation/identity",
@@ -525,6 +541,8 @@ func TestFedJoinPreview(t *testing.T) {
 // capabilities as "sees", the rest as withheld, in the peer's voice — and it
 // mints nothing (Project L "view as a peer").
 func TestFedPeerMirror(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	cookie := setup(t, h)
 	// Name ourselves so the sentence reads naturally.
@@ -588,6 +606,8 @@ func TestFedPeerMirror(t *testing.T) {
 // the peer identifier lands in a different column per verb — so the per-peer
 // filter must look past subject alone (Project K, review fix).
 func TestFederationLedger(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	cookie := setup(t, h)
 
@@ -661,6 +681,8 @@ func TestFederationLedger(t *testing.T) {
 // A refused update changes nothing: the rename, label and address in the
 // same request as a bad capability must not be saved behind a 400.
 func TestUpdateFedPeerRefusesWholesale(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`)
 	before, err := p.b.store.FedPeerByID(p.aPeerOnB.ID)
 	if err != nil {

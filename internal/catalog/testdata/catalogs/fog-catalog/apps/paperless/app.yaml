@@ -1,0 +1,105 @@
+id: paperless
+title: Paperless-ngx
+description: Document archive — scan, OCR, tag, and find anything again.
+category: Personal cloud
+icon: '📄'
+spec:
+  source:
+    type: image
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+  env:
+    PAPERLESS_ADMIN_USER: admin
+    PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
+    PAPERLESS_OCR_LANGUAGE: eng
+    PAPERLESS_REDIS: redis://broker:6379
+    PAPERLESS_SOCIALACCOUNT_PROVIDERS: '{"openid_connect":{"OAUTH_PKCE_ENABLED":true,"APPS":[{"provider_id":"fog","name":"fog","client_id":"{{oidc.client_id}}","secret":"{{oidc.client_secret}}","settings":{"server_url":"{{oidc.issuer}}","token_auth_method":"client_secret_basic"}}]}}'
+    PAPERLESS_SOCIAL_AUTO_SIGNUP: "true"
+    PAPERLESS_TIME_ZONE: Etc/UTC
+    PAPERLESS_URL: https://{{fqdn}}
+  secrets:
+    - PAPERLESS_SECRET_KEY
+  volumes:
+    - name: data
+      mount: /usr/src/paperless/data
+      owner: 1000:1000
+    - name: media
+      mount: /usr/src/paperless/media
+      owner: 1000:1000
+    - name: export
+      mount: /usr/src/paperless/export
+      owner: 1000:1000
+    - name: consume
+      mount: /usr/src/paperless/consume
+      files: Content/Scans
+  routes:
+    - port: 8000
+  health:
+    path: /
+  aux:
+    - name: broker
+      image: docker.io/valkey/valkey:9-alpine
+      volumes:
+        - name: redisdata
+          mount: /data
+  deployStrategy: restart
+  backup:
+    enabled: true
+  notes: 'Sign in with fog once fog has a domain: the household''s people get Paperless accounts on first sign-in (choose who on the Sign-in tab). First login: admin / your install password (default changeme — change it right away in the top-right menu → My Profile). Anything dropped into Drive → Content → Scans is ingested automatically and removed once filed — upload from the Drive page, save from a phone over WebDAV, or point a scanner at that folder. To connect Hub: create an auth token in Paperless (Django admin → Tokens) and point Hub''s documents settings at http://<this app''s name>:8000.'
+  signin:
+    contract: fog-signin/1
+    redirect: /accounts/oidc/fog/login/callback/
+    email: true
+    par: false
+options:
+  - key: consume
+    label: Scans folder
+    hint: Drop documents here and Paperless files them.
+    target: volume:consume
+    required: false
+  - key: tz
+    label: Timezone
+    target: env:PAPERLESS_TIME_ZONE
+    required: false
+    default: Etc/UTC
+  - key: admin_password
+    label: Admin password
+    hint: First-login password for the admin account; change it after signing in.
+    target: env:PAPERLESS_ADMIN_PASSWORD
+    required: false
+    default: changeme
+  - key: ocr_language
+    label: OCR language
+    hint: 'Tesseract code: eng, deu, fra, spa…'
+    target: env:PAPERLESS_OCR_LANGUAGE
+    required: false
+    default: eng
+  - key: PAPERLESS_SECRET_KEY
+    label: PAPERLESS_SECRET_KEY
+    hint: Django session-signing key; unique per instance.
+    target: secret:PAPERLESS_SECRET_KEY
+    required: true
+    generate: hex128
+projectUrl: https://github.com/paperless-ngx/paperless-ngx
+about: |-
+  Paperless-ngx is a document archive. Scan or drop a document in, and it is OCR'd, tagged, filed, and made searchable — the paper in the house becomes something you can find again from any device.
+
+  It learns from how you file: correspondents, document types, and tags are suggested from the text, and mail rules can pull attachments in from a mailbox on their own.
+highlights:
+  - OCR in your language, with full-text search across everything
+  - Automatic tagging and filing that learns from your corrections
+  - 'A scans folder: drop a file in and it is consumed'
+  - Mail rules that fetch attachments from an inbox
+  - Custom fields, workflows, and a share link for any document
+  - Per-user permissions for shared households
+logo: logo.svg
+developer: Paperless-ngx community
+license: GPL-3.0
+website: https://docs.paperless-ngx.com
+docs: https://docs.paperless-ngx.com
+footprint:
+  memory: 524288000
+  memoryPeak: 1572864000
+  cpu: heavy
+  cpuWhen: OCR on new documents
+  disk: 1572864000
+  diskGrows: with your documents

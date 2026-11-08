@@ -15,7 +15,7 @@ import (
 	"gitea.lan/matthew/fog/internal/store"
 )
 
-// fakeProvider is Lucid's half of fog-integration/1, as fog sees it.
+// fakeProvider is Glass's half of fog-integration/1, as fog sees it.
 type fakeProvider struct {
 	mu       sync.Mutex
 	minted   map[string]bool // id → active
@@ -55,7 +55,7 @@ func (p *fakeProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		id := "telemetry_" + body.Consumer
 		p.minted[id] = true
-		secrets := map[string]string{"LUCID_API_KEY": "lucid_ing_" + body.Consumer}
+		secrets := map[string]string{"GLASS_API_KEY": "glass_ing_" + body.Consumer}
 		if p.omit {
 			secrets = map[string]string{}
 		}
@@ -63,7 +63,7 @@ func (p *fakeProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"id": id, "secrets": secrets})
 	case r.Method == "POST" && strings.HasSuffix(id, "/claim") && p.minted[strings.TrimSuffix(id, "/claim")]:
 		p.claimed++
-		json.NewEncoder(w).Encode(map[string]any{"secrets": map[string]string{"LUCID_READ_TOKEN": "lucid_read"}})
+		json.NewEncoder(w).Encode(map[string]any{"secrets": map[string]string{"GLASS_READ_TOKEN": "glass_read"}})
 	case r.Method == "GET" && p.minted[id] || r.Method == "GET" && slices.Contains(p.revoked, id):
 		json.NewEncoder(w).Encode(map[string]any{"id": id, "active": p.minted[id], "last_activity_at": "2026-10-13T09:00:00Z"})
 	case r.Method == "DELETE" && p.minted[id]:
@@ -90,26 +90,26 @@ func newIntegrationFixture(t *testing.T) *integrationFixture {
 	s.engine = &apps.Engine{Store: s.store, Vault: s.vault}
 	f := &integrationFixture{s: s, h: h, cookie: setup(t, h), provider: &fakeProvider{minted: map[string]bool{}}}
 
-	lucidID, _ := appWithToken(t, s, "lucid")
-	withSpec(t, s, lucidID, apps.AppSpec{
-		Source: apps.Source{Type: "image", Image: "lucid"},
+	glassID, _ := appWithToken(t, s, "glass")
+	withSpec(t, s, glassID, apps.AppSpec{
+		Source: apps.Source{Type: "image", Image: "glass"},
 		Routes: []apps.Route{{Port: 80}},
 		Connection: &apps.Connection{Port: 80, Offers: []apps.Offer{{
-			ID: "telemetry", Title: "Telemetry", Blurb: "Requests show up in Lucid.",
-			Env: map[string]string{"LUCID_URL": "{{url}}"}, Secrets: []string{"LUCID_API_KEY"},
+			ID: "telemetry", Title: "Telemetry", Blurb: "Requests show up in Glass.",
+			Env: map[string]string{"GLASS_URL": "{{url}}"}, Secrets: []string{"GLASS_API_KEY"},
 		}, {
 			ID: "read", Title: "Read access", Consent: true,
-			Env: map[string]string{"LUCID_READ_URL": "{{url}}"}, Secrets: []string{"LUCID_READ_TOKEN"},
+			Env: map[string]string{"GLASS_READ_URL": "{{url}}"}, Secrets: []string{"GLASS_READ_TOKEN"},
 		}}},
 	})
-	s.store.SetAppCurrentRev(lucidID, 1)
-	s.store.SetAppDesiredState(lucidID, "running")
+	s.store.SetAppCurrentRev(glassID, 1)
+	s.store.SetAppDesiredState(glassID, "running")
 
 	f.newtabID, _ = appWithToken(t, s, "newtab")
 	withSpec(t, s, f.newtabID, apps.AppSpec{
 		Source: apps.Source{Type: "image", Image: "newtab"},
-		Env:    map[string]string{"NEWTAB_HOST": "newtab.home", "LUCID_URL": "http://lucid"},
-		Wants:  []apps.Want{{Offer: "lucid/telemetry"}},
+		Env:    map[string]string{"NEWTAB_HOST": "newtab.home", "GLASS_URL": "http://glass"},
+		Wants:  []apps.Want{{Offer: "glass/telemetry"}},
 	})
 
 	srv := httptest.NewServer(f.provider)
@@ -135,17 +135,19 @@ func (f *integrationFixture) list(t *testing.T) integrations.List {
 
 func (f *integrationFixture) connect(t *testing.T) *httptest.ResponseRecorder {
 	t.Helper()
-	return do(t, f.h, "POST", "/api/apps/newtab/integrations", `{"provider":"lucid"}`, withCookie(f.cookie))
+	return do(t, f.h, "POST", "/api/apps/newtab/integrations", `{"provider":"glass"}`, withCookie(f.cookie))
 }
 
 func (f *integrationFixture) disconnect(t *testing.T, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	return do(t, f.h, "DELETE", "/api/apps/newtab/integrations/lucid"+query, "", withCookie(f.cookie))
+	return do(t, f.h, "DELETE", "/api/apps/newtab/integrations/glass"+query, "", withCookie(f.cookie))
 }
 
 // Connecting lists the app, mints through the provider with its own
 // FOG_API_TOKEN, and lands the env and the secret in a new revision.
 func TestIntegrationConnectAndDisconnect(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 
 	got := f.list(t)
@@ -153,24 +155,24 @@ func TestIntegrationConnectAndDisconnect(t *testing.T) {
 		t.Fatalf("before: %+v", got)
 	}
 	a := got.Available[0]
-	if a.Provider != "lucid" || a.Problem != "" || !slices.Equal(a.Capabilities, []string{"Requests show up in Lucid."}) {
+	if a.Provider != "glass" || a.Problem != "" || !slices.Equal(a.Capabilities, []string{"Requests show up in Glass."}) {
 		t.Fatalf("available: %+v", a)
 	}
 	if a.Replaces {
-		t.Fatalf("LUCID_URL is already what the offer sets, so nothing is replaced: %+v", a)
+		t.Fatalf("GLASS_URL is already what the offer sets, so nothing is replaced: %+v", a)
 	}
 
 	if w := f.connect(t); w.Code != http.StatusCreated {
 		t.Fatalf("connect: %d %s", w.Code, w.Body)
 	}
-	if f.provider.auth != "Bearer fog-token-lucid" || f.provider.consumer != "newtab" {
+	if f.provider.auth != "Bearer fog-token-glass" || f.provider.consumer != "newtab" {
 		t.Fatalf("mint call: auth %q consumer %q", f.provider.auth, f.provider.consumer)
 	}
 	spec := latestSpec(t, f.s, f.newtabID)
-	if spec.Env["LUCID_URL"] != "http://lucid" || spec.Env["NEWTAB_HOST"] != "newtab.home" || !slices.Contains(spec.Secrets, "LUCID_API_KEY") {
+	if spec.Env["GLASS_URL"] != "http://glass" || spec.Env["NEWTAB_HOST"] != "newtab.home" || !slices.Contains(spec.Secrets, "GLASS_API_KEY") {
 		t.Fatalf("spec after connect: env %v secrets %v", spec.Env, spec.Secrets)
 	}
-	if v, err := f.s.secrets().Get(f.newtabID, "LUCID_API_KEY"); err != nil || v != "lucid_ing_newtab" {
+	if v, err := f.s.secrets().Get(f.newtabID, "GLASS_API_KEY"); err != nil || v != "glass_ing_newtab" {
 		t.Fatalf("vault: %q %v", v, err)
 	}
 
@@ -193,10 +195,10 @@ func TestIntegrationConnectAndDisconnect(t *testing.T) {
 		t.Fatalf("revoked: %v", f.provider.revoked)
 	}
 	spec = latestSpec(t, f.s, f.newtabID)
-	if _, set := spec.Env["LUCID_URL"]; set || slices.Contains(spec.Secrets, "LUCID_API_KEY") || spec.Env["NEWTAB_HOST"] == "" {
+	if _, set := spec.Env["GLASS_URL"]; set || slices.Contains(spec.Secrets, "GLASS_API_KEY") || spec.Env["NEWTAB_HOST"] == "" {
 		t.Fatalf("spec after disconnect: env %v secrets %v", spec.Env, spec.Secrets)
 	}
-	if v, _ := f.s.secrets().Get(f.newtabID, "LUCID_API_KEY"); v != "" {
+	if v, _ := f.s.secrets().Get(f.newtabID, "GLASS_API_KEY"); v != "" {
 		t.Fatalf("vault still holds %q", v)
 	}
 	if got := f.list(t); len(got.Connected) != 0 || len(got.Available) != 1 {
@@ -210,9 +212,11 @@ func TestIntegrationConnectAndDisconnect(t *testing.T) {
 // The provider's refusal reaches the operator in its own words, and a mint
 // that leaves out a declared secret is revoked rather than half-applied.
 func TestIntegrationConnectRefusals(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 
-	f.provider.refuse = "Lucid has no household yet — open it and finish setup first"
+	f.provider.refuse = "Glass has no household yet — open it and finish setup first"
 	w := f.connect(t)
 	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "finish setup") {
 		t.Fatalf("refused: %d %s", w.Code, w.Body)
@@ -220,19 +224,19 @@ func TestIntegrationConnectRefusals(t *testing.T) {
 
 	f.provider.refuse, f.provider.omit = "", true
 	w = f.connect(t)
-	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "LUCID_API_KEY") {
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "GLASS_API_KEY") {
 		t.Fatalf("omitted: %d %s", w.Code, w.Body)
 	}
 	if !slices.Equal(f.provider.revoked, []string{"telemetry_newtab"}) {
 		t.Fatalf("a half mint must be revoked: %v", f.provider.revoked)
 	}
-	if spec := latestSpec(t, f.s, f.newtabID); slices.Contains(spec.Secrets, "LUCID_API_KEY") {
+	if spec := latestSpec(t, f.s, f.newtabID); slices.Contains(spec.Secrets, "GLASS_API_KEY") {
 		t.Fatal("nothing should land in the spec")
 	}
 
-	lucid, _ := f.s.store.AppByName("lucid")
-	f.s.store.SetAppDesiredState(lucid.ID, "stopped")
-	if got := f.list(t); got.Available[0].Problem != "lucid is not running" {
+	glass, _ := f.s.store.AppByName("glass")
+	f.s.store.SetAppDesiredState(glass.ID, "stopped")
+	if got := f.list(t); got.Available[0].Problem != "glass is not running" {
 		t.Fatalf("stopped provider: %+v", got.Available)
 	}
 	if w := f.connect(t); w.Code != http.StatusConflict {
@@ -247,32 +251,36 @@ func TestIntegrationConnectRefusals(t *testing.T) {
 // A provider that can't revoke holds the disconnect until the operator
 // says to go on; a credential the provider revoked itself is flagged.
 func TestIntegrationDisconnectNeedsProviderOrForce(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	if w := f.connect(t); w.Code != http.StatusCreated {
 		t.Fatalf("connect: %d %s", w.Code, w.Body)
 	}
 
-	// Revoked in Lucid's own Settings: the tab says so.
+	// Revoked in Glass's own Settings: the tab says so.
 	f.provider.minted["telemetry_newtab"] = false
 	f.provider.revoked = append(f.provider.revoked, "telemetry_newtab")
 	if c := f.list(t).Connected[0]; !strings.Contains(c.Problem, "revoked") {
 		t.Fatalf("revoked upstream: %+v", c)
 	}
 
-	lucid, _ := f.s.store.AppByName("lucid")
-	f.s.store.SetAppDesiredState(lucid.ID, "stopped")
+	glass, _ := f.s.store.AppByName("glass")
+	f.s.store.SetAppDesiredState(glass.ID, "stopped")
 	if w := f.disconnect(t, ""); w.Code != http.StatusConflict {
 		t.Fatalf("disconnect with provider stopped: %d %s", w.Code, w.Body)
 	}
 	if w := f.disconnect(t, "?force=1"); w.Code != http.StatusOK {
 		t.Fatalf("forced: %d %s", w.Code, w.Body)
 	}
-	if spec := latestSpec(t, f.s, f.newtabID); slices.Contains(spec.Secrets, "LUCID_API_KEY") {
+	if spec := latestSpec(t, f.s, f.newtabID); slices.Contains(spec.Secrets, "GLASS_API_KEY") {
 		t.Fatal("forced disconnect must still clean the spec")
 	}
 }
 
 func TestOfferValidation(t *testing.T) {
+	t.Parallel()
+
 	base := func(o apps.Offer) apps.AppSpec {
 		return apps.AppSpec{Source: apps.Source{Type: "image", Image: "x"}, Connection: &apps.Connection{Port: 80, Offers: []apps.Offer{o}}}
 	}
@@ -292,19 +300,19 @@ func TestOfferValidation(t *testing.T) {
 		}
 	}
 	for _, w := range [][]apps.Want{
-		{{Offer: "lucid"}},
-		{{Offer: "lucid/telemetry", App: "lucid"}},
+		{{Offer: "glass"}},
+		{{Offer: "glass/telemetry", App: "glass"}},
 		{{App: "events"}},
 		{{App: "sabnzbd", As: map[string]string{"A": "B"}}},
 		{{App: "sabnzbd"}, {App: "sabnzbd"}},
-		{{Offer: "lucid/telemetry"}, {Offer: "lucid/telemetry"}},
-		{{Offer: "lucid/telemetry", As: map[string]string{"LUCID_API_KEY": "not a name"}}},
+		{{Offer: "glass/telemetry"}, {Offer: "glass/telemetry"}},
+		{{Offer: "glass/telemetry", As: map[string]string{"GLASS_API_KEY": "not a name"}}},
 	} {
 		if sp := (apps.AppSpec{Source: apps.Source{Type: "image", Image: "x"}, Wants: w}); sp.Validate() == nil {
 			t.Errorf("accepted wants %+v", w)
 		}
 	}
-	if (&apps.Connection{Port: 3000, Path: "/v1"}).ConnectionURL("lucid") != "http://lucid:3000/v1" {
+	if (&apps.Connection{Port: 3000, Path: "/v1"}).ConnectionURL("glass") != "http://glass:3000/v1" {
 		t.Error("connection URL with a port")
 	}
 }
@@ -312,11 +320,13 @@ func TestOfferValidation(t *testing.T) {
 // A value set by hand that connecting would change is flagged before the
 // operator connects; a secret of the same name always is.
 func TestIntegrationFlagsWhatItReplaces(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	withSpec(t, f.s, f.newtabID, apps.AppSpec{
 		Source: apps.Source{Type: "image", Image: "newtab"},
-		Env:    map[string]string{"LUCID_URL": "http://192.168.1.200:3004"},
-		Wants:  []apps.Want{{Offer: "lucid/telemetry"}},
+		Env:    map[string]string{"GLASS_URL": "http://192.168.1.200:3004"},
+		Wants:  []apps.Want{{Offer: "glass/telemetry"}},
 	})
 	if got := f.list(t).Available[0]; !got.Replaces {
 		t.Fatalf("replaces: %+v", got)
@@ -326,19 +336,21 @@ func TestIntegrationFlagsWhatItReplaces(t *testing.T) {
 // Wants rename what an offer sets to the names the app reads, and
 // connecting sets them under those names.
 func TestIntegrationWantsRename(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	withSpec(t, f.s, f.newtabID, apps.AppSpec{
 		Source: apps.Source{Type: "image", Image: "newtab"},
-		Wants:  []apps.Want{{Offer: "lucid/telemetry", As: map[string]string{"LUCID_API_KEY": "NEWTAB_INGEST_KEY"}}},
+		Wants:  []apps.Want{{Offer: "glass/telemetry", As: map[string]string{"GLASS_API_KEY": "NEWTAB_INGEST_KEY"}}},
 	})
 	if w := f.connect(t); w.Code != http.StatusCreated {
 		t.Fatalf("connect: %d %s", w.Code, w.Body)
 	}
 	spec := latestSpec(t, f.s, f.newtabID)
-	if !slices.Contains(spec.Secrets, "NEWTAB_INGEST_KEY") || slices.Contains(spec.Secrets, "LUCID_API_KEY") {
+	if !slices.Contains(spec.Secrets, "NEWTAB_INGEST_KEY") || slices.Contains(spec.Secrets, "GLASS_API_KEY") {
 		t.Fatalf("secrets: %v", spec.Secrets)
 	}
-	if v, _ := f.s.secrets().Get(f.newtabID, "NEWTAB_INGEST_KEY"); v != "lucid_ing_newtab" {
+	if v, _ := f.s.secrets().Get(f.newtabID, "NEWTAB_INGEST_KEY"); v != "glass_ing_newtab" {
 		t.Fatalf("renamed secret holds %q", v)
 	}
 	if w := f.disconnect(t, ""); w.Code != http.StatusOK {
@@ -353,26 +365,28 @@ func TestIntegrationWantsRename(t *testing.T) {
 // approved, fog claims the credential once and sets it, under the names the
 // app reads. Declined, nothing is set.
 func TestIntegrationConsent(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	f.s.store.SetSetting(store.SettingBaseDomain, "home.test")
 	withSpec(t, f.s, f.newtabID, apps.AppSpec{
 		Source: apps.Source{Type: "image", Image: "newtab"},
-		Wants: []apps.Want{{Offer: "lucid/read", As: map[string]string{
-			"LUCID_READ_URL": "NEWTAB_LUCID_URL", "LUCID_READ_TOKEN": "NEWTAB_LUCID_TOKEN"}}},
+		Wants: []apps.Want{{Offer: "glass/read", As: map[string]string{
+			"GLASS_READ_URL": "NEWTAB_GLASS_URL", "GLASS_READ_TOKEN": "NEWTAB_GLASS_TOKEN"}}},
 	})
 	if a := f.list(t).Available[0]; !a.Consent {
 		t.Fatalf("consent: %+v", a)
 	}
 	ask := func() string {
 		t.Helper()
-		w := do(t, f.h, "POST", "/api/apps/newtab/integrations", `{"provider":"lucid","deploy":true}`,
+		w := do(t, f.h, "POST", "/api/apps/newtab/integrations", `{"provider":"glass","deploy":true}`,
 			withCookie(f.cookie), withOrigin("http://example.com"))
 		if w.Code != http.StatusAccepted {
 			t.Fatalf("ask: %d %s", w.Code, w.Body)
 		}
 		var resp struct{ ConsentURL string }
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if resp.ConsentURL != "https://lucid.home.test/connect/tkt" {
+		if resp.ConsentURL != "https://glass.home.test/connect/tkt" {
 			t.Fatalf("consent url %q", resp.ConsentURL)
 		}
 		if !strings.HasPrefix(f.provider.returnTo, "http://example.com/api/integrations/return?state=") {
@@ -391,7 +405,7 @@ func TestIntegrationConsent(t *testing.T) {
 
 	ret := ask()
 	c := f.list(t).Connected
-	if len(c) != 1 || c[0].State != integrations.StatePending || c[0].Problem != "Waiting for someone to approve this in lucid" {
+	if len(c) != 1 || c[0].State != integrations.StatePending || c[0].Problem != "Waiting for someone to approve this in glass" {
 		t.Fatalf("pending: %+v", c)
 	}
 	if w := f.connect(t); w.Code != http.StatusConflict {
@@ -401,14 +415,14 @@ func TestIntegrationConsent(t *testing.T) {
 		t.Fatal("nothing is set before approval")
 	}
 
-	if loc := back(ret + "&result=approved"); loc != "/apps/newtab/integrations?connected=lucid" {
+	if loc := back(ret + "&result=approved"); loc != "/apps/newtab/integrations?connected=glass" {
 		t.Fatalf("approved lands on %q", loc)
 	}
 	spec := latestSpec(t, f.s, f.newtabID)
-	if spec.Env["NEWTAB_LUCID_URL"] != "http://lucid" || !slices.Equal(spec.Secrets, []string{"NEWTAB_LUCID_TOKEN"}) {
+	if spec.Env["NEWTAB_GLASS_URL"] != "http://glass" || !slices.Equal(spec.Secrets, []string{"NEWTAB_GLASS_TOKEN"}) {
 		t.Fatalf("spec: env %v secrets %v", spec.Env, spec.Secrets)
 	}
-	if v, _ := f.s.secrets().Get(f.newtabID, "NEWTAB_LUCID_TOKEN"); v != "lucid_read" {
+	if v, _ := f.s.secrets().Get(f.newtabID, "NEWTAB_GLASS_TOKEN"); v != "glass_read" {
 		t.Fatalf("vault: %q", v)
 	}
 	if c := f.list(t).Connected; len(c) != 1 || c[0].Problem != "" || c[0].State != integrations.StateConnected {
@@ -424,7 +438,7 @@ func TestIntegrationConsent(t *testing.T) {
 		t.Fatalf("disconnect: %d %s", w.Code, w.Body)
 	}
 	ret = ask()
-	if loc := back(ret + "&result=denied"); loc != "/apps/newtab/integrations?declined=lucid" {
+	if loc := back(ret + "&result=denied"); loc != "/apps/newtab/integrations?declined=glass" {
 		t.Fatalf("declined lands on %q", loc)
 	}
 	if got := f.list(t); len(got.Connected) != 0 {
@@ -447,10 +461,12 @@ func TestIntegrationConsent(t *testing.T) {
 // Without a domain the provider has no page anyone can open: refused, and
 // the request revoked.
 func TestIntegrationConsentNeedsDomain(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	withSpec(t, f.s, f.newtabID, apps.AppSpec{
 		Source: apps.Source{Type: "image", Image: "newtab"},
-		Wants:  []apps.Want{{Offer: "lucid/read"}},
+		Wants:  []apps.Want{{Offer: "glass/read"}},
 	})
 	w := f.connect(t)
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "Settings › Network") {
@@ -465,32 +481,34 @@ func TestIntegrationConsentNeedsDomain(t *testing.T) {
 // fog.yaml declared at its last deploy; the consumer's repo wants work the
 // same way. A push reaches them, not only a fresh install.
 func TestIntegrationDeclaredInRepo(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
-	lucid, _ := f.s.store.AppByName("lucid")
-	withSpec(t, f.s, lucid.ID, apps.AppSpec{Source: apps.Source{Type: "git", Repo: "x"}, Routes: []apps.Route{{Port: 80}}})
+	glass, _ := f.s.store.AppByName("glass")
+	withSpec(t, f.s, glass.ID, apps.AppSpec{Source: apps.Source{Type: "git", Repo: "x"}, Routes: []apps.Route{{Port: 80}}})
 	withSpec(t, f.s, f.newtabID, apps.AppSpec{Source: apps.Source{Type: "image", Image: "newtab"}})
 	if got := f.list(t); len(got.Available)+len(got.Connected) != 0 {
 		t.Fatalf("nothing declared yet: %+v", got)
 	}
 
-	decl := &apps.Declared{Offers: []apps.Offer{{ID: "telemetry", Title: "Telemetry", Capabilities: []string{"Errors in Lucid"},
-		Env: map[string]string{"LUCID_URL": apps.URLTemplate}, Secrets: []string{"LUCID_API_KEY"}}}}
-	f.s.store.SetAppIntegrations(lucid.ID, decl.JSON())
+	decl := &apps.Declared{Offers: []apps.Offer{{ID: "telemetry", Title: "Telemetry", Capabilities: []string{"Errors in Glass"},
+		Env: map[string]string{"GLASS_URL": apps.URLTemplate}, Secrets: []string{"GLASS_API_KEY"}}}}
+	f.s.store.SetAppIntegrations(glass.ID, decl.JSON())
 	if got := f.list(t); len(got.Available) != 0 {
 		t.Fatalf("an offer newtab doesn't want isn't listed: %+v", got)
 	}
-	want := &apps.Declared{Wants: []apps.Want{{Offer: "lucid/telemetry", As: map[string]string{"LUCID_API_KEY": "NEWTAB_INGEST_KEY"}}}}
+	want := &apps.Declared{Wants: []apps.Want{{Offer: "glass/telemetry", As: map[string]string{"GLASS_API_KEY": "NEWTAB_INGEST_KEY"}}}}
 	f.s.store.SetAppIntegrations(f.newtabID, want.JSON())
 
 	got := f.list(t).Available
-	if len(got) != 1 || !slices.Equal(got[0].Capabilities, []string{"Errors in Lucid"}) {
+	if len(got) != 1 || !slices.Equal(got[0].Capabilities, []string{"Errors in Glass"}) {
 		t.Fatalf("declared offer, wanted: %+v", got)
 	}
 	if w := f.connect(t); w.Code != http.StatusCreated {
 		t.Fatalf("connect: %d %s", w.Code, w.Body)
 	}
 	spec := latestSpec(t, f.s, f.newtabID)
-	if spec.Env["LUCID_URL"] != "http://lucid" || !slices.Contains(spec.Secrets, "NEWTAB_INGEST_KEY") {
+	if spec.Env["GLASS_URL"] != "http://glass" || !slices.Contains(spec.Secrets, "NEWTAB_INGEST_KEY") {
 		t.Fatalf("spec: env %v secrets %v", spec.Env, spec.Secrets)
 	}
 	if c := f.list(t).Connected; len(c) != 1 || c[0].Problem != "" {
@@ -501,6 +519,8 @@ func TestIntegrationDeclaredInRepo(t *testing.T) {
 // An app want connects through uses, and the folders the provider shares
 // are mounted into the consumer as installing it would.
 func TestIntegrationAppWantWires(t *testing.T) {
+	t.Parallel()
+
 	f := newIntegrationFixture(t)
 	streamID, _ := appWithToken(t, f.s, "stream")
 	withSpec(t, f.s, streamID, apps.AppSpec{

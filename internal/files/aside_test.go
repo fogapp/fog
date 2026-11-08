@@ -14,6 +14,8 @@ import (
 // free name when its own is taken, and the uploads sweep never removes it
 // however old it is.
 func TestMovedAsideFileSurvivesACrash(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root, err := m.openRoot()
 	if err != nil {
@@ -66,6 +68,8 @@ func TestMovedAsideFileSurvivesACrash(t *testing.T) {
 // overwriting that file; now the link is removed as itself and the receipt
 // written fresh where it is named.
 func TestAsideReceiptIsNotWrittenThroughALink(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root, err := m.openRoot()
 	if err != nil {
@@ -97,6 +101,8 @@ func TestAsideReceiptIsNotWrittenThroughALink(t *testing.T) {
 // a receipt naming fog's own reserved folder, a path out of the root, or
 // (for Content's staging) a folder outside Content is left where it is.
 func TestAsideReceiptCannotNameAnotherTree(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root, err := m.openRoot()
 	if err != nil {
@@ -130,6 +136,8 @@ func TestAsideReceiptCannotNameAnotherTree(t *testing.T) {
 // Linux is not a path from anywhere: every stat failed and nothing was
 // ever swept. A moved-aside file beside it is never touched.
 func TestAbandonedUploadIsSwept(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	root, err := m.openRoot()
 	if err != nil {

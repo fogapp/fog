@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/lucid"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/store"
 )
 
@@ -118,7 +118,7 @@ func (s *Service) ServeInference(w http.ResponseWriter, r *http.Request, app *st
 	listing := rest == "models" && r.Method == http.MethodGet
 	// The app's own trace, when it passed one: the request's transaction
 	// is dropped when the answer streams.
-	parent := lucid.WithTraceparent(context.Background(), r.Header.Get("traceparent"))
+	parent := glass.WithTraceparent(context.Background(), r.Header.Get("traceparent"))
 	row := store.ComputeActivity{App: app.Name, Pool: InferencePool, Kind: KindInference, What: rest}
 	refuse := func(status int, msg string) {
 		if !listing {
@@ -263,7 +263,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, parent context
 	case r.Context().Err() != nil:
 		outcome, failure = OutcomeStopped, "the app stopped waiting for the answer"
 	}
-	call := lucid.LLM{
+	call := glass.LLM{
 		Provider: "fog", Model: model, Served: ans.served, Tier: "local", Agent: row.App, Route: "machine:" + target.Name,
 		In: ans.in, Out: ans.out, Estimated: ans.estimated, CostSrc: "free", TTFT: float64(ans.ttft.Microseconds()) / 1000,
 		Concurrent: concurrent, Stream: stream, Stop: ans.stop,
@@ -275,7 +275,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, parent context
 	if outcome != OutcomeOK && outcome != OutcomeStopped {
 		call.Status, call.Error = "error", llmErrorClass(status)
 	}
-	lucid.ModelCall(t.ctx, t.start, call)
+	glass.ModelCall(t.ctx, t.start, call)
 	s.finish(t, outcome, &status, failure)
 	return true
 }
@@ -364,7 +364,7 @@ func (s *Service) inflight(machine string, by int) int {
 	return was
 }
 
-// llmErrorClass is how Lucid groups a failed model call.
+// llmErrorClass is how Glass groups a failed model call.
 func llmErrorClass(status int) string {
 	switch status {
 	case http.StatusTooManyRequests:

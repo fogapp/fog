@@ -14,7 +14,7 @@ import (
 	"gitea.lan/matthew/fog/internal/build"
 	"gitea.lan/matthew/fog/internal/dockerx"
 	"gitea.lan/matthew/fog/internal/fogports"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // The attack: an import's first revision binds /root/.ssh and acknowledges
@@ -157,7 +157,7 @@ func TestReclaimFogPortsStopsTheHolder(t *testing.T) {
 		}
 	}}
 	e := swapEngine(t, api, "evil")
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

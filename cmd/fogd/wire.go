@@ -177,6 +177,21 @@ func (d *daemon) wireFiles() {
 	fm.ChunkStore = d.bk.ChunkStore
 	d.bk.RepointSnapshot = fm.RepointStoreSnapshots
 	d.bk.ThinDrive = fm.ThinOldest
+	// A backup failing for want of room right now — Drive's snapshot, an
+	// offsite check — has the space guard collect what is already let go
+	// within the hour, however full the disk reads.
+	d.bk.SpaceStarved = func() bool {
+		notices, err := st.ActiveNotices()
+		if err != nil {
+			return false
+		}
+		for _, n := range notices {
+			if n.Kind == files.NoticeFilesBackupNoSpace || n.Kind == offsite.NoticeVerifyNoRoom {
+				return true
+			}
+		}
+		return false
+	}
 	// A volume that names a Files folder resolves against the live root at
 	// deploy time, and the folder is made through Files so it is owned,
 	// indexed, and badged like everything else there.

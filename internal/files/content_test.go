@@ -11,6 +11,8 @@ import (
 // operator deletes afterwards stays deleted, rather than reappearing on
 // every restart.
 func TestEnsureContentSeedsOnce(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	m.EnsureContent()
 
@@ -46,6 +48,8 @@ func TestEnsureContentSeedsOnce(t *testing.T) {
 // The two reserved folders and their children carry roles, so the Drive
 // page can say what each one is rather than showing one more folder.
 func TestReservedFolderRoles(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	for _, rel := range []string{
 		AppsDir + "/Paperless/config", ContentDir + "/Movies/2026", "Holiday",

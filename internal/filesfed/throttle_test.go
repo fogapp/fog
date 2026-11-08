@@ -10,6 +10,8 @@ import (
 // and the wait ends with its context rather than sleeping out the chunk;
 // meanwhile the bucket is not locked against the peer's other transfers.
 func TestThrottleWaitIsInterruptible(t *testing.T) {
+	t.Parallel()
+
 	th := &throttle{}
 	th.set(100 << 10)                      // 100KB/s: a 4MB chunk is 40 seconds
 	th.wait(context.Background(), 100<<10) // spend the initial burst

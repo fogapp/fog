@@ -190,6 +190,8 @@ func TestUploadRestartsUnderFreshNonceWhenSourceChanges(t *testing.T) {
 }
 
 func TestDirSourceIsDeterministicAndFlat(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{}`), 0o644)
 	os.WriteFile(filepath.Join(dir, "artifact.tar"), bytes.Repeat([]byte("x"), 5000), 0o644)
@@ -223,6 +225,8 @@ func TestDirSourceIsDeterministicAndFlat(t *testing.T) {
 }
 
 func TestRateLimiter(t *testing.T) {
+	t.Parallel()
+
 	if NewRateLimiter(0) != nil {
 		t.Fatal("0 must mean no cap")
 	}

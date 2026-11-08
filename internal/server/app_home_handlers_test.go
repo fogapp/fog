@@ -59,7 +59,7 @@ func TestAppHome(t *testing.T) {
 	if im == nil || len(v.Apps) != 2 {
 		t.Fatalf("apps = %+v", v.Apps)
 	}
-	if im.Title != "Immich" || im.Icon != "/store/immich/logo.svg" || im.URL != "https://immich.home.example" ||
+	if im.Title != "Immich" || im.Icon != "/api/catalog/assets/fog-catalog/immich/logo.svg" || im.URL != "https://immich.home.example" ||
 		im.State != "new" || len(im.Contracts) != 1 || im.Contracts[0] != "fog-files/1" || im.OpenErrors == nil {
 		t.Errorf("immich = %+v", *im)
 	}
@@ -88,6 +88,8 @@ func TestAppHome(t *testing.T) {
 }
 
 func TestUsesHomeIsValid(t *testing.T) {
+	t.Parallel()
+
 	spec := apps.AppSpec{Source: apps.Source{Type: "image", Image: "x"}, Uses: []string{"home"}}
 	if err := spec.Validate(); err != nil {
 		t.Errorf("uses: home rejected: %v", err)

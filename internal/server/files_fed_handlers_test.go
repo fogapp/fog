@@ -56,6 +56,8 @@ func twoFogs(t *testing.T, grants string) *fogPair {
 }
 
 func TestFilesFederationOriginSide(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	root := p.a.files.Root()
 	os.MkdirAll(filepath.Join(root, "Photos", "2026", "raw"), 0o755)
@@ -190,6 +192,8 @@ func TestFilesFederationOriginSide(t *testing.T) {
 }
 
 func TestFilesFederationReceivingSide(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	rootA := p.a.files.Root()
 	os.MkdirAll(filepath.Join(rootA, "Album", "raw"), 0o755)
@@ -339,6 +343,8 @@ func waitFor(t *testing.T, d time.Duration, ok func() bool) {
 // the files.share grant, not merely a paired peer: a peer without the grant
 // cannot make this box do sync work by sending events.
 func TestFilesFederationEventsRequireGrant(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[{"capability":"files.share"}]`)
 	ctx := context.Background()
 	body := []byte(`{"shareIds":[1],"event":"changed"}`)
@@ -371,6 +377,8 @@ func TestFilesFederationEventsRequireGrant(t *testing.T) {
 // the API grants the peer files.share server-side, so the share is reachable
 // even when it was not created through the settings UI that used to do it.
 func TestFilesFederationCreateShareGrantsAccess(t *testing.T) {
+	t.Parallel()
+
 	p := twoFogs(t, `[]`) // paired, but no capabilities granted
 	if _, granted, _ := p.a.store.FedCapabilityConfig(p.bPeerOnA.ID, filesfed.CapFilesShare, store.DirGrant); granted {
 		t.Fatal("precondition: peer should not hold files.share yet")

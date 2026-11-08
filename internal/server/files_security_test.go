@@ -31,6 +31,7 @@ func davPassword(t *testing.T, h http.Handler, c *http.Cookie) func(*http.Reques
 // decoys indexed, then swapped for a link to Private. The link must not
 // serve Private's files, list them, or zip them.
 func TestShareLinkDoesNotFollowASwappedInLink(t *testing.T) {
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()
@@ -81,6 +82,7 @@ func TestShareLinkDoesNotFollowASwappedInLink(t *testing.T) {
 // fog: the same sandbox and declared type as every other route serving
 // Drive's bytes.
 func TestDAVServesFilesSandboxed(t *testing.T) {
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()
@@ -120,6 +122,8 @@ func TestDAVServesFilesSandboxed(t *testing.T) {
 // then sees neither other apps' folders, peers' files, hidden files nor
 // digests.
 func TestAppDriveSearchNeedsTheGrantAndIsScoped(t *testing.T) {
+	t.Parallel()
+
 	f := newGateFixture(t)
 	gate := f.signIn(t, f.operator, "/")
 	w := do(t, f.h, "GET", "/api/authgate", "", forwarded("/"), withCookie(gate))
@@ -187,6 +191,8 @@ func TestAppDriveSearchNeedsTheGrantAndIsScoped(t *testing.T) {
 // line. The share page shows such names with those characters made visible
 // and isolated; the links and the download keep the real name.
 func TestSharePageShowsHostileNamesSafely(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	root := s.files.Root()

@@ -14,6 +14,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/apps"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 func TestCaddyfileWildcard(t *testing.T) {
@@ -73,7 +74,7 @@ func TestCaddyfileMatchersAreUniquePerHost(t *testing.T) {
 }
 
 func TestComposeJoinsTheSealedNetwork(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestCaddyfileOtherRoutesAreUntouched(t *testing.T) {
 // The field reaches the Caddyfile from the spec, not only from a hand-built
 // route.
 func TestCollectRoutesCarriesLanOnly(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +242,7 @@ func TestCaddyfileHTTPFallback(t *testing.T) {
 // it, by the same rule), and the rest still serve. An app with no revisions
 // yet is legitimately routeless and skipped.
 func TestCollectRoutesSpecErrors(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +352,7 @@ func TestCaddyfileStripsFogCookiesFromEveryApp(t *testing.T) {
 // fog's name stays fog's, the oldest claimant keeps a shared one, and the
 // rest are left out — the config renders with one block per name.
 func TestCollectRoutesSkipsClashesInsteadOfFailing(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +413,7 @@ func TestApplyDropsInjectedAcmeEmail(t *testing.T) {
 // [::], Docker's userland proxy handed Caddy the bridge gateway as the
 // peer, which private_ranges admits. Caddy's ports are IPv4 only.
 func TestCaddyPublishesIPv4Only(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +463,7 @@ func TestMatcherNamesNeverCollide(t *testing.T) {
 // live file keeps the last accepted one, and the rejected one goes.
 func TestRejectedConfigIsNotLeftLive(t *testing.T) {
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "t.db"))
+	st, err := storetest.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

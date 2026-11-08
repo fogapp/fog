@@ -13,7 +13,7 @@ import (
 
 	"gitea.lan/matthew/fog/internal/oidc"
 	"gitea.lan/matthew/fog/internal/signing"
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 	"gitea.lan/matthew/fog/internal/vault"
 )
 
@@ -59,7 +59,7 @@ func TestWriteSigninVectors(t *testing.T) {
 		t.Skip("set FOG_WRITE_VECTORS=1 to regenerate")
 	}
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "fog.db"))
+	st, err := storetest.Open(filepath.Join(dir, "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

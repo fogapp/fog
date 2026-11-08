@@ -19,6 +19,7 @@ import (
 // in one script, talking HTTP and WebSocket to an httptest server with the
 // fog bot running. Skips when Node or the SDK's dependencies are absent.
 func TestSDKEndToEnd(t *testing.T) {
+
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node not installed")

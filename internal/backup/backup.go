@@ -26,8 +26,8 @@ import (
 	"gitea.lan/matthew/fog/internal/chunkstore"
 	"gitea.lan/matthew/fog/internal/execx"
 	"gitea.lan/matthew/fog/internal/fsx"
+	"gitea.lan/matthew/fog/internal/glass"
 	"gitea.lan/matthew/fog/internal/loop"
-	"gitea.lan/matthew/fog/internal/lucid"
 	"gitea.lan/matthew/fog/internal/nas"
 	"gitea.lan/matthew/fog/internal/notify"
 	"gitea.lan/matthew/fog/internal/pg"
@@ -84,6 +84,10 @@ type Manager struct {
 
 	attempts    notify.Throttle // scheduler retries of a failing app, per app
 	staleAlerts notify.Throttle // staleness ntfy pushes, per app
+	spaceAlerts notify.Throttle // "backup disk nearly full" pushes
+	// spaceGuardedAt is when runDue last looked at the backup disk between
+	// nightly upkeeps; only ScheduleLoop's goroutine touches it.
+	spaceGuardedAt time.Time
 
 	restores sync.Map // app name -> *restoreOp, for CancelRestore
 
@@ -112,6 +116,11 @@ type Manager struct {
 	// ThinDrive, when set, removes Drive's oldest snapshot for the space
 	// guard and reports whether there was one to remove.
 	ThinDrive func() bool
+	// SpaceStarved, when set, says whether a backup is failing right now
+	// for want of room on the backup disk (Drive's snapshot, an offsite
+	// check). Between upkeeps that alone is reason to collect what is
+	// already let go, however full the disk reads.
+	SpaceStarved func() bool
 }
 
 // composeTimeout bounds the stop/up bracketing a restore.
@@ -294,7 +303,7 @@ type Meta struct {
 // joins any enclosing operation (a pre-update snapshot belongs to its update's
 // progress) so the UI shows one continuous busy state rather than two.
 func (m *Manager) BackupApp(ctx context.Context, appName, kind string) (_ int64, err error) {
-	ctx, txn := lucid.Start(ctx, "job", "backup")
+	ctx, txn := glass.Start(ctx, "job", "backup")
 	txn.Attr("app", appName)
 	txn.Attr("kind", kind)
 	defer func() { txn.End(err) }()
@@ -880,7 +889,9 @@ func (m *Manager) runDue(ctx context.Context, now time.Time) {
 	}
 	m.maybeWriteKit(ctx)
 	if global != "" && !m.Moving() {
-		m.maintainStore(ctx)
+		if hour, ok := backupHour(&apps.AppSpec{}, global); ok {
+			m.maintainStore(ctx, now, hour)
+		}
 	}
 }
 

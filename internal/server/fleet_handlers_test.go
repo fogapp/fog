@@ -13,6 +13,8 @@ import (
 )
 
 func TestFleetStatusEndpoints(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	app, _ := srv.store.CreateApp("hub")
@@ -54,6 +56,8 @@ func TestFleetStatusEndpoints(t *testing.T) {
 }
 
 func TestNotifyTest(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 

@@ -233,6 +233,8 @@ func readAt(fd int, rel string) (string, error) {
 // back up, reopens them by name — refusing one that was swapped for another
 // folder in the meantime rather than carrying on in the wrong place.
 func TestDirStackReopensOnlyTheSameFolder(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	mkChain(t, dir, dirBudget*3, 0)
 	fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY, 0)
@@ -275,6 +277,8 @@ func TestDirStackReopensOnlyTheSameFolder(t *testing.T) {
 // free "name 2" of it used to slice with a negative bound and crash the
 // server; it now gives a name that fits, cut on a character boundary.
 func TestUniqueNameFitsAnyName(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	names := []string{
 		"a." + strings.Repeat("x", 252),
@@ -316,6 +320,8 @@ func TestUniqueNameFitsAnyName(t *testing.T) {
 // conflict, through Drive and through WebDAV alike. On a case-insensitive
 // disk the two names are one file, and the rename still just changes case.
 func TestCaseOnlyRenameNeverDestroysAnotherFile(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "d/notes.txt", "lower")
 	write(t, m, "d/Notes.txt", "UPPER")
@@ -363,6 +369,8 @@ func TestCaseOnlyRenameNeverDestroysAnotherFile(t *testing.T) {
 // so a line separator or an escape cannot forge a second line or recolour
 // the notification.
 func TestBackupFailurePushShowsSafeNames(t *testing.T) {
+	t.Parallel()
+
 	if os.Geteuid() == 0 {
 		t.Skip("root reads a folder whatever its mode")
 	}
@@ -459,6 +467,8 @@ func unixOpen(t *testing.T, dir string) int {
 // verify compares modification times as well as sizes, so a file rewritten
 // in place to the same size during the copy is a mismatch, not a loss.
 func TestMoveFreezesWritesAndVerifiesMtimes(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	write(t, m, "Docs/a.txt", "aaaa")
 	unfreeze := m.freeze("Docs")
@@ -559,6 +569,8 @@ func (e *expiring) Err() error {
 // A cancelled move stops in the middle of a large file, not at the next
 // file: the context is checked every chunk.
 func TestCopyStopsMidFile(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	in, _ := os.Create(filepath.Join(dir, "in"))
 	in.Write(make([]byte, 16<<20))
@@ -581,6 +593,8 @@ func TestCopyStopsMidFile(t *testing.T) {
 // the name plus a suffix, which is too long to create. Staging names are
 // now fixed-length and random.
 func TestNamesAtTheLimitBackUpAndCopy(t *testing.T) {
+	t.Parallel()
+
 	m := newManager(t)
 	backups := t.TempDir()
 	m.BackupRoot = func() string { return backups }
@@ -627,6 +641,8 @@ func TestNamesAtTheLimitBackUpAndCopy(t *testing.T) {
 // read as data used to be written as data. Chunks of zeros are now left as
 // holes in the copy.
 func TestCopySkipsZeroChunks(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	p := filepath.Join(dir, "zeros")
 	os.WriteFile(p, append(make([]byte, 16<<20), 'x'), 0o644) // written, not sparse

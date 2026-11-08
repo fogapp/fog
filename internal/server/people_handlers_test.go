@@ -56,6 +56,7 @@ func inviteAndJoin(t *testing.T, h http.Handler, admin *http.Cookie, handle, pas
 }
 
 func TestOperatorIsPersonOne(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 
@@ -90,6 +91,7 @@ func TestOperatorIsPersonOne(t *testing.T) {
 }
 
 func TestInviteJoinLogin(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 
@@ -175,6 +177,7 @@ func itoa(i int) string {
 }
 
 func TestIdentityDevicesAndKeys(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	dave := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -297,6 +300,7 @@ func TestIdentityDevicesAndKeys(t *testing.T) {
 }
 
 func TestBackupRoundTrip(t *testing.T) {
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	dave := inviteAndJoin(t, h, admin, "dave", "correct horse battery")
@@ -330,6 +334,8 @@ func TestBackupRoundTrip(t *testing.T) {
 }
 
 func TestPasskeysNeedSecureContext(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	admin := setup(t, h)
 	// httptest requests are plain http on example.com: passkeys unavailable,
@@ -361,6 +367,7 @@ func TestPasskeysNeedSecureContext(t *testing.T) {
 // minutes, so it is bounded per address — in the passkey bucket, apart from
 // passwords (signin_handlers_limits.go).
 func TestPasskeyLoginBeginIsRateLimited(t *testing.T) {
+
 	_, h := newTestServer(t)
 	setup(t, h)
 	for i := range passkeyAttempts {
@@ -380,6 +387,7 @@ func TestPasskeyLoginBeginIsRateLimited(t *testing.T) {
 // A person changing their own password or removing a credential leaves the
 // same trail in the audit log as the operator doing it for them.
 func TestSelfServiceCredentialChangesAreAudited(t *testing.T) {
+
 	srv, h := newTestServer(t)
 	admin := setup(t, h)
 	c := inviteAndJoin(t, h, admin, "erin", "correct horse battery")

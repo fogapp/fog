@@ -14,6 +14,8 @@ import (
 // could frame the console, /device or a sign-in prompt with the household's
 // cookies attached and clickjack the person into approving something.
 func TestSecurityHeadersOnEveryPage(t *testing.T) {
+	t.Parallel()
+
 	_, h := newTestServer(t)
 	c := setup(t, h)
 
@@ -74,6 +76,8 @@ func TestSecurityHeadersOnEveryPage(t *testing.T) {
 // file) under "sandbox". The site-wide policy must not replace it, and the
 // route stays frameable by fog's own PDF preview but by no other origin.
 func TestSecurityHeadersKeepFileSandbox(t *testing.T) {
+	t.Parallel()
+
 	s, h := newTestServer(t)
 	c := setup(t, h)
 	os.MkdirAll(s.files.Root(), 0o755)

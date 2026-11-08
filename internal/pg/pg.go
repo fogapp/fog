@@ -255,7 +255,7 @@ func pgdata(major int, layout Layout) (pgdata, mount string) {
 //     with several processes, every one holding a pool per database
 //     (primary, cache, queue), and a blue-green swap runs two of the app
 //     for a while. 200 was sized for three such apps; five (feed, hook,
-//     hud, lucid, stream — stream alone runs two puma workers of twelve
+//     hud, glass, stream — stream alone runs two puma workers of twelve
 //     threads) ran it out on 2026-10-19 and 20 during overlapping deploys.
 //     Deploys of these apps now switch over one at a time (apps.switchGate),
 //     and 400 leaves headroom for one swap on top of everyone's steady
@@ -532,6 +532,24 @@ func publicTargets(names []string) []extTarget {
 	out := make([]extTarget, 0, len(names))
 	for _, n := range names {
 		out = append(out, extTarget{Name: n, Schema: "public"})
+	}
+	return out
+}
+
+// withDeclared is the dump's extensions plus each declared one the dump does
+// not name, into public as provisioning installs it. The dump's own schema
+// for an extension wins.
+func withDeclared(exts []extTarget, declared []string) []extTarget {
+	have := map[string]bool{}
+	for _, x := range exts {
+		have[x.Name] = true
+	}
+	out := append([]extTarget(nil), exts...)
+	for _, d := range publicTargets(declared) {
+		if !have[d.Name] {
+			have[d.Name] = true
+			out = append(out, d)
+		}
 	}
 	return out
 }
@@ -937,6 +955,11 @@ func (m *Manager) restoreDatabaseBounded(ctx context.Context, db, role, dumpPath
 	if err := m.checkExtensionsAllowed(ctx, exts, allowed); err != nil {
 		return err
 	}
+	// The spec's own extensions go in too, as provisioning puts them in the
+	// live database: an app that dumps without its extensions (pg_dump
+	// --exclude-extension, so its non-owner role can restore the dump
+	// itself) relies on them being there already.
+	exts = withDeclared(exts, allowed)
 	// A non-superuser login role owns the restore. The ALTER forces the safe
 	// attributes even on a role that predates this: an app is never a
 	// superuser, and the restore must not become one by accident.

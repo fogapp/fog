@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // A client that finishes sending and half-closes must still receive the whole
@@ -39,7 +39,7 @@ func TestForwarderDeliversResponseAfterClientHalfClose(t *testing.T) {
 		c.Write(make([]byte, payload))
 	}()
 
-	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

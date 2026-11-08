@@ -6,6 +6,8 @@ import (
 )
 
 func TestDisplayName(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct{ in, want string }{
 		{"report.pdf", "report.pdf"},
 		{"Ünïcödé 写真.jpg", "Ünïcödé 写真.jpg"},
@@ -39,6 +41,8 @@ func TestDisplayName(t *testing.T) {
 // Characters that break a line or are not drawn at all are shown, so two
 // names that look the same are told apart and a name stays on its line.
 func TestDisplayNameShowsSeparatorsAndInvisibles(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct{ in, want string }{
 		{"a\u2028b", "a⟨U+2028⟩b"},
 		{"a\u2029b", "a⟨U+2029⟩b"},

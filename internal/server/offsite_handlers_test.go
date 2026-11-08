@@ -19,6 +19,8 @@ func init() {
 }
 
 func TestOffsiteTargetsAPI(t *testing.T) {
+	t.Parallel()
+
 	srv, h := newTestServer(t)
 	c := setup(t, h)
 	fake := fakes3.New("fog-test")

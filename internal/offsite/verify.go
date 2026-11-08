@@ -31,6 +31,7 @@ import (
 
 const (
 	NoticeVerifyFailed = "offsite-verify-failed"
+	NoticeVerifyNoRoom = "offsite-verify-no-room"
 	verifyInterval     = 6 * time.Hour
 	// Blob sampling: the local sampler's numbers.
 	sampleFraction = 0.01
@@ -262,6 +263,15 @@ func (m *Manager) verifyTarget(ctx context.Context, t *store.OffsiteTarget) erro
 			verr = m.verifyFilesCopy(ctx, r, full)
 		}
 		subject := strings.TrimPrefix(series, "app:")
+		if verr != nil && noRoom(verr) {
+			// This server's disk, not the copy: say so, and leave whatever
+			// the copy's last real check found standing.
+			errs = append(errs, series+": "+verr.Error())
+			m.Store.CreateNotice(NoticeVerifyNoRoom, subject, fmt.Sprintf("The offsite copy of %s could not be checked", subject),
+				fmt.Sprintf("On %s: %s. Nothing is known to be wrong with the copy; fog checks it again once this server has room — free space on its disk (Settings → Storage).", t.Name, verr.Error()))
+			continue
+		}
+		m.Store.DismissNoticeByKind(NoticeVerifyNoRoom, subject)
 		if verr != nil {
 			errs = append(errs, series+": "+verr.Error())
 			m.Store.CreateNotice(NoticeVerifyFailed, subject, fmt.Sprintf("The offsite copy of %s failed verification", subject),
@@ -289,7 +299,7 @@ func (m *Manager) verifyAppCopy(ctx context.Context, r *Reader, c *store.Offsite
 	if row.StoreSnapshot != "" {
 		return m.verifyStoreCopy(ctx, r, &row)
 	}
-	if row.Mode != "delegated" || m.TestRestore == nil {
+	if !m.testRestorable(&row) {
 		// Nothing to test-restore: reading the object through, every frame
 		// authenticating, and matching its row is the whole check.
 		sum, n, err := r.Hash(ctx, c.Key)
@@ -305,6 +315,9 @@ func (m *Manager) verifyAppCopy(ctx context.Context, r *Reader, c *store.Offsite
 		return nil
 	}
 	if err := os.MkdirAll(m.spool(), 0o700); err != nil {
+		return err
+	}
+	if err := m.ensureRoom(m.spool(), row.SizeBytes); err != nil {
 		return err
 	}
 	scratch, err := os.MkdirTemp(m.spool(), "verify-")
@@ -327,11 +340,17 @@ func (m *Manager) verifyAppCopy(ctx context.Context, r *Reader, c *store.Offsite
 	return m.TestRestore(ctx, row.App, filepath.Join(scratch, "artifact.tar"), row.Manifest)
 }
 
-// verifyStoreCopy fetches a store-backed copy's packs and rebuilds the
-// backup from them — every chunk and file checked on the way — and
-// test-restores a delegated artifact's dump.
+// verifyStoreCopy fetches a store-backed copy's packs and reads the backup
+// back from them — every chunk and file checked on the way — and
+// test-restores a delegated artifact's dump. Only a test-restore needs the
+// backup written out; otherwise it is read through and nothing but the
+// packs lands on disk.
 func (m *Manager) verifyStoreCopy(ctx context.Context, r *Reader, row *AppRow) error {
 	if err := os.MkdirAll(m.spool(), 0o700); err != nil {
+		return err
+	}
+	restore := m.testRestorable(row)
+	if err := m.ensureRoom(m.spool(), storeFetchNeed(row, restore)); err != nil {
 		return err
 	}
 	scratch, err := os.MkdirTemp(m.spool(), "verify-")
@@ -339,14 +358,31 @@ func (m *Manager) verifyStoreCopy(ctx context.Context, r *Reader, row *AppRow) e
 		return err
 	}
 	defer os.RemoveAll(scratch)
+	if !restore {
+		return FetchStoreSnapshot(ctx, r, row, scratch, "", nil)
+	}
 	dest := filepath.Join(scratch, "backup")
 	if err := FetchStoreSnapshot(ctx, r, row, scratch, dest, nil); err != nil {
 		return err
 	}
-	if row.Mode != "delegated" || m.TestRestore == nil {
-		return nil
-	}
 	return m.TestRestore(ctx, row.App, filepath.Join(dest, "artifact.tar"), row.Manifest)
+}
+
+// testRestorable says whether a copy's dump is test-restored, not only read
+// back: a delegated artifact, of an app still installed here. A removed
+// app's spec — what decides the extensions a scratch restore may recreate —
+// went with it, so its copies, kept until they age out, are checked whole
+// and unaltered but not restored.
+func (m *Manager) testRestorable(row *AppRow) bool {
+	if row.Mode != "delegated" || m.TestRestore == nil {
+		return false
+	}
+	if m.Store != nil {
+		if _, err := m.Store.AppByName(row.App); errors.Is(err, store.ErrNotFound) {
+			return false
+		}
+	}
+	return true
 }
 
 // verifyFilesCopy re-hashes a random sample of the newest snapshot's

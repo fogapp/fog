@@ -12,6 +12,7 @@ import (
 	"gitea.lan/matthew/fog/internal/objstore"
 	"gitea.lan/matthew/fog/internal/objstore/fakes3"
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 type harness struct {
@@ -25,7 +26,7 @@ func newHarness(t *testing.T, fake *fakes3.Server) *harness {
 	t.Helper()
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +34,7 @@ func newHarness(t *testing.T, fake *fakes3.Server) *harness {
 	fake.AccessKey = "key-1"
 	m := &Manager{DataDir: t.TempDir(), Store: st, Vault: fakeVault{1}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Passphrase: func() string { return "passphrase 12345" }, ServerName: func() string { return "house" },
-		HTTPClient: srv.Client()}
+		HTTPClient: srv.Client(), DiskSpace: plentyOfRoom}
 	return &harness{m: m, fake: fake, url: srv.URL, st: st}
 }
 
@@ -42,6 +43,8 @@ func (h *harness) spec(name string) TargetSpec {
 }
 
 func TestAddTargetGrades(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		shape func(f *fakes3.Server)
@@ -89,6 +92,8 @@ func TestAddTargetGrades(t *testing.T) {
 }
 
 func TestAddTargetRefusesAnUnusableBucket(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	_, probe, err := h.m.AddTarget(context.Background(), h.spec("cloud"), "wrong-key", "secret")
 	if !errors.Is(err, ErrProbeFailed) {
@@ -106,6 +111,8 @@ func TestAddTargetRefusesAnUnusableBucket(t *testing.T) {
 }
 
 func TestAddTargetNeedsThePassphrase(t *testing.T) {
+	t.Parallel()
+
 	h := newHarness(t, fakes3.New("fog-test"))
 	h.m.Passphrase = func() string { return "" }
 	if _, _, err := h.m.AddTarget(context.Background(), h.spec("cloud"), "key-1", "secret"); !errors.Is(err, ErrNoPassphrase) {
@@ -117,6 +124,8 @@ func TestAddTargetNeedsThePassphrase(t *testing.T) {
 // with the passphrase and rewrapped so the nightly door opens for free;
 // one made under a different passphrase is refused.
 func TestAddTargetAdoptsOrRefusesAnExistingLocker(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	ctx := context.Background()
@@ -164,6 +173,8 @@ func TestAddTargetAdoptsOrRefusesAnExistingLocker(t *testing.T) {
 }
 
 func TestReprobeUpdateAndDelete(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	ctx := context.Background()
@@ -217,6 +228,8 @@ func TestReprobeUpdateAndDelete(t *testing.T) {
 }
 
 func TestTargetSpecValidation(t *testing.T) {
+	t.Parallel()
+
 	bad := []TargetSpec{
 		{Name: "Bad Name", Endpoint: "https://x", Bucket: "b"},
 		{Name: "ok", Endpoint: "s3.example.com", Bucket: "b"},
@@ -241,6 +254,8 @@ func TestTargetSpecValidation(t *testing.T) {
 // fresh machine opens the locker with the passphrase the operator now
 // has, not the one from before the change.
 func TestPassphraseChangeRewrapsLockers(t *testing.T) {
+	t.Parallel()
+
 	fake := fakes3.New("fog-test")
 	h := newHarness(t, fake)
 	ctx := context.Background()
@@ -288,3 +303,7 @@ func TestPassphraseChangeRewrapsLockers(t *testing.T) {
 		t.Fatalf("the other machine's wrap was dropped: %v", err)
 	}
 }
+
+// plentyOfRoom is a disk with room for any check, whatever the machine
+// running the tests has free.
+func plentyOfRoom(string) (int64, int64, bool) { return 500 << 30, 1 << 40, true }

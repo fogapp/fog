@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gitea.lan/matthew/fog/internal/store"
+	"gitea.lan/matthew/fog/internal/store/storetest"
 )
 
 // FleetStatus applies the staleness alarm's own rule: only a scheduled app
@@ -14,7 +15,7 @@ import (
 // than the schedule plus grace. The resolved hour follows the global
 // default when the spec sets none.
 func TestFleetStatus(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func TestFleetStatus(t *testing.T) {
 // moment an operator switches backups on for an app that has had them off
 // for months. The expectation starts when they are switched on.
 func TestStalenessGracesNewlyEnabledBackups(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +163,7 @@ func TestStalenessGracesNewlyEnabledBackups(t *testing.T) {
 // the one that turned backups on, and an app installed after that stays
 // graced by its install time.
 func TestStalenessFindsTheSwitchOnPastManyRevisions(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +230,7 @@ func TestStalenessFindsTheSwitchOnPastManyRevisions(t *testing.T) {
 // The dead-man's-switch notice states an ongoing condition: it has to
 // appear when an app falls behind and go when it catches up.
 func TestStalenessNoticeFollowsTheCondition(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "fog.db"))
+	st, err := storetest.Open(filepath.Join(t.TempDir(), "fog.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

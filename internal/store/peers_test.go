@@ -7,6 +7,8 @@ import (
 )
 
 func TestPeerCRUDAndCascade(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, err := s.CreatePairedPeer("01ARZ3NDEKTSV4RRFFQ69G5FAV", "dave", "https://fog.dave.house", "pubkey")
 	if err != nil {
@@ -71,6 +73,8 @@ func TestPeerCRUDAndCascade(t *testing.T) {
 }
 
 func TestFedCapabilities(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, _ := s.CreatePairedPeer("01INST", "dave", "", "k")
 	if err := s.SetFedCapability(p.ID, CapFlareIngest, DirUse, `{"mode":"redacted"}`); err != nil {
@@ -106,6 +110,8 @@ func TestFedCapabilities(t *testing.T) {
 }
 
 func TestFedInvites(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	future := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
 	inv, err := s.CreateFedInvite("digest-a", `["flare.ingest"]`, future)
@@ -137,6 +143,8 @@ func TestFedInvites(t *testing.T) {
 }
 
 func TestFedIdentityRow(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	if _, err := s.FedIdentity(); err != ErrNotFound {
 		t.Fatalf("empty identity: %v", err)
@@ -151,6 +159,8 @@ func TestFedIdentityRow(t *testing.T) {
 }
 
 func TestOutboxLifecycle(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, _ := s.CreatePairedPeer("01OUT", "dave", "https://x", "k")
 	other, _ := s.CreatePairedPeer("01OUT2", "erin", "https://y", "k2")
@@ -191,6 +201,8 @@ func TestOutboxLifecycle(t *testing.T) {
 }
 
 func TestOutboxCapDropsOldest(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, _ := s.CreatePairedPeer("01CAP", "dave", "https://x", "k")
 	for i := 0; i < outboxCap+20; i++ {
@@ -212,6 +224,8 @@ func TestOutboxCapDropsOldest(t *testing.T) {
 }
 
 func TestPeerAndLocalGroupsNeverMerge(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	app := testApp(t, s)
 	p, _ := s.CreatePairedPeer("01MERGE", "dave", "", "k")
@@ -258,6 +272,8 @@ func TestPeerAndLocalGroupsNeverMerge(t *testing.T) {
 }
 
 func TestPeerLabelShadowsNameForDisplay(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, err := s.CreatePairedPeer("01ARZ3NDEKTSV4RRFFQ69G5FAV", "dave", "", "pubkey")
 	if err != nil {
@@ -329,6 +345,8 @@ func TestPeerLabelShadowsNameForDisplay(t *testing.T) {
 // operator switched to "redacted" (or off and on again), and a report
 // queued with its dossier goes as a note once sending is narrowed to notes.
 func TestUseConsentReachesQueuedRows(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	p, _ := s.CreatePairedPeer("01INST", "dave", "https://fog.dave.house", "k")
 	set := func(capability, config string, on bool) {

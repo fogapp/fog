@@ -5,6 +5,8 @@ import "testing"
 // The per-peer ledger finds a peer's crossings whether the row was written
 // with a JSON detail or, before that, with the bare name or id as detail.
 func TestFederationLedgerMatchesOldAndNewDetails(t *testing.T) {
+	t.Parallel()
+
 	s := testStore(t)
 	// Old-style and JSON details for aunt (peer id 7), a crossing she made
 	// herself, then two rows for other peers that must stay out.
